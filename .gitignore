@@ -1,0 +1,44 @@
+backups/
+
+
+# Ignore the 'scratch.json' file
+scratch.json
+
+# Ignore the 'prompt.txt' file
+prompt.txt
+cognitoDomain.ref
+bootstrap.ref
+last_update.txt
+allowlistdomain.ref
+outputs.json
+chatbot-prompts/
+cdk/react-chatbot/src/variables.js
+cdk/react-chatbot/src/config.json
+
+
+cdk/*.swp
+cdk/package-lock.json
+cdk/__pycache__
+cdk/.pytest_cache
+cdk/.venv
+cdk/*.egg-info
+cdk/static-website-source/*
+
+cdk/cdk/*.swp
+cdk/cdk/package-lock.json
+cdk/cdk/__pycache__
+cdk/cdk/.pytest_cache
+cdk/cdk/.venv
+cdk/cdk/*.egg-info
+
+cdk/lambda_functions/python_layer/python/
+scratch.json
+
+
+# CDK asset staging directory
+cdk/.cdk.staging
+cdk/cdk.out
+**/*.pyc
+**/*.out
+
+

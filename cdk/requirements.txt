@@ -1,0 +1,3 @@
+aws-cdk-lib>=2.131.0
+constructs>=10.0.0
+aws-solutions-constructs.aws-cloudfront-s3

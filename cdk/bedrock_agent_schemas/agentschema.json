@@ -1,0 +1,155 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+      "title": "Incident Management API",
+      "version": "1.0.0",
+      "description": "APIs for managing incidents by creating new incidents and retrieving existing incidents."
+    },
+    "paths": {
+      "/newincident": {
+        "post": {
+          "summary": "Create a new incident",
+          "operationId": "createIncident",
+          "description": "Create a new incident and generate a unique incident ID. The request body should include incident details such as first name, last name, incident location, severity (1{highest}-5{lowest}), and a description. ",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "firstName": {
+                      "type": "string",
+                      "description": "First name of the person reporting the incident."
+                    },
+                    "lastName": {
+                      "type": "string",
+                      "description": "Last name of the person reporting the incident."
+                    },
+                    "location": {
+                      "type": "string",
+                      "description": "Location of the incident."
+                    },
+                    "severity": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5,
+                      "description": "Severity of the incident (1 being the highest, 5 being the lowest)."
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "Description of the incident."
+                    }
+                  },
+                  "required": [
+                    "firstName",
+                    "lastName",
+                    "location",
+                    "severity",
+                    "description"
+                  ]
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Successful response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "incident_id": {
+                        "type": "string",
+                        "description": "Unique ID of the created incident."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/getincident/{incident_id}": {
+        "get": {
+          "summary": "Get an incident",
+          "description": "Retrieve an incident by its unique ID. The response will include all attributes of the incident.",
+          "operationId": "getIncident",
+          "parameters": [
+            {
+              "name": "incident_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              },
+              "description": "Unique ID of the incident to retrieve."
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "incident_id": {
+                        "type": "string",
+                        "description": "Unique ID of the incident."
+                      },
+                      "status": {
+                        "type": "string",
+                        "description": "The status of the incident (e.g., 'open', 'closed')."
+                      },
+                      "firstName": {
+                        "type": "string",
+                        "description": "First name of the person reporting the incident."
+                      },
+                      "lastName": {
+                        "type": "string",
+                        "description": "Last name of the person reporting the incident."
+                      },
+                      "location": {
+                        "type": "string",
+                        "description": "Location of the incident."
+                      },
+                      "severity": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5,
+                        "description": "Severity of the incident (1 being the highest, 5 being the lowest)."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "Description of the incident."
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Incident not found",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "error": {
+                        "type": "string",
+                        "description": "Error message indicating that the incident was not found."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  

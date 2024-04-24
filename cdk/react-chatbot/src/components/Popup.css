@@ -1,0 +1,60 @@
+/* Popup.css */
+.popup {
+    position: fixed;
+    z-index: 1000;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #fff;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 400px;
+    width: 90%;
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  }
+  
+  .popup-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    cursor: pointer;
+    font-size: 20px;
+    color: #757575;
+    transition: color 0.2s;
+  }
+  
+  .close-btn:hover {
+    color: #333;
+  }
+  
+  .popup-message {
+    margin: 16px 0;
+    text-align: center;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #333;
+  }
+  
+  .success {
+    border: 2px solid #34a853;
+  }
+  
+  .error {
+    border: 2px solid #ea4335;
+  }
+  
+  .success .popup-message {
+    color: #34a853;
+  }
+  
+  .error .popup-message {
+    color: #ea4335;
+  }
