@@ -32,6 +32,8 @@ The application utilizes the following AWS services:
 - **AWS Cognito**: User authentication and management.
 - **AWS Bedrock**: Bedrock Agents and Bedrock runtime for language model interactions.
 
+![Architecture diagram](./readme-images/bedrock-chatbot-archietcture.png)
+
 ## Prerequisites
 
 Before deploying the application, ensure you have the following installed:
