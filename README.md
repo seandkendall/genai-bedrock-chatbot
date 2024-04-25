@@ -4,6 +4,7 @@
 ## Tdlr; ?
 > [!NOTE]
 > Use [Cloud9](https://aws.amazon.com/pm/cloud9) for a fast start, using any instance size larger than a 'small' size.
+>
 > us-east-1 and us-west-2 are the only supported regions. us-west-2 is the only region with Anthropic Claude 3 Opus
 
 
