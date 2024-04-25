@@ -3,6 +3,16 @@
 DEFAULT_COLOR="\033[0m"
 GREEN_COLOR="\033[0;32m"
 RED_COLOR="\033[0;31m"
+list_user_pools() {
+    aws cognito-idp list-user-pools --max-results 60 --query 'UserPools[*].Id' --output text
+}
+get_user_pool_domain() {
+    local user_pool_id="$1"
+    local domain=$(aws cognito-idp describe-user-pool --user-pool-id "$user_pool_id" --query 'UserPool.Domain' --output text)
+    if [ -n "$domain" ]; then
+        echo "$domain"
+    fi
+}
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -19,6 +29,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Check if AWS CDK is installed
+if ! command -v cdk &> /dev/null
+then
+    echo -e "${RED_COLOR}Error: AWS CDK is not installed. Please install the AWS CDK or run the setup script.${DEFAULT_COLOR}"
+    echo -e "${GREEN_COLOR}To install the AWS CDK manually, follow the instructions at: https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html${DEFAULT_COLOR}"
+    echo -e "${GREEN_COLOR}Alternatively, you can run the setup script by executing: ./setup.sh${DEFAULT_COLOR}"
+    exit 1
+fi
+
 # Check if jq is installed
 if ! command -v jq &> /dev/null
 then
@@ -32,22 +51,20 @@ then
     exit 1
 fi
 
-# Check if it's a new day and update pip and aws-cdk if needed
-# last_update_file="last_update.txt"
-# current_date=$(date +%Y%m%d)
-
-# if [ -f "$last_update_file" ]; then
-#     last_update=$(cat "$last_update_file")
-# else
-#     last_update=0
-# fi
-
-# if [ "$current_date" != "$last_update" ]; then
-#     echo "Updating pip and aws-cdk..."
-#     python3 -m pip install --upgrade pip
-#     npm install -g aws-cdk
-#     echo "$current_date" > "$last_update_file"
-# fi
+# Check if AWS CLI is installed
+if ! command -v aws &> /dev/null
+then
+    echo -e "${RED_COLOR}Error: AWS CLI is not installed. Please install the AWS CLI and configure your AWS credentials before running this script.${DEFAULT_COLOR}"
+    case "$(uname -s)" in
+        Linux*) echo -e "${GREEN_COLOR}On Linux, you can install the AWS CLI with: sudo apt-get install awscli${DEFAULT_COLOR}" ;;
+        Darwin*) echo -e "${GREEN_COLOR}On macOS, you can install the AWS CLI with: brew install awscli${DEFAULT_COLOR}" ;;
+        CYGWIN*|MINGW*|MSYS*) echo -e "${GREEN_COLOR}On Windows, you can download and install the AWS CLI from: https://aws.amazon.com/cli/${DEFAULT_COLOR}" ;;
+        *) echo -e "${RED_COLOR}Unsupported operating system. Please visit https://aws.amazon.com/cli/ for installation instructions.${DEFAULT_COLOR}" ;;
+    esac
+    echo -e "${GREEN_COLOR}After installing the AWS CLI, run 'aws configure' to set up your AWS credentials.${DEFAULT_COLOR}"
+    echo -e "${GREEN_COLOR}Visit https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html for more information.${DEFAULT_COLOR}"
+    exit 1
+fi
 
 # Check if the virtual environment is activated
 if [ -z "${VIRTUAL_ENV}" ]; then
@@ -77,6 +94,26 @@ if [ -z "${VIRTUAL_ENV}" ]; then
     fi
     exit 1
 fi
+
+# List all user pools
+user_pools=$(list_user_pools)
+
+# Check if any existing user pool has a domain matching the expected format
+for user_pool_id in $user_pools; do
+    domain=$(get_user_pool_domain "$user_pool_id")
+    if [ -n "$domain" ] && [[ "$domain" =~ ^[a-z]+$ ]]; then
+        read -p "An existing Cognito user pool domain '$domain' was found. Do you want to use it? (y/n) " use_existing
+        case "$use_existing" in
+            [yY][eE][sS]|[yY])
+                cognitoDomain="$domain"
+                echo "$cognitoDomain" > cognitoDomain.ref
+                break
+                ;;
+            *)
+                ;;
+        esac
+    fi
+done
 
 # Read cognitoDomain from reference file, if it exists
 if [ -f cognitoDomain.ref ]; then

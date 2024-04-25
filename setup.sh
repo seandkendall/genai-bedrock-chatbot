@@ -110,6 +110,21 @@ if [[ "$OS" == "macOS" ]]; then
     esac
   fi
 
+# Check if AWS CDK is installed
+  if ! command_exists cdk; then
+    read -p "AWS CDK is not installed. Do you want to install it? (y/n): " install_cdk
+    case "$install_cdk" in
+      y|Y)
+        # Install AWS CDK
+        npm install -g aws-cdk
+        ;;
+      *)
+        echo "AWS CDK is required. Please install AWS CDK and try again."
+        exit 1
+        ;;
+    esac
+  fi
+
 elif [[ "$OS" == "AWS CloudShell" ]]; then
   # AWS CloudShell-specific installation steps
 
@@ -149,6 +164,12 @@ elif [[ "$OS" == "AWS CloudShell" ]]; then
     exit 1
   fi
 
+# Check if AWS CDK is installed
+  if ! command_exists cdk; then
+    echo "AWS CDK is not installed. Please install AWS CDK and try again."
+    exit 1
+  fi
+
 else
   echo "This script is currently designed to run on macOS and AWS CloudShell systems."
   echo "Please ensure you have the following tools installed manually on your system:"
@@ -158,6 +179,7 @@ else
   echo "- Node.js"
   echo "- jq"
   echo "- AWS CLI (configured with your AWS credentials)"
+  echo "- AWS CDK"
   exit 0
 fi
 

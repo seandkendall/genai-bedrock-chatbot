@@ -120,14 +120,13 @@ def process_websocket_message(event):
                 assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id)
 
             # Store the updated conversation history in DynamoDB
-            #session_id, existing_history, user_message, assistant_message
             store_conversation_history(session_id, existing_history, prompt, assistant_response, user_id, input_tokens, output_tokens)
         except Exception as e:
             if 'have access to the model with the specified model ID.' in str(e):
                 model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
                 send_websocket_message(connection_id, {
                     'type': 'error',
-                    'error': f'You have not enabled the selected model. Please visit the following link to request model access: {model_access_url}'
+                    'error': f'You have not enabled the selected model. Please visit the following link to request model access: [{model_access_url}]({model_access_url})'
                 })
             print(f"Error calling bedrock model (912): {str(e)}")
         

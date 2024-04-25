@@ -1,7 +1,7 @@
 # AWS Chatbot Application with Bedrock Agents and Claude-3
 <!-- MD formats here: https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax -->
 
-## Tdlr; ?
+## Tdlr;
 > [!NOTE]
 > Use [Cloud9](https://aws.amazon.com/pm/cloud9) for a fast start, using any instance size larger than a 'small' size.
 >
@@ -34,13 +34,36 @@ The application utilizes the following AWS services:
 
 ![Architecture diagram](./readme-images/bedrock-chatbot-archietcture.png)
 
+## Screenshots
+
+1. This is what the interface looks like, here we are simply communicating with Anthropic Claude3 Sonnet
+![Simple interaction with Anthropic Clause 3 Sonnet](./readme-images/1-bedrock-runtime-interface.png)
+
+2. You can ask the chatbot to write code for you. Here we are using Anthropic Claude 3 Sonnet to show us python code
+![Writing code with Anthropic Claude 3 Sonnet](./readme-images/2-bedrock-runtime-code-example.png)
+
+3. There are settings you can change at a user and global level (Global if you have multiple users using this app). You can configure a Bedrock KnowledgeBase ID to simply enable RAG. You can also configure the Agent ID and Agent Alias ID if you would like to use this chatbot with a Bedrock Agent. You can set a system prompt at the user or system level so all interactions have a standard context set. You can also set custom pricing per 1000 input/output tokens, however without saving this value, the app will use the price saved in the code which is built from the AWS Bedrock pricing page. Finally, you can select your model.
+![Setting in the Application](./readme-images/3-settings-modal.png)
+
+4. This is an example of interacting with Bedrock Knowledgebases, enabling RAG with Anthropic Claude3 Sonnet
+![AWS Bedrock Knowledgebases RAG example](./readme-images/4-knowledgebases-RAG-example.png)
+
+5. This is an example of interacting with Bedrock Agents, where we can ask questions about the data sitting behind our KnowledgeBase or have the chatbot interact with API's in the backend. This example shows how Bedrock Agents can use an AWS Lambda function to log an inciden into a DynamoDB Table. The sample code for this demo is also included in thie repository if you wish to test by manually creating the KnowledgeBase and Agent. If you need help with this, feel free to reach out to me at [Seandall@Amazon.com](mailto:Seandall@Amazon.com)
+![Bedrock Agents Example](./readme-images/5-bedrock-agents-HSE-example.png)
+
+6. If you mouse-over the info icon in the header, you can see additional details such as the current cost, session ID's, and total input/output tokens. Since Bedrock today only supportes token metrics for the Bedrock Runtime, the tokens and cost shown here are only for communicating with an LLM directly. If you are using KnowledgeBases or Agents, these values are not reflected here
+![Information panel](./readme-images/6-info-panel-example.png)
+
+
 ## Prerequisites
 
 Before deploying the application, ensure you have the following installed:
 
-- [Python](https://www.python.org/) (version 3.7 or later)
+- [Python 3](https://www.python.org/) (version 3.7 or later)
 - [pip](https://pip.pypa.io/en/stable/installing/) (Python package installer)
-- [AWS CLI](https://aws.amazon.com/cli/)
+- [Git](https://try.github.io/) - click for a quick interactive tutorial
+- [jq](https://jqlang.github.io/jq)
+- [AWS CLI](https://aws.amazon.com/cli/) (Configured with your AWS credentials)
 - [AWS CDK](https://aws.amazon.com/cdk/) (version 2.x)
 - [Node.js](https://nodejs.org/en/) (version 12.x or later)
 
@@ -117,6 +140,17 @@ To deploy the application on a Mac, follow these steps:
 
 1. Install the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html) and [Node.js](https://nodejs.org/en/download/) for macOS.
 2. Open the Terminal and follow the "Getting Started" section above.
+
+## Git
+
+This project relies on Git for version control. If you're new to Git, we recommend going through the [Try Git](https://try.github.io/) interactive tutorial to get familiar with the basic Git commands and workflow.
+
+Additionally, here are some other helpful resources for learning Git:
+
+- [Git Documentation](https://git-scm.com/doc)
+- [Git Handbook](https://guides.github.com/introduction/git-handbook/)
+- [Git Tutorial for Beginners](https://www.vogella.com/tutorials/GitTutorial/article.html)
+
 
 ## Contributing
 

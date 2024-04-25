@@ -41,4 +41,7 @@ cdk/cdk.out
 **/*.pyc
 **/*.out
 
+.DS_Store
+**/.DS_Store
+
 
