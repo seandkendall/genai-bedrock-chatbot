@@ -1,23 +1,19 @@
 # AWS Chatbot Application with Bedrock Agents and Claude-3
+<!-- MD formats here: https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax -->
 
 ## Tdlr; ?
-clone this repo: 
-```
-git clone https://github.com/seandkendall/genai-bedrock-chatbot --depth 1
-```
+> [!NOTE]
+> Use [Cloud9](https://aws.amazon.com/pm/cloud9) for a fast start, using any instance size larger than a 'small' size.
+> us-east-1 and us-west-2 are the only supported regions. us-west-2 is the only region with Anthropic Claude 3 Opus
 
-cd into the directory:
-```
+
+
+
+clone this repo + run setup.sh and deploy.sh: 
+```bash
+git clone https://github.com/seandkendall/genai-bedrock-chatbot.git --depth 1
 cd genai-bedrock-chatbot
-```
-
-run the setup (only the first time):
-```
 ./setup.sh
-```
-
-deploy the app:
-```
 ./deploy.sh
 ```
 
