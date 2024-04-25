@@ -95,30 +95,35 @@ if [ -z "${VIRTUAL_ENV}" ]; then
     exit 1
 fi
 
-# List all user pools
-user_pools=$(list_user_pools)
+if [ -f cognitoDomain.ref ]; then
+  cognitoDomain=$(cat cognitoDomain.ref)
+else
+    # List all user pools
+    user_pools=$(list_user_pools)
 
-# Check if any existing user pool has a domain matching the expected format
-for user_pool_id in $user_pools; do
-    domain=$(get_user_pool_domain "$user_pool_id")
-    if [ -n "$domain" ] && [[ "$domain" =~ ^[a-z]+$ ]]; then
-        read -p "An existing Cognito user pool domain '$domain' was found. Do you want to use it? (y/n) " use_existing
-        case "$use_existing" in
-            [yY][eE][sS]|[yY])
-                cognitoDomain="$domain"
-                echo "$cognitoDomain" > cognitoDomain.ref
-                break
-                ;;
-            *)
-                ;;
-        esac
-    fi
-done
+    # Check if any existing user pool has a domain matching the expected format
+    for user_pool_id in $user_pools; do
+        domain=$(get_user_pool_domain "$user_pool_id")
+        if [ -n "$domain" ] && [[ "$domain" =~ ^[a-z]+$ ]]; then
+            read -p "An existing Cognito user pool domain '$domain' was found. Do you want to use it? (y/n) " use_existing
+            case "$use_existing" in
+                [yY][eE][sS]|[yY])
+                    cognitoDomain="$domain"
+                    echo "$cognitoDomain" > cognitoDomain.ref
+                    break
+                    ;;
+                *)
+                    ;;
+            esac
+        fi
+    done
+fi
 
 # Read cognitoDomain from reference file, if it exists
 if [ -f cognitoDomain.ref ]; then
   cognitoDomain=$(cat cognitoDomain.ref)
 else
+  echo "A cognito Domain is needed to create a new userpool. This name must be globally unique, if another user is already using this domain, this script will fail."
   read -p "Enter a cognitoDomain (lowercase, no special characters): " cognitoDomain
   # Validate cognitoDomain format
   if ! [[ "$cognitoDomain" =~ ^[a-z]+$ ]]; then
