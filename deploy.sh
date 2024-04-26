@@ -95,6 +95,7 @@ if [ -z "${VIRTUAL_ENV}" ]; then
     exit 1
 fi
 
+# Read cognitoDomain from reference file, if it exists
 if [ -f cognitoDomain.ref ]; then
   cognitoDomain=$(cat cognitoDomain.ref)
 else
@@ -123,38 +124,17 @@ fi
 if [ -f cognitoDomain.ref ]; then
   cognitoDomain=$(cat cognitoDomain.ref)
 else
-  echo "A cognito Domain is needed to create a new userpool. This name must be globally unique, if another user is already using this domain, this script will fail."
-  read -p "Enter a cognitoDomain (lowercase, no special characters): " cognitoDomain
-  # Validate cognitoDomain format
-  if ! [[ "$cognitoDomain" =~ ^[a-z]+$ ]]; then
-    echo "Error: cognitoDomain must be lowercase and contain no special characters."
-    exit 1
-  fi
-  echo "$cognitoDomain" > cognitoDomain.ref
-fi
-
-# Check if allowlistDomain exists, else prompt user
-allowListDomain=""
-if [ -f allowlistdomain.ref ]; then
-  allowListDomain=$(cat allowlistdomain.ref)
-else
-  read -p "Would you like to add an email domain allowlist for user registration? (y/n) " add_allowlist
-  case "$add_allowlist" in
-    [yY][eE][sS]|[yY])
-      while true; do
-        read -p "Enter the allowlist domain (Example: @amazon.com): " allowListDomain
-        if [[ "$allowListDomain" =~ ^@[a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]]; then
-          echo "$allowListDomain" > allowlistdomain.ref
-          break
-        else
-          echo "Error: Invalid domain format. Please try again."
-        fi
-      done
-      ;;
-    *)
-      echo "" > allowlistdomain.ref
-      ;;
-  esac
+  while true; do
+    echo "A cognito Domain is needed to create a new userpool. This name must be globally unique, if another user is already using this domain, this script will fail."
+    read -p "Enter a cognitoDomain (lowercase, no special characters, no numbers, and without the words 'cognito', 'aws', 'amazon'): " cognitoDomain
+    # Validate cognitoDomain format
+    if [[ "$cognitoDomain" =~ ^[a-z]+$ ]] && ! [[ "$cognitoDomain" =~ cognito ]] && ! [[ "$cognitoDomain" =~ aws ]] && ! [[ "$cognitoDomain" =~ amazon ]]; then
+      echo "$cognitoDomain" > cognitoDomain.ref
+      break
+    else
+      echo "Error: cognitoDomain must be lowercase, contain no special characters, no numbers, and should not contain the words 'cognito', 'amazon', 'aws'."
+    fi
+  done
 fi
 
 ./recreate-python-lambda-layer.sh
