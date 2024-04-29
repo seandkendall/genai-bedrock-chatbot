@@ -39,22 +39,26 @@ class ChatbotWebsiteStack(Stack):
         )
 
         # Create the S3 bucket for website content
-        bucket = s3.Bucket(self, "GenAiChatbotS3BucketContent")
-        bucket.removal_policy = RemovalPolicy.DESTROY
+        bucket = s3.Bucket(self, "GenAiChatbotS3BucketContent",
+                           removal_policy=RemovalPolicy.DESTROY,
+                           auto_delete_objects=True )
 
         # Create the S3 bucket for conversation history
-        conversation_history_bucket = s3.Bucket(self, "ConversationHistoryBucket")
-        conversation_history_bucket.removal_policy = RemovalPolicy.DESTROY
+        conversation_history_bucket = s3.Bucket(self, "ConversationHistoryBucket",
+                           removal_policy=RemovalPolicy.DESTROY,
+                           auto_delete_objects=True )
 
         # Create the S3 bucket for agent schemas
-        schemabucket = s3.Bucket(self, "GenAiChatbotS3BucketAgentSchemas")
-        schemabucket.removal_policy = RemovalPolicy.DESTROY
+        schemabucket = s3.Bucket(self, "GenAiChatbotS3BucketAgentSchemas",
+                           removal_policy=RemovalPolicy.DESTROY,
+                           auto_delete_objects=True )
 
         # Deploy agent schemas to the S3 bucket
         s3deploy.BucketDeployment(self, "s3FilesDeploymentSchema",
                             sources=[s3deploy.Source.asset("./bedrock_agent_schemas")],
                             destination_bucket=schemabucket,
                             prune=True)
+        
         
         # Create a CloudFront distribution for the website content S3 bucket
         cloudfront_to_s3 = CloudFrontToS3(self, 'CloudfrontDist',

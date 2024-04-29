@@ -137,6 +137,30 @@ else
   done
 fi
 
+# Check if allowlistDomain exists, else prompt user
+allowListDomain=""
+if [ -f allowlistdomain.ref ]; then
+  allowListDomain=$(cat allowlistdomain.ref)
+else
+  read -p "Would you like to add an email domain allowlist for user registration? (y/n) " add_allowlist
+  case "$add_allowlist" in
+    [yY][eE][sS]|[yY])
+      while true; do
+        read -p "Enter the allowlist domain (Example: @amazon.com): " allowListDomain
+        if [[ "$allowListDomain" =~ ^@[a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]]; then
+          echo "$allowListDomain" > allowlistdomain.ref
+          break
+        else
+          echo "Error: Invalid domain format. Please try again."
+        fi
+      done
+      ;;
+    *)
+      echo "" > allowlistdomain.ref
+      ;;
+  esac
+fi
+
 ./recreate-python-lambda-layer.sh
 #change to cdk Directory
 cd cdk
