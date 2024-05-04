@@ -5,11 +5,13 @@ import boto3
 import os
 import logging
 from botocore.exceptions import ClientError
+from aws_lambda_powertools import Tracer
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
-
 dynamodb = boto3.resource('dynamodb')
+tracer = Tracer()
 
 try:
     dynamodb_table_name = os.environ['DYNAMODB_TABLE']
@@ -19,6 +21,7 @@ except KeyError:
 
 incidents_table = dynamodb.Table(dynamodb_table_name)
 
+@tracer.capture_lambda_handler
 def lambda_handler(event, context):
 
     action_group = event.get('actionGroup', '')
@@ -47,6 +50,7 @@ def lambda_handler(event, context):
     else:
         return error_response(action_group, api_path, http_method, 404, 'Not Found', session_attributes, prompt_session_attributes)
 
+@tracer.capture_method
 def validate_incident_data(incident_data):
     required_fields = ['firstName', 'lastName', 'location', 'description']
     missing_fields = [field for field in required_fields if field not in incident_data]
@@ -66,6 +70,7 @@ def validate_incident_data(incident_data):
         if not incident_data[field].strip():
             raise ValueError(f"{field} cannot be an empty string")
 
+@tracer.capture_method
 def create_incident(action_group, incident_data, session_attributes, prompt_session_attributes, api_path, http_method):
     now = datetime.datetime.now()
     incident_id_prefix = f"INC{now.year}{now.month:02d}{now.day:02d}{now.hour:02d}{now.minute:02d}{now.second:02d}"
@@ -94,6 +99,7 @@ def create_incident(action_group, incident_data, session_attributes, prompt_sess
 
     return success_response(action_group, api_path, http_method, 201, response_body, session_attributes, prompt_session_attributes)
 
+@tracer.capture_method
 def get_incident(action_group, session_attributes, prompt_session_attributes, event, api_path, http_method):
     incident_id = None
     for param in event.get('parameters', []):
@@ -123,6 +129,7 @@ def get_incident(action_group, session_attributes, prompt_session_attributes, ev
         logger.debug(f'Incident {incident_id} not found')
         return error_response(action_group, api_path, http_method, 404, f'Incident {incident_id} not found', session_attributes, prompt_session_attributes)
 
+@tracer.capture_method
 def success_response(action_group, api_path, http_method, status_code, response_body, session_attributes, prompt_session_attributes):
     return {
         'messageVersion': '1.0',
@@ -137,6 +144,7 @@ def success_response(action_group, api_path, http_method, status_code, response_
         'promptSessionAttributes': prompt_session_attributes
     }
 
+@tracer.capture_method
 def error_response(action_group, api_path, http_method, status_code, error_message, session_attributes, prompt_session_attributes):
     response_body = {
         'application/json': {

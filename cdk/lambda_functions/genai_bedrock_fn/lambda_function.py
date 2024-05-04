@@ -1,4 +1,6 @@
 import json, boto3, os
+from aws_lambda_powertools import Tracer
+
 
 
 lambda_client = boto3.client('lambda')
@@ -9,8 +11,9 @@ user_pool_id = os.environ['USER_POOL_ID']
 region = os.environ['REGION']
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
 user_cache = {}
+tracer = Tracer()
 
-
+@tracer.capture_lambda_handler
 def lambda_handler(event, context):
     try:
         request_body = json.loads(event['body'])
@@ -21,6 +24,7 @@ def lambda_handler(event, context):
     print('selected_mode:'+selected_mode)
     id_token = request_body.get('idToken', 'none')
     access_token = request_body.get('accessToken', 'none')
+    tracer.put_annotation(key="SelectedMode", value=selected_mode)
     
     allowed, not_allowed_message = validate_jwt_token(id_token, access_token)
     if allowed:
@@ -46,7 +50,7 @@ def lambda_handler(event, context):
             'statusCode': 403,
             'body': json.dumps(not_allowed_message)
         }
-
+@tracer.capture_method
 def validate_jwt_token(id_token, access_token):
     # return True, ''
     # Check if the access_token is in the cache
@@ -68,9 +72,11 @@ def validate_jwt_token(id_token, access_token):
             email_verified = attribute['Value'] == 'true'
         elif attribute['Name'] == 'email':
             email = attribute['Value']
+            tracer.put_annotation(key="Email", value=email)
 
     # if allowlist_domain is not empty and not null then
     if allowlist_domain and allowlist_domain != '':
+        tracer.put_annotation(key="AllowListDomain", value=allowlist_domain)
         if email.endswith(allowlist_domain):
             return True, ''
     else:

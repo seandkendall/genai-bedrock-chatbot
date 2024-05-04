@@ -1,6 +1,8 @@
 import json, os
 import boto3
 from datetime import datetime, timezone
+from aws_lambda_powertools import Tracer
+
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource('dynamodb')
@@ -10,8 +12,9 @@ cognito_client = boto3.client('cognito-idp')
 bedrock_client = boto3.client(service_name='bedrock')
 region = os.environ['REGION']
 user_cache = {}
+tracer = Tracer()
 
-
+@tracer.capture_lambda_handler
 def lambda_handler(event, context):
     try:
         # Parse request body
@@ -53,6 +56,7 @@ def lambda_handler(event, context):
             'body': json.dumps({'error': str(e)})
         }
 
+@tracer.capture_method
 def load_config(user, config_type):
     try:
         response = table.get_item(
@@ -82,7 +86,7 @@ def load_config(user, config_type):
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
         }
-
+@tracer.capture_method
 def save_config(user, config_type, config):
     try:
         now = datetime.now(timezone.utc).isoformat()
@@ -125,7 +129,7 @@ def save_config(user, config_type, config):
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
         }
-
+@tracer.capture_method
 def load_models():
     try:
         # Call the Bedrock API to list available foundation models
@@ -151,7 +155,7 @@ def load_models():
         print(f"Error loading models: {str(e)}")
         return []
 
-    
+@tracer.capture_method    
 def validate_jwt_token(id_token, access_token):
     # return True, ''
     # Check if the access_token is in the cache

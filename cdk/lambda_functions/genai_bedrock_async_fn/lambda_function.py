@@ -1,6 +1,12 @@
 import json, datetime, os, boto3
 from botocore.exceptions import ClientError
 import jwt
+#use AWS powertools for logging
+from aws_lambda_powertools import Logger, Metrics, Tracer
+logger = Logger()
+metrics = Metrics()
+tracer = Tracer()
+
 
 
 
@@ -23,6 +29,7 @@ apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url
 
 system_prompt = ''
 
+@tracer.capture_lambda_handler
 def lambda_handler(event, context):   
     try:
         # Check if the event is a WebSocket event
@@ -35,14 +42,17 @@ def lambda_handler(event, context):
     except Exception as e:    
         print("Error (766): " + str(e))
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
-
+@tracer.capture_method
 def process_websocket_message(event):
     global system_prompt
     # Extract the request body and session ID from the WebSocket event
     request_body = json.loads(event['body'])
     message_type = request_body.get('type', '')
+    tracer.put_annotation(key="MessageType", value=message_type)
     session_id = request_body.get('session_id', 'XYZ')
+    tracer.put_annotation(key="SessionID", value=session_id)
     connection_id = event['requestContext']['connectionId']
+    tracer.put_annotation(key="ConnectionID", value=connection_id)
     # Check if the WebSocket connection is open
     try:
         connection = apigateway_management_api.get_connection(ConnectionId=connection_id)
@@ -71,8 +81,10 @@ def process_websocket_message(event):
         id_token = request_body.get('idToken', 'none')
         decoded_token = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
         user_id = decoded_token['cognito:username']
+        tracer.put_annotation(key="UserID", value=user_id)
         reload_prompt_config = bool(request_body.get('reloadPromptConfig', 'False'))
         system_prompt_user_or_system = request_body.get('systemPromptUserOrSystem', 'system')
+        tracer.put_annotation(key="PromptUserOrSystem", value=system_prompt_user_or_system)
         if not system_prompt or reload_prompt_config:
             print('reloading system config')
             system_prompt = load_system_prompt_config(system_prompt_user_or_system,user_id)
@@ -109,6 +121,7 @@ def process_websocket_message(event):
 
         # Invoke the Bedrock API and get the response stream
         try:
+            tracer.put_annotation(key="Model", value=selected_model_id)
             response = bedrock.invoke_model_with_response_stream(body=json.dumps(bedrock_request), modelId=selected_model_id)
 
             # Process the response stream and send the content to the WebSocket client
@@ -131,7 +144,7 @@ def process_websocket_message(event):
             print(f"Error calling bedrock model (912): {str(e)}")
         
         
-
+@tracer.capture_method
 def delete_conversation_history(session_id):
     try:
         dynamodb.delete_item(
@@ -142,6 +155,7 @@ def delete_conversation_history(session_id):
     except Exception as e:
         print(f"Error deleting conversation history (9781): {str(e)}")
 
+@tracer.capture_method
 def process_bedrock_response(response_stream, prompt, connection_id, user_id):
     result_text = ""
     current_input_tokens = 0
@@ -201,7 +215,7 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id):
     # assistant_response,input_tokens, output_tokens
     return result_text, current_input_tokens, current_output_tokens
 
-
+@tracer.capture_method
 def send_websocket_message(connection_id, message):
     try:
         # Check if the WebSocket connection is open
@@ -219,7 +233,7 @@ def send_websocket_message(connection_id, message):
         print(f"WebSocket connection is closed (connectionId: {connection_id})")
     except Exception as e:
         print(f"Error sending WebSocket message (9012): {str(e)}")
-
+@tracer.capture_method
 def query_existing_history(session_id):
     try:
         response = dynamodb.get_item(
@@ -236,7 +250,7 @@ def query_existing_history(session_id):
     except Exception as e:
         print("Error querying existing history: " + str(e))
         return []
-
+@tracer.capture_method
 def get_monthly_token_usage(user_id):
     current_date_ym = datetime.datetime.now().strftime('%Y-%m')
     response = dynamodb.get_item(
@@ -246,7 +260,7 @@ def get_monthly_token_usage(user_id):
     )
     if 'Item' in response:
         return response['Item']['input_tokens']['N'], response['Item']['output_tokens']['N']
-    
+@tracer.capture_method    
 def save_token_usage(user_id, input_tokens,output_tokens):
     current_date_ymd = datetime.datetime.now().strftime('%Y-%m-%d')
     current_date_ym = datetime.datetime.now().strftime('%Y-%m')
@@ -281,7 +295,7 @@ def save_token_usage(user_id, input_tokens,output_tokens):
                         ':message_count': {'N': str(1)}
                     }
                 )
-    
+@tracer.capture_method    
 def store_conversation_history(session_id, existing_history, user_message, assistant_message, user_id, input_tokens, output_tokens):
     if user_message.strip() and assistant_message.strip():
         # Prepare the updated conversation history
@@ -330,6 +344,7 @@ def store_conversation_history(session_id, existing_history, user_message, assis
         if not assistant_message.strip():
             print(f"Assistant response is empty, skipping storage for session ID: {session_id}")
 
+@tracer.capture_method
 def load_and_send_conversation_history(session_id, connection_id):
     try:
         response = dynamodb.get_item(
@@ -369,7 +384,7 @@ def load_and_send_conversation_history(session_id, connection_id):
         print(f"Error loading conversation history: {str(e)}")
         return []
     
-
+@tracer.capture_method
 def split_message(message, max_chunk_size=30 * 1024):  # 30 KB chunk size
     chunks = []
     current_chunk = []
@@ -391,7 +406,7 @@ def split_message(message, max_chunk_size=30 * 1024):  # 30 KB chunk size
         chunks.append(json.dumps(current_chunk))
 
     return chunks
-
+@tracer.capture_method
 def load_system_prompt_config(system_prompt_user_or_system, user_id):
     try:
         user_key = 'system'

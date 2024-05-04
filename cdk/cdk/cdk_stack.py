@@ -1,4 +1,4 @@
-from aws_cdk import (
+from aws_cdk import ( # type: ignore
     Stack, Duration, CfnOutput,CfnParameter,
     aws_s3 as s3,
     aws_lambda as _lambda,
@@ -13,9 +13,10 @@ from aws_cdk import (
     RemovalPolicy,
 )
 from constructs import Construct
-from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3
+from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3 # type: ignore
 from .constructs.user_pool_user import UserPoolUser
 import json
+
 
 class ChatbotWebsiteStack(Stack):
 
@@ -35,23 +36,29 @@ class ChatbotWebsiteStack(Stack):
             self, "Boto3Layer",
             code=_lambda.Code.from_asset("lambda_functions/python_layer"),
             compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
+            compatible_architectures=[_lambda.Architecture.ARM_64],
             description="Boto3 library layer"
         )
+        # Add powertools layer
+        powertools_layer = _lambda.LayerVersion.from_layer_version_arn(self, "PowertoolsLayer",f"arn:aws:lambda:{self.region}:017000801446:layer:AWSLambdaPowertoolsPythonV2-Arm64:69")
 
         # Create the S3 bucket for website content
         bucket = s3.Bucket(self, "GenAiChatbotS3BucketContent",
                            removal_policy=RemovalPolicy.DESTROY,
-                           auto_delete_objects=True )
+                           auto_delete_objects=True,
+                           enforce_ssl=True)
 
         # Create the S3 bucket for conversation history
         conversation_history_bucket = s3.Bucket(self, "ConversationHistoryBucket",
                            removal_policy=RemovalPolicy.DESTROY,
-                           auto_delete_objects=True )
+                           auto_delete_objects=True,
+                           enforce_ssl=True)
 
         # Create the S3 bucket for agent schemas
         schemabucket = s3.Bucket(self, "GenAiChatbotS3BucketAgentSchemas",
                            removal_policy=RemovalPolicy.DESTROY,
-                           auto_delete_objects=True )
+                           auto_delete_objects=True,
+                           enforce_ssl=True)
 
         # Deploy agent schemas to the S3 bucket
         s3deploy.BucketDeployment(self, "s3FilesDeploymentSchema",
@@ -113,14 +120,16 @@ class ChatbotWebsiteStack(Stack):
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_config_fn/"),
             timeout=Duration.seconds(30),
+            architecture=_lambda.Architecture.ARM_64,
             tracing=_lambda.Tracing.ACTIVE,
             memory_size=1024,
-            layers=[boto3_layer],
+            layers=[boto3_layer, powertools_layer],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={
                 "DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
                 "ALLOWLIST_DOMAIN": allowlist_domain_string,
                 "REGION": self.region,
+                "POWERTOOLS_SERVICE_NAME":"CONFIG_SERVICE",
             }
         )
         config_function.removal_policy = RemovalPolicy.DESTROY
@@ -137,13 +146,15 @@ class ChatbotWebsiteStack(Stack):
                                      handler="lambda_function.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_agents_client_fn/"),
                                      timeout=Duration.seconds(900),
+                                     architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer],
+                                     layers=[boto3_layer, powertools_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
-                                          "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint
+                                          "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
+                                          "POWERTOOLS_SERVICE_NAME":"AGENTS_CLIENT_SERVICE",
                                      }
                                      )
         agents_client_function.removal_policy = RemovalPolicy.DESTROY
@@ -161,12 +172,14 @@ class ChatbotWebsiteStack(Stack):
                                      handler="lambda_function.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_agents_fn/"),
                                      timeout=Duration.seconds(120),
+                                     architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer],
+                                     layers=[boto3_layer, powertools_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "DYNAMODB_TABLE": dynamodb_incidents_table.table_name,
+                                          "POWERTOOLS_SERVICE_NAME":"AGENTS_SERVICE",
                                      }
                                      )
         agents_function.removal_policy = RemovalPolicy.DESTROY
@@ -183,9 +196,10 @@ class ChatbotWebsiteStack(Stack):
                                      handler="lambda_function.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_async_fn/"),
                                      timeout=Duration.seconds(900),
+                                     architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer],
+                                     layers=[boto3_layer, powertools_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,                                     
                                      environment={
                                           "DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
@@ -193,7 +207,8 @@ class ChatbotWebsiteStack(Stack):
                                           "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                                           "DYNAMODB_TABLE_CONFIG": dynamodb_configurations_table.table_name,
                                           "DYNAMODB_TABLE_USAGE": dynamodb_bedrock_usage_table.table_name,
-                                          "REGION": self.region
+                                          "REGION": self.region,
+                                          "POWERTOOLS_SERVICE_NAME":"BEDROCK_ASYNC_SERVICE",
                                      }
                                      )
         lambda_fn_async.removal_policy = RemovalPolicy.DESTROY
@@ -223,33 +238,35 @@ class ChatbotWebsiteStack(Stack):
             ),
         )
         # Create the "genai_bedrock_fn" Lambda function
-        lambda_fn = _lambda.Function(self, "genai_bedrock_fn",
+        lambda_router_fn = _lambda.Function(self, "genai_bedrock_router_fn",
                                      runtime=_lambda.Runtime.PYTHON_3_12,
                                      handler="lambda_function.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_fn/"),
                                      timeout=Duration.seconds(20),
+                                     architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer],
+                                     layers=[boto3_layer, powertools_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "USER_POOL_ID": user_pool.user_pool_id,
                                           "REGION": self.region,
                                           "AGENTS_FUNCTION_NAME": agents_client_function.function_name,
                                           "BEDROCK_FUNCTION_NAME": lambda_fn_async.function_name,
-                                          "ALLOWLIST_DOMAIN": allowlist_domain_string
+                                          "ALLOWLIST_DOMAIN": allowlist_domain_string,
+                                          "POWERTOOLS_SERVICE_NAME":"BEDROCK_ROUTER",
                                         }
                                      )
-        lambda_fn.removal_policy = RemovalPolicy.DESTROY
+        lambda_router_fn.removal_policy = RemovalPolicy.DESTROY
         
-        dynamodb_conversations_table.grant_full_access(lambda_fn)
-        lambda_fn_async.grant_invoke(lambda_fn)
-        agents_client_function.grant_invoke(lambda_fn)
+        dynamodb_conversations_table.grant_full_access(lambda_router_fn)
+        lambda_fn_async.grant_invoke(lambda_router_fn)
+        agents_client_function.grant_invoke(lambda_router_fn)
         dynamodb_incidents_table.grant_full_access(agents_client_function)
 
         # Create a Lambda integration for the "genai_bedrock_fn" Lambda
         bedrock_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
-            "BedrockFnIntegration", lambda_fn
+            "BedrockFnIntegration", lambda_router_fn
         )
         config_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
             "ConfigFnIntegration", config_function
