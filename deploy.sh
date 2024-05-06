@@ -228,7 +228,12 @@ else
     case "$run_bootstrap" in
         [yY][eE][sS]|[yY])
             echo "Running CDK bootstrap..."
-            cdk bootstrap --require-approval never
+            if [ -n "$cname" ] && [ "$cname" != "null" ]; then
+                cdk bootstrap --require-approval never --context cname="$cname" --context certificate_arn="$certificate_arn" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain"
+            else
+                cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain"
+            fi
+            
             if [ $? -eq 0 ]; then
                 echo "CDK bootstrap completed successfully."
             else

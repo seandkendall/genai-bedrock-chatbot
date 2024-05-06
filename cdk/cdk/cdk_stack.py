@@ -25,6 +25,8 @@ class ChatbotWebsiteStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         cognito_domain_string = self.node.try_get_context("cognitoDomain")
+        if cognito_domain_string is None:
+            cognito_domain_string = ""
         allowlist_domain_string = self.node.try_get_context("allowlistDomain")
         # if allowlist_domain_string is null then set as empty string
         if allowlist_domain_string is None:
