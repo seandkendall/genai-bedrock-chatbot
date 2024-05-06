@@ -1,5 +1,5 @@
 from aws_cdk import ( # type: ignore
-    Stack, Duration, CfnOutput,CfnParameter,
+    Stack, Duration, CfnOutput,
     aws_s3 as s3,
     aws_lambda as _lambda,
     aws_s3_deployment as s3deploy,
@@ -11,25 +11,33 @@ from aws_cdk import ( # type: ignore
     aws_apigatewayv2_integrations as apigwv2_integrations,
     aws_cognito as cognito,
     RemovalPolicy,
+    aws_certificatemanager as acm
 )
 from constructs import Construct
 from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3 # type: ignore
 from .constructs.user_pool_user import UserPoolUser
 import json
+from aws_cdk.aws_route53 import PublicHostedZone
 
 
 class ChatbotWebsiteStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+        cognito_domain_string = self.node.try_get_context("cognitoDomain")
+        allowlist_domain_string = self.node.try_get_context("allowlistDomain")
+        cname_string = self.node.try_get_context("cname")
+        certificate_arn_string = self.node.try_get_context("certificate_arn")
 
-        cognito_domain_param = CfnParameter(self, "cognitoDomain", type="String",
-            description="Specify your unique cognito domain")
-        cognito_domain_string = cognito_domain_param.value_as_string
+        #set boolean has_cname_condition for if cname_string is not null and not empty
+        has_cname_condition = False
+        if cname_string is not None and cname_string != "":
+            has_cname_condition = True
+        has_certificate_arn_condition = False
+        if certificate_arn_string is not None and certificate_arn_string != "":
+            has_certificate_arn_condition = True
         
-        allowlist_domain_param = CfnParameter(self, "allowlistDomain", type="String",
-            description="Specify your domain allowlist")
-        allowlist_domain_string = allowlist_domain_param.value_as_string
+        
 
         # Create a Lambda layer for the Boto3 library
         boto3_layer = _lambda.LayerVersion(
@@ -65,18 +73,39 @@ class ChatbotWebsiteStack(Stack):
                             sources=[s3deploy.Source.asset("./bedrock_agent_schemas")],
                             destination_bucket=schemabucket,
                             prune=True)
+
+        cloud_front_distribution_props={
+                           'comment': 'GenAiChatbot Website',
+                           'defaultBehavior': {
+                               'cachePolicy': cloudfront.CachePolicy.CACHING_DISABLED
+                           },
+                       }
+        if has_cname_condition:
+            #get hosted zone
+            hosted_zone = PublicHostedZone.from_lookup(self, "HostedZone", domain_name=cname_string)
+            #if hosted zone was found:
+            if hosted_zone is not None:
+                #continue
+                print('TODO: continue')
+            else:
+                print('TODO: error')
+                #error
+                
+            cloud_front_distribution_props['domainNames'] = [cname_string]
+            if has_certificate_arn_condition:
+                print("has_certificate_arn_condition: "+certificate_arn_string)
+                # cloud_front_distribution_props['certificate'] = acm.Certificate.from_certificate_arn(self, "Certificate", certificate_arn_string)
+            else:
+                print("Not has_certificate_arn_condition!")
+                # cloud_front_distribution_props['certificate'] = acm.Certificate(self, "Certificate", domain_name=cname_string)
         
         
+
         # Create a CloudFront distribution for the website content S3 bucket
         cloudfront_to_s3 = CloudFrontToS3(self, 'CloudfrontDist',
                        existing_bucket_obj=bucket,
                        insert_http_security_headers=False,
-                       cloud_front_distribution_props={
-                           'comment': 'GenAiChatbot Website',
-                           'defaultBehavior': {
-                               'cachePolicy': cloudfront.CachePolicy.CACHING_DISABLED
-                           }
-                       }
+                       cloud_front_distribution_props=cloud_front_distribution_props
                        )
         cloudfront_distribution = cloudfront_to_s3.cloud_front_web_distribution
         

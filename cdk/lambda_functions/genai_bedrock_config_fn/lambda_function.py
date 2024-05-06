@@ -177,7 +177,13 @@ def validate_jwt_token(id_token, access_token):
             email_verified = attribute['Value'] == 'true'
         elif attribute['Name'] == 'email':
             email = attribute['Value']
-
+    # if allowlist_domain contains a comma, then split it into a list and return true of the email ends with any of the domains
+    if ',' in allowlist_domain:
+        allowlist_domains = allowlist_domain.split(',')
+        for domain in allowlist_domains:
+            if email.endswith(domain):
+                return True, ''
+            
     # if allowlist_domain is not empty and not null then
     if allowlist_domain and allowlist_domain != '':
         if email.endswith(allowlist_domain):

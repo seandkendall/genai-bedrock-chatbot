@@ -10,6 +10,7 @@ cognitoDomain.ref
 bootstrap.ref
 last_update.txt
 allowlistdomain.ref
+cname.ref
 outputs.json
 chatbot-prompts/
 cdk/react-chatbot/src/variables.js

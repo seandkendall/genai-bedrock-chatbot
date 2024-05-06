@@ -3,15 +3,38 @@
 DEFAULT_COLOR="\033[0m"
 GREEN_COLOR="\033[0;32m"
 RED_COLOR="\033[0;31m"
+
 list_user_pools() {
-    aws cognito-idp list-user-pools --max-results 60 --query 'UserPools[*].Id' --output text
+    aws cognito-idp list-user-pools --max-results 60 --query 'UserPools[?contains(Name, `ChatbotUserPool`)].Id' --output text
 }
+
 get_user_pool_domain() {
     local user_pool_id="$1"
     local domain=$(aws cognito-idp describe-user-pool --user-pool-id "$user_pool_id" --query 'UserPool.Domain' --output text)
     if [ -n "$domain" ]; then
         echo "$domain"
     fi
+}
+
+generate_cognito_domain(){
+    local cognito_domain="genchatbot-$(LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 8)-$(date +%y%m%d%H%M)"
+    echo "$cognito_domain"
+    return cognito_domain
+}
+
+get_certificate_arn() {
+    local cname="$1"
+    local wildcard_cname="*.$cname"
+
+    # Check for a direct match first
+    certificate_arn=$(aws acm list-certificates --query "CertificateSummaryList[?DomainName=='$cname'].CertificateArn|[0]" --output text)
+
+    # If no direct match, check for a wildcard certificate
+    if [ -z "$certificate_arn" ]; then
+        certificate_arn=$(aws acm list-certificates --query "CertificateSummaryList[?DomainName=='$wildcard_cname'].CertificateArn|[0]" --output text)
+    fi
+
+    echo "$certificate_arn"
 }
 
 # Parse command-line arguments
@@ -106,48 +129,69 @@ else
     for user_pool_id in $user_pools; do
         domain=$(get_user_pool_domain "$user_pool_id")
         if [ -n "$domain" ] && [[ "$domain" =~ ^[a-z]+$ ]]; then
-            read -p "An existing Cognito user pool domain '$domain' was found. Do you want to use it? (y/n) " use_existing
-            case "$use_existing" in
-                [yY][eE][sS]|[yY])
-                    cognitoDomain="$domain"
-                    echo "$cognitoDomain" > cognitoDomain.ref
-                    break
-                    ;;
-                *)
-                    ;;
-            esac
+            cognitoDomain="$domain"
+            echo "$cognitoDomain" > cognitoDomain.ref
         fi
     done
 fi
-
-# Read cognitoDomain from reference file, if it exists
-if [ -f cognitoDomain.ref ]; then
-  cognitoDomain=$(cat cognitoDomain.ref)
-else
-  while true; do
-    echo "A cognito Domain is needed to create a new userpool. This name must be globally unique, if another user is already using this domain, this script will fail."
-    read -p "Enter a cognitoDomain (lowercase, no special characters, no numbers, and without the words 'cognito', 'aws', 'amazon'): " cognitoDomain
-    # Validate cognitoDomain format
-    if [[ "$cognitoDomain" =~ ^[a-z]+$ ]] && ! [[ "$cognitoDomain" =~ cognito ]] && ! [[ "$cognitoDomain" =~ aws ]] && ! [[ "$cognitoDomain" =~ amazon ]]; then
-      echo "$cognitoDomain" > cognitoDomain.ref
-      break
-    else
-      echo "Error: cognitoDomain must be lowercase, contain no special characters, no numbers, and should not contain the words 'cognito', 'amazon', 'aws'."
-    fi
-  done
+# if cognitoDomain is null or empty, generate a new one
+if [ -z "$cognitoDomain" ]; then
+    cognitoDomain=$(generate_cognito_domain)
+    echo "$cognitoDomain" > cognitoDomain.ref
+    echo -e "${DEFAULT_COLOR}No existing user pool found. A new user pool with domain $cognitoDomain will be created."
 fi
+
+# Check if cname exists, else prompt user
+cname=""
+certificate_arn=""
+# if [ -f cname.ref ]; then
+#   cname=$(cat cname.ref)
+# else
+#   read -p "Would you like to add a DNS CNAME Record for this website such as ai.example.com? You will still need to update your DNS manually after the deployment is complete (y/n) " add_cname
+#   case "$add_cname" in
+#     [yY][eE][sS]|[yY])
+#       while true; do
+#         read -p "Enter the CNAME here (e.g., api.example.com): " cname
+#         if [[ "$cname" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]]; then
+#           echo "$cname" > cname.ref
+#           certificate_arn=$(get_certificate_arn "$cname")
+#           if [ -n "$certificate_arn" ]; then
+#             echo "Found certificate ARN: $certificate_arn"
+#             break
+#           else
+#             echo "No certificate found for $cname or *.$cname One will be created"
+#             certificate_arn=""
+#           fi
+#         else
+#           echo "Error: Invalid CNAME format. Please try again."
+#         fi
+#       done
+#       ;;
+#     *)
+#       echo "" > cname.ref
+#       ;;
+#   esac
+# fi
 
 # Check if allowlistDomain exists, else prompt user
 allowListDomain=""
 if [ -f allowlistdomain.ref ]; then
   allowListDomain=$(cat allowlistdomain.ref)
 else
-  read -p "Would you like to add an email domain allowlist for user registration? (y/n) " add_allowlist
+  read -p "Would you like to add one or more email domains to an allowlist for user registration? (y/n) " add_allowlist
   case "$add_allowlist" in
     [yY][eE][sS]|[yY])
       while true; do
-        read -p "Enter the allowlist domain (Example: @amazon.com): " allowListDomain
-        if [[ "$allowListDomain" =~ ^@[a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]]; then
+        read -p "Enter the allowlist domains separated by commas (Example: @amazon.com,@example.ca): " allowListDomain
+        valid=true
+        IFS=',' read -ra domains <<< "$allowListDomain"
+        for domain in "${domains[@]}"; do
+          if ! [[ "$domain" =~ ^@[a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]]; then
+            valid=false
+            break
+          fi
+        done
+        if $valid; then
           echo "$allowListDomain" > allowlistdomain.ref
           break
         else
@@ -200,7 +244,11 @@ fi
 touch "$bootstrap_ref_file"
 
 # Deploy the CDK app
-cdk deploy --outputs-file outputs.json --parameters cognitoDomain="$cognitoDomain" --parameters allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+if [ -n "$cname" ] && [ "$cname" != "null" ]; then
+    cdk deploy --outputs-file outputs.json --context cname="$cname" --context certificate_arn="$certificate_arn" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+else
+    cdk deploy --outputs-file outputs.json --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+fi
 if [ $? -ne 0 ]; then
     echo "Error: CDK deployment failed. Exiting script."
     exit 1
@@ -295,8 +343,11 @@ fi
 
 # Go back to the parent directory
 cd ..
-
-cdk deploy --outputs-file outputs.json --parameters cognitoDomain="$cognitoDomain" --parameters allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+if [ -n "$cname" ] && [ "$cname" != "null" ]; then
+    cdk deploy --outputs-file outputs.json --context cname="$cname" --context certificate_arn="$certificate_arn" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+else
+    cdk deploy --outputs-file outputs.json --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+fi
 if [ $? -ne 0 ]; then
     echo -e "${RED_COLOR}Error: CDK deployment failed. Exiting script.${DEFAULT_COLOR}"
     exit 1
@@ -307,3 +358,8 @@ cd ..
 echo -e "${GREEN_COLOR}Deployment complete!${DEFAULT_COLOR}"
 # tell user to visit the url: awschatboturl
 echo -e "${GREEN_COLOR}Visit the chatbot here: ${awschatboturl}${DEFAULT_COLOR}"
+#if cname is not null and not empty, then print cname
+if [ -n "$cname" ] && [ "$cname" != "null" ]; then
+    echo -e "${GREEN_COLOR}Or you can use your DNS Entry: ${cname}${DEFAULT_COLOR}"
+    echo -e "${DEFAULT_COLOR}The DNS entry will only work if you have configured your DNS correctly${DEFAULT_COLOR}"
+fi
