@@ -408,9 +408,11 @@ const App = memo(({ signOut, user }) => {
       } else if (message.type === 'message_start') {
         const model = message?.['message'].model
         setUsedModel(model)
+        updateMessages(message);
       } else if (message.type === 'content_block_delta') {
         updateMessages(message);
       } else if (message.type === 'message_stop') {
+        updateMessages(message);
         updateMessagesOnStop(message);
         setIsDisabled(false);
         setResponseCompleted(true);
@@ -446,19 +448,22 @@ const App = memo(({ signOut, user }) => {
   }, [lastMessage]);
 
   const updateMessages = (message) => {
-    setMessages((prevMessages) => {
-      const updatedMessages = [...prevMessages];
-      const lastIndex = updatedMessages.length - 1;
-      const lastMessage = updatedMessages[lastIndex];
-      if (lastMessage && lastMessage.role === 'assistant') {
-        const newContent = lastMessage.content + message.delta.text;
-        updatedMessages[lastIndex] = {
-          ...lastMessage,
-          content: newContent,
-        };
-      }
-      return updatedMessages;
-    });
+    // console.log('message:', message)
+    if (message && message.delta && message.delta.text) {
+      setMessages((prevMessages) => {
+        const updatedMessages = [...prevMessages];
+        const lastIndex = updatedMessages.length - 1;
+        const lastMessage = updatedMessages[lastIndex];
+        if (lastMessage && lastMessage.role === 'assistant') {
+          const newContent = lastMessage.content + message.delta.text;
+          updatedMessages[lastIndex] = {
+            ...lastMessage,
+            content: newContent,
+          };
+        }
+        return updatedMessages;
+      });
+    }
   };
 
   const updateMessagesOnStop = (messageStop) => {

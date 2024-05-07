@@ -101,10 +101,11 @@ const SettingsModal = ({
         const selectedModelId = event.target.value;
         const selectedModel = models.find((model) => model.modelId === selectedModelId);
         if (selectedModel) {
+            console.log('handleModelChange: Setting New Model As : ' + selectedModel.modelId)
             setSelectedModel(selectedModel.modelId);
         }
     };
-
+    
     const handleSystemPromptChange = (event) => {
         const { value } = event.target;
         setSystemPrompt((prevState) => ({
@@ -147,7 +148,7 @@ const SettingsModal = ({
         if(!selectedModel){
             const defaultModel = getDefaultModel(models);
             if(defaultModel){
-                console.log('setting default model as: '+defaultModel.modelId)
+                console.log('DefaultModel: setting default model as: '+defaultModel.modelId)
                 setSelectedModel(defaultModel.modelId)
             }
         }

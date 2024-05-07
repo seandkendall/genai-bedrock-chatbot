@@ -142,7 +142,7 @@ def load_models():
                 'modelArn': model['modelArn']
             }
             for model in response['modelSummaries']
-            if 'Anthropic' in model['providerName'] and 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
+            if ('Anthropic' in model['providerName'] or 'Mistral' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
         ]
 
         # Send the available models to the frontend

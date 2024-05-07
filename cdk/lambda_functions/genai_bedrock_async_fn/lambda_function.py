@@ -40,7 +40,7 @@ def lambda_handler(event, context):
         return {'statusCode': 200}
 
     except Exception as e:    
-        print("Error (766): " + str(e))
+        logger.error("Error (766): " + str(e))
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 @tracer.capture_method
 def process_websocket_message(event):
@@ -58,14 +58,14 @@ def process_websocket_message(event):
         connection = apigateway_management_api.get_connection(ConnectionId=connection_id)
         connection_state = connection.get('ConnectionStatus', 'OPEN')
         if connection_state != 'OPEN':
-            print(f"WebSocket connection is not open (state: {connection_state})")
+            logger.info(f"WebSocket connection is not open (state: {connection_state})")
             return
     except apigateway_management_api.exceptions.GoneException:
-        print(f"WebSocket connection is closed (connectionId: {connection_id})")
+        logger.error(f"WebSocket connection is closed (connectionId: {connection_id})")
         return
 
     if message_type == 'clear_conversation':
-        print(f'Action: Clear Conversation {session_id}')
+        logger.info(f'Action: Clear Conversation {session_id}')
         # Delete the conversation history from DynamoDB
         delete_conversation_history(session_id)
         return
@@ -86,7 +86,7 @@ def process_websocket_message(event):
         system_prompt_user_or_system = request_body.get('systemPromptUserOrSystem', 'system')
         tracer.put_annotation(key="PromptUserOrSystem", value=system_prompt_user_or_system)
         if not system_prompt or reload_prompt_config:
-            print('reloading system config')
+            logger.info('reloading system config')
             system_prompt = load_system_prompt_config(system_prompt_user_or_system,user_id)
         selected_model = request_body.get('model')
         if isinstance(selected_model,str):
@@ -94,7 +94,6 @@ def process_websocket_message(event):
         else:
             selected_model_id = selected_model.get('modelId').replace(' ','')
             
-        bedrock_request= {}
         if 'anthropic' in selected_model_id.lower():
             bedrock_request = {
                 'max_tokens': 4096,
@@ -115,33 +114,47 @@ def process_websocket_message(event):
                 'max_tokens': 4096,
                 'prompt': existing_history + ' ' +  prompt
             }
+        elif 'mistral' in selected_model_id.lower():
+            if existing_history:
+                instruction = f"{existing_history}</s><s>[INST] {prompt} [/INST] "
+            else:
+                instruction = f"<s>[INST] {prompt} [/INST]"
+
+            bedrock_request = {
+                'max_tokens': 4096,
+                'prompt': instruction
+            }
         else:
-            print(selected_model_id+' Not yet implemented')
+            logger.warn(selected_model_id+' Not yet implemented')
             
 
-        # Invoke the Bedrock API and get the response stream
-        try:
-            tracer.put_annotation(key="Model", value=selected_model_id)
-            response = bedrock.invoke_model_with_response_stream(body=json.dumps(bedrock_request), modelId=selected_model_id)
+        if bedrock_request:
+            try:
+                tracer.put_annotation(key="Model", value=selected_model_id)
+                response = bedrock.invoke_model_with_response_stream(body=json.dumps(bedrock_request), modelId=selected_model_id)
 
-            # Process the response stream and send the content to the WebSocket client
-            if 'anthropic' in selected_model_id.lower():
-                assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id)
-            elif 'amazon' in selected_model_id.lower():
-                assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id)
-            elif 'ai21' in selected_model_id.lower():
-                assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id)
+                # Process the response stream and send the content to the WebSocket client
+                if 'anthropic' in selected_model_id.lower():
+                    assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'anthropic',selected_model_id)
+                elif 'amazon' in selected_model_id.lower():
+                    assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'amazon',selected_model_id)
+                elif 'ai21' in selected_model_id.lower():
+                    assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'ai21',selected_model_id)
+                elif 'mistral' in selected_model_id.lower():
+                    assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'mistral',selected_model_id)
 
-            # Store the updated conversation history in DynamoDB
-            store_conversation_history(session_id, existing_history, prompt, assistant_response, user_id, input_tokens, output_tokens)
-        except Exception as e:
-            if 'have access to the model with the specified model ID.' in str(e):
-                model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
-                send_websocket_message(connection_id, {
-                    'type': 'error',
-                    'error': f'You have not enabled the selected model. Please visit the following link to request model access: [{model_access_url}]({model_access_url})'
-                })
-            print(f"Error calling bedrock model (912): {str(e)}")
+                # Store the updated conversation history in DynamoDB
+                store_conversation_history(session_id, existing_history, prompt, assistant_response, user_id, input_tokens, output_tokens)
+            except Exception as e:
+                if 'have access to the model with the specified model ID.' in str(e):
+                    model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
+                    send_websocket_message(connection_id, {
+                        'type': 'error',
+                        'error': f'You have not enabled the selected model. Please visit the following link to request model access: [{model_access_url}]({model_access_url})'
+                    })
+                logger.error(f"Error calling bedrock model (912): {str(e)}")
+        else:
+            logger.warn('No bedrock request')
         
         
 @tracer.capture_method
@@ -151,12 +164,12 @@ def delete_conversation_history(session_id):
             TableName=table_name,
             Key={'session_id': {'S': session_id}}
         )
-        print(f"Conversation history deleted for session ID: {session_id}")
+        logger.info(f"Conversation history deleted for session ID: {session_id}")
     except Exception as e:
-        print(f"Error deleting conversation history (9781): {str(e)}")
+        logger.error(f"Error deleting conversation history (9781): {str(e)}")
 
 @tracer.capture_method
-def process_bedrock_response(response_stream, prompt, connection_id, user_id):
+def process_bedrock_response(response_stream, prompt, connection_id, user_id, model_provider, model_name):
     result_text = ""
     current_input_tokens = 0
     current_output_tokens = 0
@@ -168,7 +181,47 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id):
             if chunk.get('bytes'):
                 content_chunk = json.loads(chunk['bytes'].decode('utf-8'))
 
-                if content_chunk['type'] == 'message_start':
+                if model_provider == 'mistral':
+                    if counter == 0:
+                        message_type = 'message_start'
+                    else:
+                        message_type = 'content_block_delta'
+                    for element in content_chunk['outputs']:
+                        msg_text = element['text']
+                        if element['stop_reason']:
+                            message_type = 'message_stop'
+                    
+                    #if message_type equals 'message_start' then
+                    if message_type == 'message_start':
+                        # Send the message_start event to the WebSocket client
+                        result_text += msg_text
+                        send_websocket_message(connection_id, {
+                            'type': message_type,
+                            'message': {"model": model_name},
+                            'delta': {'text': msg_text},
+                            'message_id': counter
+                        })
+                    elif message_type == 'content_block_delta':
+                        result_text += msg_text
+                        send_websocket_message(connection_id, {
+                            'type': message_type,
+                            'delta': {'text': msg_text},
+                            'message_id': counter
+                        })
+                    elif message_type == 'message_stop':
+                        amazon_bedrock_invocationMetrics =  content_chunk.get('amazon-bedrock-invocationMetrics', {})
+                        current_input_tokens = amazon_bedrock_invocationMetrics.get('inputTokenCount', 0)
+                        current_output_tokens = amazon_bedrock_invocationMetrics.get('outputTokenCount', 0)
+                        logger.info(f"TokenCounts: {str(current_input_tokens)}/{str(current_output_tokens)}")
+                        # TODO: send update monthly usage tokens
+                        # {monthly_input_tokens, monthly_output_tokens} = get_monthly_token_usage(user_id)
+                        # Send the message_stop event to the WebSocket client
+                        send_websocket_message(connection_id, {
+                            'type': message_type,
+                            'amazon-bedrock-invocationMetrics': content_chunk.get('amazon-bedrock-invocationMetrics', {})
+                        })
+
+                elif content_chunk['type'] == 'message_start':
                     # Send the message_start event to the WebSocket client
                     send_websocket_message(connection_id, {
                         'type': 'message_start',
@@ -176,8 +229,6 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id):
                     })
 
                 elif content_chunk['type'] == 'content_block_delta':
-                    #increment counter by 1
-                    counter += 1
                     if content_chunk['delta']['text']:
                         # Escape any HTML tags before sending
                         escaped_text = content_chunk['delta']['text']
@@ -194,7 +245,7 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id):
                     amazon_bedrock_invocationMetrics =  content_chunk.get('amazon-bedrock-invocationMetrics', {})
                     current_input_tokens = amazon_bedrock_invocationMetrics.get('inputTokenCount', 0)
                     current_output_tokens = amazon_bedrock_invocationMetrics.get('outputTokenCount', 0)
-                    print(f"TokenCounts: {str(current_input_tokens)}/{str(current_output_tokens)}")
+                    logger.info(f"TokenCounts: {str(current_input_tokens)}/{str(current_output_tokens)}")
                     # TODO: send update monthly usage tokens
                     # {monthly_input_tokens, monthly_output_tokens} = get_monthly_token_usage(user_id)
                     # Send the message_stop event to the WebSocket client
@@ -202,10 +253,11 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id):
                         'type': 'message_stop',
                         'amazon-bedrock-invocationMetrics': content_chunk.get('amazon-bedrock-invocationMetrics', {})
                     })
+            counter += 1
 
     except Exception as e:
-        print(f"Error processing Bedrock response (9926): {str(e)}")
-        print(f"Original Prompt: {prompt}")
+        logger.error(f"Error processing Bedrock response (9926): {str(e)}")
+        logger.error(f"Original Prompt: {prompt}")
         # Send an error message to the WebSocket client
         send_websocket_message(connection_id, {
             'type': 'error',
@@ -222,7 +274,7 @@ def send_websocket_message(connection_id, message):
         connection = apigateway_management_api.get_connection(ConnectionId=connection_id)
         connection_state = connection.get('ConnectionStatus', 'OPEN')
         if connection_state != 'OPEN':
-            print(f"WebSocket connection is not open (state: {connection_state})")
+            logger.warn(f"WebSocket connection is not open (state: {connection_state})")
             return
 
         apigateway_management_api.post_to_connection(
@@ -230,9 +282,9 @@ def send_websocket_message(connection_id, message):
             Data=json.dumps(message).encode()
         )
     except apigateway_management_api.exceptions.GoneException:
-        print(f"WebSocket connection is closed (connectionId: {connection_id})")
+        logger.info(f"WebSocket connection is closed (connectionId: {connection_id})")
     except Exception as e:
-        print(f"Error sending WebSocket message (9012): {str(e)}")
+        logger.error(f"Error sending WebSocket message (9012): {str(e)}")
 @tracer.capture_method
 def query_existing_history(session_id):
     try:
@@ -248,7 +300,7 @@ def query_existing_history(session_id):
             return []
 
     except Exception as e:
-        print("Error querying existing history: " + str(e))
+        logger.error("Error querying existing history: " + str(e))
         return []
 @tracer.capture_method
 def get_monthly_token_usage(user_id):
@@ -308,7 +360,7 @@ def store_conversation_history(session_id, existing_history, user_message, assis
 
         # Check if the conversation history size is greater than 80% of the 400KB limit (327,680)
         if conversation_history_size > (400 * 1024 * 0.8):
-            print(f"Warning: Session ID {session_id} has reached 80% of the DynamoDB limit. Storing conversation history in S3.")
+            logger.warn(f"Warning: Session ID {session_id} has reached 80% of the DynamoDB limit. Storing conversation history in S3.")
             # Store the conversation history in S3
             try:
                 s3.put_object(
@@ -317,7 +369,7 @@ def store_conversation_history(session_id, existing_history, user_message, assis
                     Body=json.dumps(conversation_history).encode('utf-8')
                 )
             except ClientError as e:
-                print(f"Error storing conversation history in S3: {e}")
+                logger.error(f"Error storing conversation history in S3: {e}")
 
             # Update the DynamoDB item to indicate that the conversation history is in S3
                 dynamodb.update_item(
@@ -340,9 +392,9 @@ def store_conversation_history(session_id, existing_history, user_message, assis
         save_token_usage(user_id, input_tokens, output_tokens)
     else:
         if not user_message.strip():
-            print(f"User message is empty, skipping storage for session ID: {session_id}")
+            logger.info(f"User message is empty, skipping storage for session ID: {session_id}")
         if not assistant_message.strip():
-            print(f"Assistant response is empty, skipping storage for session ID: {session_id}")
+            logger.info(f"Assistant response is empty, skipping storage for session ID: {session_id}")
 
 @tracer.capture_method
 def load_and_send_conversation_history(session_id, connection_id):
@@ -381,7 +433,7 @@ def load_and_send_conversation_history(session_id, connection_id):
             return []
 
     except Exception as e:
-        print(f"Error loading conversation history: {str(e)}")
+        logger.error(f"Error loading conversation history: {str(e)}")
         return []
     
 @tracer.capture_method
