@@ -1,41 +1,28 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Define colors
-DEFAULT_COLOR="\033[0m"
-GREEN_COLOR="\033[0;32m"
-RED_COLOR="\033[0;31m"
-
-list_user_pools() {
-    aws cognito-idp list-user-pools --max-results 60 --query 'UserPools[?contains(Name, `ChatbotUserPool`)].Id' --output text
-}
-
-get_user_pool_domain() {
-    local user_pool_id="$1"
-    local domain=$(aws cognito-idp describe-user-pool --user-pool-id "$user_pool_id" --query 'UserPool.Domain' --output text)
-    if [ -n "$domain" ]; then
-        echo "$domain"
+has_colors() {
+    local has_colors=false
+    if [ -t 1 ]; then
+        if command -v tput >/dev/null 2>&1; then
+            if [ "$TERM" != linux ]; then
+                has_colors=true
+            fi
+        fi
     fi
+    echo $has_colors
 }
 
-generate_cognito_domain(){
-    local cognito_domain="genchatbot-$(LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 8)-$(date +%y%m%d%H%M)"
-    echo "$cognito_domain"
-    return cognito_domain
-}
-
-get_certificate_arn() {
-    local cname="$1"
-    local wildcard_cname="*.$cname"
-
-    # Check for a direct match first
-    certificate_arn=$(aws acm list-certificates --query "CertificateSummaryList[?DomainName=='$cname'].CertificateArn|[0]" --output text)
-
-    # If no direct match, check for a wildcard certificate
-    if [ -z "$certificate_arn" ]; then
-        certificate_arn=$(aws acm list-certificates --query "CertificateSummaryList[?DomainName=='$wildcard_cname'].CertificateArn|[0]" --output text)
-    fi
-
-    echo "$certificate_arn"
-}
+if $(has_colors); then
+    # Use color codes
+    DEFAULT_COLOR="\033[0m"
+    GREEN_COLOR="\033[0;32m"
+    RED_COLOR="\033[0;31m"
+else
+    # Don't use color codes
+    DEFAULT_COLOR=""
+    GREEN_COLOR=""
+    RED_COLOR=""
+fi
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -118,28 +105,36 @@ if [ -z "${VIRTUAL_ENV}" ]; then
     exit 1
 fi
 
-# Read cognitoDomain from reference file, if it exists
-if [ -f cognitoDomain.ref ]; then
-  cognitoDomain=$(cat cognitoDomain.ref)
+user_pool_id=$(aws cognito-idp list-user-pools --max-results 60 --query 'UserPools[?contains(Name, `ChatbotUserPool`)].Id' --output text)
+if [ -n "$user_pool_id" ]; then
+    cognitoDomain=$(aws cognito-idp describe-user-pool --user-pool-id "$user_pool_id" --query 'UserPool.Domain' --output text)
+    if [ -n "$cognitoDomain" ]; then
+        echo -e "${DEFAULT_COLOR}User pool found with ID $user_pool_id and domain $cognitoDomain"
+    else
+        echo -e "${DEFAULT_COLOR}User pool found with ID $user_pool_id, but no Domain"
+        cognitoDomain="genchatbot-$(LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 8)-$(date +%y%m%d%H%M)"
+        echo -e "${DEFAULT_COLOR}New Domain Set: $cognitoDomain"
+    fi
 else
-    # List all user pools
-    user_pools=$(list_user_pools)
+    cognitoDomain="genchatbot-$(LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 8)-$(date +%y%m%d%H%M)"
+    echo -e "${DEFAULT_COLOR}No User Pool or Domain Found, Creating New Domain: $cognitoDomain"
+fi
 
-    # Check if any existing user pool has a domain matching the expected format
-    for user_pool_id in $user_pools; do
-        domain=$(get_user_pool_domain "$user_pool_id")
-        if [ -n "$domain" ] && [[ "$domain" =~ ^[a-z]+$ ]]; then
-            cognitoDomain="$domain"
-            echo "$cognitoDomain" > cognitoDomain.ref
-        fi
-    done
-fi
-# if cognitoDomain is null or empty, generate a new one
-if [ -z "$cognitoDomain" ]; then
-    cognitoDomain=$(generate_cognito_domain)
-    echo "$cognitoDomain" > cognitoDomain.ref
-    echo -e "${DEFAULT_COLOR}No existing user pool found. A new user pool with domain $cognitoDomain will be created."
-fi
+get_certificate_arn() {
+    local cname="$1"
+    local wildcard_cname="*.$cname"
+
+    # Check for a direct match first
+    certificate_arn=$(aws acm list-certificates --query "CertificateSummaryList[?DomainName=='$cname'].CertificateArn|[0]" --output text)
+
+    # If no direct match, check for a wildcard certificate
+    if [ -z "$certificate_arn" ]; then
+        certificate_arn=$(aws acm list-certificates --query "CertificateSummaryList[?DomainName=='$wildcard_cname'].CertificateArn|[0]" --output text)
+    fi
+
+    echo "$certificate_arn"
+}
+
 
 # Check if cname exists, else prompt user
 cname=""
