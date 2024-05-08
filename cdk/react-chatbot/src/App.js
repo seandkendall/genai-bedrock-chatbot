@@ -53,6 +53,18 @@ const modelPrices = {
     pricePer1000InputTokens: 0.0008,
     pricePer1000OutputTokens: 0.0024,
   },
+  'mistral.mistral-7b-instruct-v0:2': {
+    pricePer1000InputTokens: 0.00015,
+    pricePer1000OutputTokens: 0.0002,
+  },
+  'mistral.mixtral-8x7b-instruct-v0:1': {
+    pricePer1000InputTokens: 0.00045,
+    pricePer1000OutputTokens: 0.0007,
+  },
+  'mistral.mistral-large-2402-v1:0': {
+    pricePer1000InputTokens: 0.008,
+    pricePer1000OutputTokens: 0.024,
+  },
 };
 
 async function getCurrentSession() {
