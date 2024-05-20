@@ -106,9 +106,9 @@ if [ -z "${VIRTUAL_ENV}" ]; then
 fi
 
 user_pool_id=$(aws cognito-idp list-user-pools --max-results 60 --query 'UserPools[?contains(Name, `ChatbotUserPool`)].Id' --output text)
-if [ -n "$user_pool_id" ]; then
+if [ -n "$user_pool_id" ] && [ "$user_pool_id" != "None" ]; then
     cognitoDomain=$(aws cognito-idp describe-user-pool --user-pool-id "$user_pool_id" --query 'UserPool.Domain' --output text)
-    if [ -n "$cognitoDomain" ]; then
+    if [ -n "$cognitoDomain" ] && [ "$cognitoDomain" != "None" ]; then
         echo -e "${DEFAULT_COLOR}User pool found with ID $user_pool_id and domain $cognitoDomain"
     else
         echo -e "${DEFAULT_COLOR}User pool found with ID $user_pool_id, but no Domain"
@@ -223,7 +223,7 @@ else
     case "$run_bootstrap" in
         [yY][eE][sS]|[yY])
             echo "Running CDK bootstrap..."
-            if [ -n "$cname" ] && [ "$cname" != "null" ]; then
+            if [ -n "$cname" ] && [ "$cname" != "None" ] && [ "$cname" != "null" ]; then
                 cdk bootstrap --require-approval never --context cname="$cname" --context certificate_arn="$certificate_arn" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain"
             else
                 cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain"
@@ -244,7 +244,7 @@ fi
 touch "$bootstrap_ref_file"
 
 # Deploy the CDK app
-if [ -n "$cname" ] && [ "$cname" != "null" ]; then
+if [ -n "$cname" ] && [ "$cname" != "None" ] && [ "$cname" != "null" ]; then
     cdk deploy --outputs-file outputs.json --context cname="$cname" --context certificate_arn="$certificate_arn" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
 else
     cdk deploy --outputs-file outputs.json --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
@@ -343,7 +343,7 @@ fi
 
 # Go back to the parent directory
 cd ..
-if [ -n "$cname" ] && [ "$cname" != "null" ]; then
+if [ -n "$cname" ] && [ "$cname" != "None" ] && [ "$cname" != "null" ]; then
     cdk deploy --outputs-file outputs.json --context cname="$cname" --context certificate_arn="$certificate_arn" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
 else
     cdk deploy --outputs-file outputs.json --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
@@ -359,7 +359,7 @@ echo -e "${GREEN_COLOR}Deployment complete!${DEFAULT_COLOR}"
 # tell user to visit the url: awschatboturl
 echo -e "${GREEN_COLOR}Visit the chatbot here: ${awschatboturl}${DEFAULT_COLOR}"
 #if cname is not null and not empty, then print cname
-if [ -n "$cname" ] && [ "$cname" != "null" ]; then
+if [ -n "$cname" ] && [ "$cname" != "None" ] && [ "$cname" != "null" ]; then
     echo -e "${GREEN_COLOR}Or you can use your DNS Entry: ${cname}${DEFAULT_COLOR}"
     echo -e "${DEFAULT_COLOR}The DNS entry will only work if you have configured your DNS correctly${DEFAULT_COLOR}"
 fi
