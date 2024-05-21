@@ -340,7 +340,7 @@ const App = memo(({ signOut, user }) => {
     setShowPopup(true);
     console.error('WebSocket error:', errormessage);
   };
-// useEffect(() => {}, [selectedModel]);
+
   const onSend = async (message) => {
     setIsDisabled(true);
     setResponseCompleted(false);
@@ -367,7 +367,7 @@ const App = memo(({ signOut, user }) => {
         reloadPromptConfig: reloadPromptConfig,
         systemPromptUserOrSystem: systemPromptUserOrSystem
       };
-
+      data.model = selectedModel;
       const currentTime = new Date();
       const messageWithTime = {
         role: 'user',

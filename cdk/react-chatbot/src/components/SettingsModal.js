@@ -101,7 +101,7 @@ const SettingsModal = ({
         const selectedModelId = event.target.value;
         const selectedModel = models.find((model) => model.modelId === selectedModelId);
         if (selectedModel) {
-            console.log('handleModelChange: Setting New Model As : ' + selectedModel.modelId)
+            console.log('handleModelChange: Setting New Model As : ' + selectedModel.modelId);
             setSelectedModel(selectedModel.modelId);
         }
     };
