@@ -1,6 +1,6 @@
 import { marked } from 'marked';
 import { websocketUrl } from './variables.js';
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useRef, memo, lazy, Suspense } from 'react';
 import DOMPurify from 'dompurify';
 import Header from './components/Header';
 import ChatHistory from './components/ChatHistory';
@@ -15,7 +15,6 @@ import '@aws-amplify/ui-react/styles.css';
 import amplifyConfig from './config.json';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import SettingsModal from './components/SettingsModal';
 import useWebSocket from 'react-use-websocket';
 
 // hard-coded pricing for now, until amazon releases an API for this
@@ -66,6 +65,8 @@ const modelPrices = {
     pricePer1000OutputTokens: 0.024,
   },
 };
+
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
 
 async function getCurrentSession() {
   try {
@@ -630,33 +631,35 @@ const App = memo(({ signOut, user }) => {
           onClose={() => setShowPopup(false)}
           showPopup={showPopup}
           setShowPopup={setShowPopup} />}
-        <SettingsModal
-          open={showSettingsModal}
-          onClose={handleCloseSettingsModal}
-          onSave={handleSaveSettings}
-          bedrockKnowledgeBaseID={bedrockKnowledgeBaseID}
-          setBedrockKnowledgeBaseID={setBedrockKnowledgeBaseID}
-          bedrockAgentsID={bedrockAgentsID}
-          knowledgebasesOrAgents={knowledgebasesOrAgents}
-          setBedrockAgentsID={setBedrockAgentsID}
-          bedrockAgentsAliasID={bedrockAgentsAliasID}
-          setBedrockAgentsAliasID={setBedrockAgentsAliasID}
-          setPricePer1000InputTokens={setPricePer1000InputTokens}
-          pricePer1000InputTokens={pricePer1000InputTokens}
-          setPricePer1000OutputTokens={setPricePer1000OutputTokens}
-          pricePer1000OutputTokens={pricePer1000OutputTokens}
-          setKnowledgebasesOrAgents={setKnowledgebasesOrAgents}
-          user={user}
-          websocketUrl={websocketUrl}
-          getCurrentSession={getCurrentSession}
-          systemPromptUserOrSystem={systemPromptUserOrSystem}
-          setSystemPromptUserOrSystem={setSystemPromptUserOrSystem}
-          setReloadPromptConfig={setReloadPromptConfig}
-          models={models}
-          selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
-          setRegion={setRegion}
-        />
+        <Suspense fallback={<div>Loading...</div>}>
+          <SettingsModal
+            open={showSettingsModal}
+            onClose={handleCloseSettingsModal}
+            onSave={handleSaveSettings}
+            bedrockKnowledgeBaseID={bedrockKnowledgeBaseID}
+            setBedrockKnowledgeBaseID={setBedrockKnowledgeBaseID}
+            bedrockAgentsID={bedrockAgentsID}
+            knowledgebasesOrAgents={knowledgebasesOrAgents}
+            setBedrockAgentsID={setBedrockAgentsID}
+            bedrockAgentsAliasID={bedrockAgentsAliasID}
+            setBedrockAgentsAliasID={setBedrockAgentsAliasID}
+            setPricePer1000InputTokens={setPricePer1000InputTokens}
+            pricePer1000InputTokens={pricePer1000InputTokens}
+            setPricePer1000OutputTokens={setPricePer1000OutputTokens}
+            pricePer1000OutputTokens={pricePer1000OutputTokens}
+            setKnowledgebasesOrAgents={setKnowledgebasesOrAgents}
+            user={user}
+            websocketUrl={websocketUrl}
+            getCurrentSession={getCurrentSession}
+            systemPromptUserOrSystem={systemPromptUserOrSystem}
+            setSystemPromptUserOrSystem={setSystemPromptUserOrSystem}
+            setReloadPromptConfig={setReloadPromptConfig}
+            models={models}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            setRegion={setRegion}
+          />
+        </Suspense>
       </div>
     </ThemeProvider>
   );

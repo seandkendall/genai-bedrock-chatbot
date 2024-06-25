@@ -181,7 +181,7 @@ else
         valid=true
         IFS=',' read -ra domains <<< "$allowListDomain"
         for domain in "${domains[@]}"; do
-          if ! [[ "$domain" =~ ^@[a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]]; then
+          if ! [[ "$domain" =~ ^@?[a-zA-Z0-9.-]+$ ]]; then
             valid=false
             break
           fi

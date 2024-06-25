@@ -73,13 +73,14 @@ def validate_jwt_token(id_token, access_token):
         elif attribute['Name'] == 'email':
             email = attribute['Value']
             tracer.put_annotation(key="Email", value=email)
-    # if allowlist_domain contains a comma, then split it into a list and return true of the email ends with any of the domains
+    # if allowlist_domain contains a comma, then split it into a list and return true of the email contains any of the domains
     if ',' in allowlist_domain:
         allowlist_domains = allowlist_domain.split(',')
         for domain in allowlist_domains:
-            if email.endswith(domain):
+            if domain.casefold() in email.casefold():
                 return True, ''
-            
+
+                        
     # if allowlist_domain is not empty and not null then
     if allowlist_domain and allowlist_domain != '':
         tracer.put_annotation(key="AllowListDomain", value=allowlist_domain)

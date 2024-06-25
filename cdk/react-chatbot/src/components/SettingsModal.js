@@ -20,7 +20,7 @@ import {
     InputLabel,
     Select,
     MenuItem,
-
+    
 } from '@mui/material';
 import useWebSocket from 'react-use-websocket';
 
@@ -55,6 +55,15 @@ const SettingsModal = ({
     const [error, setError] = useState('');
     const [showInfoTooltip, setShowInfoTooltip] = useState(false);
 
+    // Local state variables for form fields
+    const [localBedrockKnowledgeBaseID, setLocalBedrockKnowledgeBaseID] = useState(bedrockKnowledgeBaseID);
+    const [localBedrockAgentsID, setLocalBedrockAgentsID] = useState(bedrockAgentsID);
+    const [localBedrockAgentsAliasID, setLocalBedrockAgentsAliasID] = useState(bedrockAgentsAliasID);
+    const [localPricePer1000InputTokens, setLocalPricePer1000InputTokens] = useState(pricePer1000InputTokens);
+    const [localPricePer1000OutputTokens, setLocalPricePer1000OutputTokens] = useState(pricePer1000OutputTokens);
+    const [localKnowledgebasesOrAgents, setLocalKnowledgebasesOrAgents] = useState(knowledgebasesOrAgents);
+    const [localSelectedModel, setLocalSelectedModel] = useState(selectedModel);
+
     const [systemPrompt, setSystemPrompt] = useState({
         system: '',
         user: '',
@@ -76,36 +85,36 @@ const SettingsModal = ({
 
     const getDefaultModel = (models) => {
         const defaultModel = models.find(
-          (model) => model.modelId === 'anthropic.claude-3-sonnet-20240229-v1:0'
+            (model) => model.modelId === 'anthropic.claude-3-sonnet-20240229-v1:0'
         );
-    
+
         if (defaultModel) {
-          return defaultModel;
+            return defaultModel;
         }
-    
+
         // If not, check for any Anthropic model
         const anthropicModel = models.find((model) => model.providerName === 'Anthropic');
-    
+
         if (anthropicModel) {
-          return anthropicModel;
+            return anthropicModel;
         }
-    
+
         // If no Anthropic model, return the first available model
         if (models.length > 0) {
-          return models[0];
+            return models[0];
         }
         // If no models are available, return null
         return null;
-      };
+    };
     const handleModelChange = (event) => {
         const selectedModelId = event.target.value;
         const selectedModel = models.find((model) => model.modelId === selectedModelId);
         if (selectedModel) {
             console.log('handleModelChange: Setting New Model As : ' + selectedModel.modelId);
-            setSelectedModel(selectedModel.modelId);
+            setLocalSelectedModel(selectedModel.modelId);
         }
     };
-    
+
     const handleSystemPromptChange = (event) => {
         const { value } = event.target;
         setSystemPrompt((prevState) => ({
@@ -113,7 +122,6 @@ const SettingsModal = ({
             [systemPromptType]: value,
         }));
     };
-
 
     const [configLoaded, setConfigLoaded] = useState(false);
 
@@ -145,20 +153,20 @@ const SettingsModal = ({
         [getCurrentSession, sendMessage, user.username]
     );
     useEffect(() => {
-        if(!selectedModel){
+        if (!selectedModel) {
             const defaultModel = getDefaultModel(models);
-            if(defaultModel){
-                console.log('DefaultModel: setting default model as: '+defaultModel.modelId)
-                setSelectedModel(defaultModel.modelId)
+            if (defaultModel) {
+                console.log('DefaultModel: setting default model as: ' + defaultModel.modelId);
+                setLocalSelectedModel(defaultModel.modelId);
             }
         }
-    });
-    
+    }, [models, selectedModel]);
+
 
     useEffect(() => {
         const storedOption = localStorage.getItem('knowledgebasesOrAgents');
         if (storedOption) {
-            setKnowledgebasesOrAgents(storedOption);
+            setLocalKnowledgebasesOrAgents(storedOption);
         }
 
         if (configLoaded === false) {
@@ -173,9 +181,19 @@ const SettingsModal = ({
     }, [systemPrompt, systemPromptType, setReloadPromptConfig]);
 
     const handleOptionChange = (knowledgebasesOrAgents) => {
-        setKnowledgebasesOrAgents(knowledgebasesOrAgents);
+        setLocalKnowledgebasesOrAgents(knowledgebasesOrAgents);
         localStorage.setItem('knowledgebasesOrAgents', knowledgebasesOrAgents);
     };
+
+    const updateSystemPrompt = useCallback(
+        (configType, newPrompt) => {
+            setSystemPrompt((prevState) => ({
+                ...prevState,
+                [configType]: newPrompt,
+            }));
+        },
+        [setSystemPrompt]
+    );
 
     // config loading logic from websocket 
     useEffect(() => {
@@ -183,26 +201,34 @@ const SettingsModal = ({
             const response = JSON.parse(lastMessage.data);
             if (response) {
                 if (response.config_type === 'system') {
-                    setBedrockKnowledgeBaseID(response.bedrockKnowledgeBaseID || bedrockKnowledgeBaseID);
-                    setBedrockAgentsID(response.bedrockAgentsID || bedrockAgentsID);
-                    setBedrockAgentsAliasID(response.bedrockAgentsAliasID || bedrockAgentsAliasID);
-                    setPricePer1000InputTokens(response.pricePer1000InputTokens || pricePer1000InputTokens);
-                    setPricePer1000OutputTokens(response.pricePer1000OutputTokens || pricePer1000OutputTokens);
+                    setLocalBedrockKnowledgeBaseID(response.bedrockKnowledgeBaseID || bedrockKnowledgeBaseID);
+                    setLocalBedrockAgentsID(response.bedrockAgentsID || bedrockAgentsID);
+                    setLocalBedrockAgentsAliasID(response.bedrockAgentsAliasID || bedrockAgentsAliasID);
+                    setLocalPricePer1000InputTokens(response.pricePer1000InputTokens || pricePer1000InputTokens);
+                    setLocalPricePer1000OutputTokens(response.pricePer1000OutputTokens || pricePer1000OutputTokens);
                     setRegion(response.region || 'us-west-2')
                     if (response.modelId) {
                         console.log('setting model as : ' + response.modelId)
-                        setSelectedModel(response.modelId)
+                        setLocalSelectedModel(response.modelId)
                     }
 
                     setSystemPrompt((prevState) => ({
                         ...prevState,
                         system: response.systemPrompt !== null && response.systemPrompt !== undefined ? response.systemPrompt : prevState.system,
                     }));
+                    updateSystemPrompt(
+                        'system',
+                        response.systemPrompt !== null && response.systemPrompt !== undefined
+                            ? response.systemPrompt
+                            : systemPrompt.system
+                    );
                 } else if (response.config_type === 'user') {
-                    setSystemPrompt((prevState) => ({
-                        ...prevState,
-                        user: response.systemPrompt !== null && response.systemPrompt !== undefined ? response.systemPrompt : prevState.user,
-                    }));
+                    updateSystemPrompt(
+                        'user',
+                        response.systemPrompt !== null && response.systemPrompt !== undefined
+                            ? response.systemPrompt
+                            : systemPrompt.user
+                    );
                 } else if (response.message === 'Config saved successfully') {
                     // NoOp: Save Success 
                 } else {
@@ -229,7 +255,7 @@ const SettingsModal = ({
         setBedrockKnowledgeBaseID,
         setPricePer1000InputTokens,
         setPricePer1000OutputTokens,
-        setSystemPrompt,
+        updateSystemPrompt,
     ]);
     const saveConfig = async (configType, config) => {
         const { accessToken, idToken } = await getCurrentSession();
@@ -249,26 +275,34 @@ const SettingsModal = ({
     };
 
     const handleSave = () => {
-        if ((bedrockAgentsID && !bedrockAgentsAliasID) || (!bedrockAgentsID && bedrockAgentsAliasID)) {
+        if ((localBedrockAgentsID && !localBedrockAgentsAliasID) || (!localBedrockAgentsID && localBedrockAgentsAliasID)) {
             setError('If you enter a Bedrock Agents ID, you must also enter a Bedrock Agents Alias ID, and vice versa.');
         } else {
             setError('');
+            setBedrockKnowledgeBaseID(localBedrockKnowledgeBaseID);
+            setBedrockAgentsID(localBedrockAgentsID);
+            setBedrockAgentsAliasID(localBedrockAgentsAliasID);
+            setPricePer1000InputTokens(localPricePer1000InputTokens);
+            setPricePer1000OutputTokens(localPricePer1000OutputTokens);
+            setKnowledgebasesOrAgents(localKnowledgebasesOrAgents);
+            setSelectedModel(localSelectedModel);
+
             saveConfig('system', {
-                bedrockKnowledgeBaseID,
-                bedrockAgentsID,
-                bedrockAgentsAliasID,
+                bedrockKnowledgeBaseID: localBedrockKnowledgeBaseID,
+                bedrockAgentsID: localBedrockAgentsID,
+                bedrockAgentsAliasID: localBedrockAgentsAliasID,
                 systemPrompt,
-                modelId: selectedModel ? selectedModel : null,
+                modelId: localSelectedModel ? localSelectedModel : null,
             });
             saveConfig('user', {
                 systemPrompt,
             });
-            onSave(knowledgebasesOrAgents);
+            onSave(localKnowledgebasesOrAgents);
         }
     };
 
     const isFormValid = () => {
-        return !(bedrockAgentsID && !bedrockAgentsAliasID) && !((!bedrockAgentsID && bedrockAgentsAliasID));
+        return !(localBedrockAgentsID && !localBedrockAgentsAliasID) && !((!localBedrockAgentsID && localBedrockAgentsAliasID));
     };
     const handleInfoTooltipOpen = () => {
         setShowInfoTooltip(true);
@@ -277,9 +311,6 @@ const SettingsModal = ({
     const handleInfoTooltipClose = () => {
         setShowInfoTooltip(false);
     };
-
-
-
 
     return (
         <Modal open={open} onClose={onClose}>
@@ -297,7 +328,7 @@ const SettingsModal = ({
                                 <Grid item xs={12}>
                                     <FormControl fullWidth>
                                         <InputLabel>Model</InputLabel>
-                                        <Select value={selectedModel ? selectedModel : ''} onChange={handleModelChange}>
+                                        <Select value={localSelectedModel ? localSelectedModel : ''} onChange={handleModelChange}>
                                             <MenuItem value="">Select a model</MenuItem>
                                             {models.map((model) => (
                                                 <MenuItem key={model.modelId} value={model.modelId}>
@@ -311,7 +342,7 @@ const SettingsModal = ({
                                     <FormControl component="fieldset">
                                         <RadioGroup
                                             row
-                                            value={knowledgebasesOrAgents}
+                                            value={localKnowledgebasesOrAgents}
                                             onChange={(e) => handleOptionChange(e.target.value)}
                                         >
                                             <FormControlLabel
@@ -327,31 +358,31 @@ const SettingsModal = ({
                                         </RadioGroup>
                                     </FormControl>
                                 </Grid>
-                                {knowledgebasesOrAgents === 'knowledgeBases' && (
+                                {localKnowledgebasesOrAgents === 'knowledgeBases' && (
                                     <Grid item xs={12}>
                                         <TextField
                                             label="Bedrock Knowledge Base ID"
-                                            value={bedrockKnowledgeBaseID}
-                                            onChange={(e) => setBedrockKnowledgeBaseID(e.target.value)}
+                                            value={localBedrockKnowledgeBaseID || ''}
+                                            onChange={(e) => setLocalBedrockKnowledgeBaseID(e.target.value)}
                                             fullWidth
                                         />
                                     </Grid>
                                 )}
-                                {knowledgebasesOrAgents === 'agents' && (
+                                {localKnowledgebasesOrAgents === 'agents' && (
                                     <>
                                         <Grid item xs={12}>
                                             <TextField
                                                 label="Bedrock Agents ID"
-                                                value={bedrockAgentsID}
-                                                onChange={(e) => setBedrockAgentsID(e.target.value)}
+                                                value={localBedrockAgentsID || ''}
+                                                onChange={(e) => setLocalBedrockAgentsID(e.target.value)}
                                                 fullWidth
                                             />
                                         </Grid>
                                         <Grid item xs={12}>
                                             <TextField
                                                 label="Bedrock Agents Alias ID"
-                                                value={bedrockAgentsAliasID}
-                                                onChange={(e) => setBedrockAgentsAliasID(e.target.value)}
+                                                value={localBedrockAgentsAliasID || ''}
+                                                onChange={(e) => setLocalBedrockAgentsAliasID(e.target.value)}
                                                 fullWidth
                                             />
                                         </Grid>
@@ -360,16 +391,16 @@ const SettingsModal = ({
                                 <Grid item xs={12}>
                                     <TextField
                                         label="Price per 1000 Input Tokens"
-                                        value={pricePer1000InputTokens}
-                                        onChange={(e) => setPricePer1000InputTokens(e.target.value)}
+                                        value={localPricePer1000InputTokens || ''}
+                                        onChange={(e) => setLocalPricePer1000InputTokens(e.target.value)}
                                         fullWidth
                                     />
                                 </Grid>
                                 <Grid item xs={12}>
                                     <TextField
                                         label="Price per 1000 Output Tokens"
-                                        value={pricePer1000OutputTokens}
-                                        onChange={(e) => setPricePer1000OutputTokens(e.target.value)}
+                                        value={localPricePer1000OutputTokens || ''}
+                                        onChange={(e) => setLocalPricePer1000OutputTokens(e.target.value)}
                                         fullWidth
                                     />
                                 </Grid>
