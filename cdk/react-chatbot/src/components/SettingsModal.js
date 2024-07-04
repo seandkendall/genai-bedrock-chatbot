@@ -158,6 +158,7 @@ const SettingsModal = ({
             if (defaultModel) {
                 console.log('DefaultModel: setting default model as: ' + defaultModel.modelId);
                 setLocalSelectedModel(defaultModel.modelId);
+                setSelectedModel(defaultModel.modelId);
             }
         }
     }, [models, selectedModel]);
@@ -210,6 +211,7 @@ const SettingsModal = ({
                     if (response.modelId) {
                         console.log('setting model as : ' + response.modelId)
                         setLocalSelectedModel(response.modelId)
+                        setSelectedModel(response.modelId)
                     }
 
                     setSystemPrompt((prevState) => ({

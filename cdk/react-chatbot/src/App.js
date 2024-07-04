@@ -352,6 +352,7 @@ const App = memo(({ signOut, user }) => {
     const sanitizedMessage = DOMPurify.sanitize(message);
 
     let currentSessionId = selectedMode === 'bedrock' ? bedrockSessionId : agentsSessionId;
+
     if (!selectedModel) {
       handleError('You have not requested access to a model in Bedrock. You can do so by visiting this link:https://'+region+'.console.aws.amazon.com/bedrock/home?region='+region+'#/modelaccess')
     }else{
