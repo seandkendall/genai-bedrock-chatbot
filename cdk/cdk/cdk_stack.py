@@ -54,6 +54,7 @@ class ChatbotWebsiteStack(Stack):
         )
         # Add powertools layer
         powertools_layer = _lambda.LayerVersion.from_layer_version_arn(self, "PowertoolsLayer",f"arn:aws:lambda:{self.region}:017000801446:layer:AWSLambdaPowertoolsPythonV2-Arm64:69")
+        lambda_insights_layer = _lambda.LayerVersion.from_layer_version_arn(self, "LambdaInsightsLayer",f"arn:aws:lambda:{self.region}:580247275435:layer:LambdaInsightsExtension-Arm64:20") 
 
         # Create the S3 bucket for website content
         bucket = s3.Bucket(self, "GenAiChatbotS3BucketContent",
@@ -157,7 +158,7 @@ class ChatbotWebsiteStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             tracing=_lambda.Tracing.ACTIVE,
             memory_size=1024,
-            layers=[boto3_layer, powertools_layer],
+            layers=[boto3_layer, powertools_layer,lambda_insights_layer],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={
                 "DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
@@ -183,7 +184,7 @@ class ChatbotWebsiteStack(Stack):
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer, powertools_layer],
+                                     layers=[boto3_layer, powertools_layer,lambda_insights_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
@@ -209,7 +210,7 @@ class ChatbotWebsiteStack(Stack):
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer, powertools_layer],
+                                     layers=[boto3_layer, powertools_layer,lambda_insights_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "DYNAMODB_TABLE": dynamodb_incidents_table.table_name,
@@ -233,7 +234,7 @@ class ChatbotWebsiteStack(Stack):
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer, powertools_layer],
+                                     layers=[boto3_layer, powertools_layer,lambda_insights_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,                                     
                                      environment={
                                           "DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
@@ -280,7 +281,7 @@ class ChatbotWebsiteStack(Stack):
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer, powertools_layer],
+                                     layers=[boto3_layer, powertools_layer,lambda_insights_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "USER_POOL_ID": user_pool.user_pool_id,

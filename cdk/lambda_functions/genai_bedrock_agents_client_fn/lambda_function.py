@@ -21,46 +21,57 @@ bedrock_knowledgebase_id = ''
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
-    global bedrock_agents_id, bedrock_agents_alias_id, bedrock_knowledgebase_id 
+    global bedrock_agents_id, bedrock_agents_alias_id, bedrock_knowledgebase_id; 
+    
+    force_null_kb_session_id = False
+    while True:
+        try:
+            if not bedrock_agents_id or not bedrock_agents_alias_id or not bedrock_knowledgebase_id:
+                bedrock_agents_id, bedrock_agents_alias_id, bedrock_knowledgebase_id = load_config()
+                print(f"Bedrock agents id: {bedrock_agents_id}")
+                tracer.put_annotation(key="BedrockAgentsId", value=bedrock_agents_id)
+                print(f"Bedrock agents alias id: {bedrock_agents_alias_id}")
+                tracer.put_annotation(key="BedrockAgentsAliasId", value=bedrock_agents_alias_id)
+                print(f"Loaded Bedrock Knowledgebase id: {bedrock_knowledgebase_id}")
+                tracer.put_annotation(key="BedrockKnowledgeBaseId", value=bedrock_knowledgebase_id)
+                
+            # Check if the event is a WebSocket event
+            if event['requestContext']['eventType'] == 'MESSAGE':
+                # Handle WebSocket message
+                process_websocket_message(event, bedrock_agents_id, bedrock_agents_alias_id, bedrock_knowledgebase_id, force_null_kb_session_id)
 
-    try:
-        if not bedrock_agents_id or not bedrock_agents_alias_id or not bedrock_knowledgebase_id:
-            bedrock_agents_id, bedrock_agents_alias_id, bedrock_knowledgebase_id = load_config()
-            print(f"Bedrock agents id: {bedrock_agents_id}")
-            tracer.put_annotation(key="BedrockAgentsId", value=bedrock_agents_id)
-            print(f"Bedrock agents alias id: {bedrock_agents_alias_id}")
-            tracer.put_annotation(key="BedrockAgentsAliasId", value=bedrock_agents_alias_id)
-            print(f"Loaded Bedrock Knowledgebase id: {bedrock_knowledgebase_id}")
-            tracer.put_annotation(key="BedrockKnowledgeBaseId", value=bedrock_knowledgebase_id)
-            
-        # Check if the event is a WebSocket event
-        if event['requestContext']['eventType'] == 'MESSAGE':
-            # Handle WebSocket message
-            process_websocket_message(event, bedrock_agents_id, bedrock_agents_alias_id, bedrock_knowledgebase_id)
+            return {'statusCode': 200}
 
-        return {'statusCode': 200}
-
-    except Exception as e:
-        print("Error 7460: " + str(e))
-        bedrock_agents_id = ''
-        bedrock_agents_alias_id = ''
-        bedrock_knowledgebase_id = ''
-        send_websocket_message(event['requestContext']['connectionId'], {
-            'type': 'error',
-            'code':'7460',
-            'error': str(e)
-        })
-        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+        except Exception as e:
+            print("Error 7460: " + str(e))
+            #if str(e) contains the text 'Session with Id' and 'is not valid. Please check and try again' then
+            #extract the session id from the error message and send it to the client
+            if 'Session with Id' in str(e) and 'is not valid. Please check and try again' in str(e):
+                print("Removing Session ID and trying again")
+                force_null_kb_session_id = True
+            else:
+                bedrock_agents_id = ''
+                bedrock_agents_alias_id = ''
+                bedrock_knowledgebase_id = ''
+                send_websocket_message(event['requestContext']['connectionId'], {
+                    'type': 'error',
+                    'code':'7460',
+                    'error': str(e)
+                })
+                return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
 @tracer.capture_method
-def process_websocket_message(event,bedrock_agents_id,bedrock_agents_alias_id,bedrock_knowledgebase_id):
+def process_websocket_message(event,bedrock_agents_id,bedrock_agents_alias_id,bedrock_knowledgebase_id, force_null_kb_session_id):
     # Extract the request body and session ID from the WebSocket event
     request_body = json.loads(event['body'])
     message_type = request_body.get('type', '')
     tracer.put_annotation(key="MessageType", value=message_type)
     session_id = request_body.get('session_id', 'XYZ')
     tracer.put_annotation(key="SessionID", value=session_id)
-    kb_session_id =  request_body.get('kb_session_id', '')
+    if force_null_kb_session_id:
+        kb_session_id = 'null'
+    else:
+        kb_session_id =  request_body.get('kb_session_id', '')
     tracer.put_annotation(key="KBSessionID", value=kb_session_id)
     if(kb_session_id == 'undefined'):
         kb_session_id = ''
