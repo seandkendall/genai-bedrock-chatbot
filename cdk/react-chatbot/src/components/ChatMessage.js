@@ -5,9 +5,20 @@ import { okaidia } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import CodeBlock from './CodeBlock';
 import MessageHeader from './MessageHeader';
 
-const ChatMessage = memo(({ role, content, responseTime, isStreaming, timestamp, outputTokenCount, model }) => {
-  const renderContent = () => (
-    <ReactMarkdown
+const ChatMessage = memo(({ role, content, responseTime, isStreaming, timestamp, outputTokenCount, model, isImage, imageAlt }) => {
+  const renderContent = () => {
+    if (isImage) {
+      return (
+        <img
+          src={content}
+          alt={imageAlt || 'Generated image'}
+          style={{ maxWidth: '100%', height: 'auto' }}
+        />
+      );
+    }
+  
+    return (
+      <ReactMarkdown
       components={{
         code({ node, inline, className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || '');
@@ -40,7 +51,8 @@ const ChatMessage = memo(({ role, content, responseTime, isStreaming, timestamp,
     >
       {formatContent(content, outputTokenCount)}
     </ReactMarkdown>
-  );
+    );
+  };
 
   return (
     <Box

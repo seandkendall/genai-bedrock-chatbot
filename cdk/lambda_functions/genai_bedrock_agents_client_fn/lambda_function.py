@@ -44,8 +44,6 @@ def lambda_handler(event, context):
 
         except Exception as e:
             print("Error 7460: " + str(e))
-            #if str(e) contains the text 'Session with Id' and 'is not valid. Please check and try again' then
-            #extract the session id from the error message and send it to the client
             if 'Session with Id' in str(e) and 'is not valid. Please check and try again' in str(e):
                 print("Removing Session ID and trying again")
                 force_null_kb_session_id = True

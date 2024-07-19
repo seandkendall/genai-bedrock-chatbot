@@ -10,6 +10,7 @@ bedrock_function_name = os.environ['BEDROCK_FUNCTION_NAME']
 user_pool_id = os.environ['USER_POOL_ID']
 region = os.environ['REGION']
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
+image_generation_function_name = os.environ['IMAGE_GENERATION_FUNCTION_NAME']
 user_cache = {}
 tracer = Tracer()
 
@@ -36,6 +37,9 @@ def lambda_handler(event, context):
             # Invoke genai_bedrock_async_fn
             lambda_client.invoke(FunctionName=bedrock_function_name, InvocationType='Event', Payload=json.dumps(event))
             # Process the response from lambda_fn_async
+        elif selected_mode == 'image':
+            # Invoke image generation function
+            lambda_client.invoke(FunctionName=image_generation_function_name, InvocationType='Event', Payload=json.dumps(event))
         else:
             return {
                 'statusCode': 404,

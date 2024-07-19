@@ -10,6 +10,7 @@ from aws_cdk import ( # type: ignore
     aws_apigatewayv2 as apigwv2,
     aws_apigatewayv2_integrations as apigwv2_integrations,
     aws_cognito as cognito,
+    aws_cloudfront_origins as origins,
     RemovalPolicy,
     aws_certificatemanager as acm
 )
@@ -57,7 +58,7 @@ class ChatbotWebsiteStack(Stack):
         lambda_insights_layer = _lambda.LayerVersion.from_layer_version_arn(self, "LambdaInsightsLayer",f"arn:aws:lambda:{self.region}:580247275435:layer:LambdaInsightsExtension-Arm64:20") 
 
         # Create the S3 bucket for website content
-        bucket = s3.Bucket(self, "GenAiChatbotS3BucketContent",
+        website_content_bucket = s3.Bucket(self, "GenAiChatbotS3BucketContent",
                            removal_policy=RemovalPolicy.DESTROY,
                            auto_delete_objects=True,
                            enforce_ssl=True)
@@ -73,6 +74,12 @@ class ChatbotWebsiteStack(Stack):
                            removal_policy=RemovalPolicy.DESTROY,
                            auto_delete_objects=True,
                            enforce_ssl=True)
+        # Add this after the existing S3 bucket definitions
+        image_bucket = s3.Bucket(self, "GeneratedImagesBucket",
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            enforce_ssl=True
+        )
 
         # Deploy agent schemas to the S3 bucket
         s3deploy.BucketDeployment(self, "s3FilesDeploymentSchema",
@@ -80,12 +87,20 @@ class ChatbotWebsiteStack(Stack):
                             destination_bucket=schemabucket,
                             prune=True)
 
-        cloud_front_distribution_props={
-                           'comment': 'GenAiChatbot Website',
-                           'defaultBehavior': {
-                               'cachePolicy': cloudfront.CachePolicy.CACHING_DISABLED
-                           },
-                       }
+        #ORIGINAL  cloud_front_distribution_props={
+        #                    'comment': 'GenAiChatbot Website',
+        #                    'defaultBehavior': {
+        #                        'cachePolicy': cloudfront.CachePolicy.CACHING_DISABLED
+        #                    },
+        #                }
+        cloud_front_distribution_props = {
+            'comment': 'GenAiChatbot Website',
+            'defaultBehavior': {
+                'viewerProtocolPolicy': cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                'cachePolicy': cloudfront.CachePolicy.CACHING_DISABLED,
+                'originRequestPolicy': cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
+            },
+        }
         if has_cname_condition:
             #get hosted zone
             hosted_zone = PublicHostedZone.from_lookup(self, "HostedZone", domain_name=cname_string)
@@ -109,11 +124,30 @@ class ChatbotWebsiteStack(Stack):
 
         # Create a CloudFront distribution for the website content S3 bucket
         cloudfront_to_s3 = CloudFrontToS3(self, 'CloudfrontDist',
-                       existing_bucket_obj=bucket,
+                       existing_bucket_obj=website_content_bucket,
                        insert_http_security_headers=False,
                        cloud_front_distribution_props=cloud_front_distribution_props
                        )
         cloudfront_distribution = cloudfront_to_s3.cloud_front_web_distribution
+
+        oai = cloudfront.OriginAccessIdentity(self, "ImageBucketOAI")
+
+        # Add the image bucket as a new origin
+        image_origin = origins.S3Origin(
+            bucket=image_bucket,
+            origin_access_identity=oai
+        )
+
+        # Add a new behavior for the /images/* path
+        cloudfront_distribution.add_behavior(
+            path_pattern="/images/*",
+            origin=image_origin,
+            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+            origin_request_policy=cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
+        )
+        image_bucket.grant_read(oai)    
+        
         
 
         # Create DynamoDB table for bedrock_usage with a user_id (partition key string), input_tokens (number) and output_tokens(number)
@@ -148,6 +182,28 @@ class ChatbotWebsiteStack(Stack):
             stage_name="ws",
             auto_deploy=True,
         )
+        
+        # Create the Lambda function for image generation
+        image_generation_function = _lambda.Function(self, "ImageGenerationFunction",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            handler="lambda_function.lambda_handler",
+            code=_lambda.Code.from_asset("lambda_functions/genai_bedrock_image_fn/"),
+            timeout=Duration.seconds(300),
+            architecture=_lambda.Architecture.ARM_64,
+            tracing=_lambda.Tracing.ACTIVE,
+            memory_size=1024,
+            layers=[boto3_layer, powertools_layer, lambda_insights_layer],
+            log_retention=logs.RetentionDays.FIVE_DAYS,
+            environment={
+                "WEBSOCKET_API_ENDPOINT": websocket_api.api_endpoint,
+                "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
+                "CLOUDFRONT_DOMAIN": cloudfront_distribution.distribution_domain_name,
+            },
+        )
+        image_generation_function.removal_policy = RemovalPolicy.DESTROY
+        image_bucket.grant_read_write(image_generation_function)
+        image_generation_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
+        image_generation_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"))
 
         config_function = _lambda.Function(
             self, "genai_bedrock_config_fn",
@@ -289,6 +345,7 @@ class ChatbotWebsiteStack(Stack):
                                           "AGENTS_FUNCTION_NAME": agents_client_function.function_name,
                                           "BEDROCK_FUNCTION_NAME": lambda_fn_async.function_name,
                                           "ALLOWLIST_DOMAIN": allowlist_domain_string,
+                                          "IMAGE_GENERATION_FUNCTION_NAME": image_generation_function.function_name,
                                           "POWERTOOLS_SERVICE_NAME":"BEDROCK_ROUTER",
                                         }
                                      )
@@ -297,6 +354,7 @@ class ChatbotWebsiteStack(Stack):
         dynamodb_conversations_table.grant_full_access(lambda_router_fn)
         lambda_fn_async.grant_invoke(lambda_router_fn)
         agents_client_function.grant_invoke(lambda_router_fn)
+        image_generation_function.grant_invoke(lambda_router_fn)
         dynamodb_incidents_table.grant_full_access(agents_client_function)
 
         # Create a Lambda integration for the "genai_bedrock_fn" Lambda
@@ -354,7 +412,7 @@ class ChatbotWebsiteStack(Stack):
         # Deploy the website files and variables.js to the S3 bucket
         s3deploy.BucketDeployment(self, "s3FilesDeployment",
                             sources=[s3deploy.Source.asset("./static-website-source")],
-                            destination_bucket=bucket,
+                            destination_bucket=website_content_bucket,
                             prune=True)
 
 

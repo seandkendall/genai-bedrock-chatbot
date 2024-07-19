@@ -332,6 +332,8 @@ const App = memo(({ signOut, user }) => {
       popupMsg = errormessage
     } else if (errormessage.includes('throttlingException')) {
       popupMsg = 'Sorry, We encountered a Throttling issue, Please try resubmitting your message.'
+    } else if (errormessage.includes('This request has been blocked by our content filters')) {
+      popupMsg = 'This request has been blocked by our content filters'
     }
     setIsDisabled(false);
     stopTimer();
@@ -350,8 +352,14 @@ const App = memo(({ signOut, user }) => {
     startTimer();
 
     const sanitizedMessage = DOMPurify.sanitize(message);
-
     let currentSessionId = selectedMode === 'bedrock' ? bedrockSessionId : agentsSessionId;
+    
+  
+    if (selectedMode === 'bedrock' && sanitizedMessage.trim().toLowerCase().startsWith('image:')) {
+      const imagePrompt = sanitizedMessage.slice(6).trim(); // Remove "Image:" prefix
+      generateImage(imagePrompt, currentSessionId);
+      return;
+    }
 
     if (!selectedModel) {
       handleError('You have not requested access to a model in Bedrock. You can do so by visiting this link:https://'+region+'.console.aws.amazon.com/bedrock/home?region='+region+'#/modelaccess')
@@ -394,6 +402,47 @@ const App = memo(({ signOut, user }) => {
       setReloadPromptConfig(false);
 
     }
+  };
+
+  const generateImage = async (prompt, sessionId) => {
+    setIsDisabled(true);
+    setResponseCompleted(false);
+    setIsLoading(true);
+    resetTimer();
+    startTimer();
+  
+    const { accessToken, idToken } = await getCurrentSession();
+    const data = {
+      prompt: prompt,
+      session_id: sessionId,
+      selectedMode: 'image',
+      idToken: idToken + '',
+      accessToken: accessToken + '',
+    };
+  
+    const currentTime = new Date();
+    const messageWithTime = {
+      role: 'user',
+      content: `Image: ${prompt}`,
+      timestamp: currentTime.toLocaleString(),
+    };
+
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      messageWithTime,
+      {
+        role: 'assistant',
+        content: '',
+        isStreaming: true,
+        timestamp: null,
+        isImage: true,
+        imageAlt: prompt
+      },
+    ]);
+  
+    scrollToBottom();
+  
+    sendMessage(JSON.stringify(data));
   };
 
   useEffect(() => {
@@ -439,6 +488,18 @@ const App = memo(({ signOut, user }) => {
         setResponseCompleted(true);
         setIsLoading(false);
         scrollToBottom();
+      } else if (message.type === 'image_generated') {
+        setMessages((prevMessages) => {
+          const updatedMessages = [...prevMessages];
+          const lastIndex = updatedMessages.length - 1;
+          updatedMessages[lastIndex] = {
+            ...updatedMessages[lastIndex],
+            content: message.image_url,
+            isStreaming: false,
+            timestamp: new Date().toLocaleString(),
+          };
+          return updatedMessages;
+        });
       } else if (message.type === 'load_models') {
         setModels(message.models)
       } else {
