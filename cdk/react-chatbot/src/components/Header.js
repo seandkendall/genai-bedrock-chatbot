@@ -37,7 +37,8 @@ const Header = ({
   monthlyInputTokens,
   monthlyOutputTokens,
   knowledgebasesOrAgents,
-  selectedModel
+  selectedModel,
+  imageModel,
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
@@ -90,13 +91,16 @@ const Header = ({
             title={
               <Box>
                 <Typography>Solution Designed and Built by Sean Kendall</Typography>
-                <Typography>Active Model: {selectedModel}</Typography>
+                <Typography>Active Text Model: {selectedModel}</Typography>
+                <Typography>Active Image Model: {imageModel}</Typography>
                 <Typography>Bedrock Session ID: {bedrockSessionId}</Typography>
                 <Typography>Agents Session ID: {agentsSessionId}</Typography>
                 {kbSessionId && <Typography>KnowledgeBase Session ID: {kbSessionId}</Typography>}
                 <Typography>Total Input/Output Tokens (Bedrock only): {totalInputTokens}/{totalOutputTokens}</Typography>
                 <Typography>Bedrock Cost (Today): { calculateDailyCost()} USD</Typography>
                 {monthlyInputTokens > 0 && <Typography>Bedrock Cost (Current Month): { calculateMonthlyCost()} USD</Typography>}
+                <Typography></Typography>
+                <Typography>Note: Generate an image by prefixing your chat with "Image:"</Typography>
               </Box>
             }
             open={showInfoTooltip}
@@ -122,7 +126,7 @@ const Header = ({
             />
             <Typography variant="body2" ml={1}>{getHeaderLabel()}</Typography>
           </Box>
-          <IconButton color="inherit" onClick={handleOpenSettingsModal}>
+          <IconButton color="inherit" onClick={() => handleOpenSettingsModal()}>
             <FaCog />
           </IconButton>
           <IconButton color="inherit" onClick={onClearConversation} disabled={disabled}>

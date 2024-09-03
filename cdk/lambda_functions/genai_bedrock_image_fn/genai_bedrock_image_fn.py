@@ -1,7 +1,6 @@
 import json
 import boto3
 import base64
-from botocore.exceptions import ClientError
 import uuid
 import os
 import logging
@@ -26,46 +25,30 @@ def lambda_handler(event, context):
         request_body = json.loads(event['body'])
         prompt = request_body.get('prompt', '')
         connection_id = event['requestContext']['connectionId']
-        
-        logger.info(f"Prompt: {prompt}")
-        logger.info(f"Connection ID: {connection_id}")
-
-        logger.info("Generating image using Titan Image Generator")
-        response = bedrock.invoke_model(
-            modelId="amazon.titan-image-generator-v1",
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps({
-                "taskType": "TEXT_IMAGE",
-                "textToImageParams": {
-                    "text": prompt,
-                    "negativeText": "low quality, blurry",
-                },
-                "imageGenerationConfig": {
-                    "numberOfImages": 1,
-                    "width": 512,
-                    "height": 512,
-                    "seed": 0,
-                    "cfgScale": 8.0
-                }
-            })
-        )
-        logger.info("Image generation completed")
-
-        response_body = json.loads(response['body'].read())
-        image_base64 = response_body['images'][0]
+        modelId = request_body.get('imageModel', 'amazon.titan-image-generator-v2:0')
+        stylePreset = request_body.get('stylePreset', 'photographic')
+        heightWidth = request_body.get('heightWidth', '1024x1024')
+        height, width = map(int, heightWidth.split('x'))
+        #if modelId contains titan then 
+        if 'titan' in modelId:
+            image_base64 = generate_image_titan(modelId, prompt, width, height)
+        elif 'stable' in modelId:
+            image_base64 = generate_image_stable_diffusion(modelId, prompt, width, height, stylePreset)
+        else:
+            raise ValueError(f"Unsupported model: {modelId}")
 
         # Save image to S3 and generate pre-signed URL
         image_url = save_image_to_s3_and_get_url(image_base64)
         logger.info("Image saved to S3 and URL generated")
-
-        logger.info("Sending image URL back to the client")
         send_websocket_message(connection_id, {
             'type': 'image_generated',
-            'image_url': image_url
+            'image_url': image_url,
+            'prompt': prompt,
+            'modelId': modelId
         })
         send_websocket_message(connection_id, {
             'type': 'message_stop',
+            'modelId': modelId,
             'backend_type': 'image_generated'
         })
 
@@ -80,6 +63,49 @@ def lambda_handler(event, context):
         })
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
+def generate_image_titan(modelId, prompt, width, height):
+    logger.info("Generating image using Titan Image Generator")
+    response = bedrock.invoke_model(
+        modelId=modelId,
+        contentType="application/json",
+        accept="application/json",
+        body=json.dumps({
+            "taskType": "TEXT_IMAGE",
+            "textToImageParams": {
+                "text": prompt,
+                "negativeText": "low quality, blurry",
+            },
+            "imageGenerationConfig": {
+                "numberOfImages": 1,
+                "width": width,
+                "height": height,
+                "seed": 0,
+                "cfgScale": 8.0
+            }
+        })
+    )
+    response_body = json.loads(response['body'].read())
+    return response_body['images'][0]
+
+def generate_image_stable_diffusion(modelId, prompt, width, height, style_preset):
+    logger.info("Generating image using Stable Diffusion XL")
+    response = bedrock.invoke_model(
+        modelId=modelId,
+        contentType="application/json",
+        accept="application/json",
+        body=json.dumps({
+            "text_prompts": [{"text": prompt}],
+            "cfg_scale": 10,
+            "seed": 0,
+            "steps": 30,
+            "width": width,
+            "height": height,
+            "style_preset": style_preset
+        })
+    )
+    response_body = json.loads(response['body'].read())
+    return response_body['artifacts'][0]['base64']
+
 def save_image_to_s3_and_get_url(image_base64):
     # Decode base64 image
     image_data = base64.b64decode(image_base64)
@@ -87,8 +113,13 @@ def save_image_to_s3_and_get_url(image_base64):
     # Generate a unique filename
     filename = f"images/generated_image_{uuid.uuid4()}.png"
     
-    # Upload to S3
-    s3_client.put_object(Bucket=S3_BUCKET_NAME, Key=filename, Body=image_data, ContentType='image/png')
+    # Upload to S3 with expiration metadata
+    s3_client.put_object(
+        Bucket=S3_BUCKET_NAME,
+        Key=filename,
+        Body=image_data,
+        ContentType='image/png',
+    )
     
     # Generate CloudFront URL
     cloudfront_url = f"https://{os.environ['CLOUDFRONT_DOMAIN']}/{filename}"

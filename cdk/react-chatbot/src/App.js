@@ -130,6 +130,10 @@ const App = memo(({ signOut, user }) => {
   const [usedModel, setUsedModel] = useState('');
   const [selectedModel, setSelectedModel] = useState(null);
   const [region, setRegion] = useState(null);
+  const [imageModel, setImageModel] = useState('amazon.titan-image-generator-v2:0');
+  const [stylePreset, setStylePreset] = useState('photographic');
+  const [heightWidth, setHeightWidth] = useState('1024x1024');
+
 
   // Use the useWebSocket hook to manage the WebSocket connection
   // eslint-disable-next-line
@@ -332,8 +336,8 @@ const App = memo(({ signOut, user }) => {
       popupMsg = errormessage
     } else if (errormessage.includes('throttlingException')) {
       popupMsg = 'Sorry, We encountered a Throttling issue, Please try resubmitting your message.'
-    } else if (errormessage.includes('This request has been blocked by our content filters')) {
-      popupMsg = 'This request has been blocked by our content filters'
+    } else if (errormessage.includes('AUP or AWS Responsible AI')) {
+      popupMsg = 'This request has been blocked by our content filters because the generated image(s) may conflict our AUP or AWS Responsible AI Policy. please try again'
     }
     setIsDisabled(false);
     stopTimer();
@@ -418,6 +422,9 @@ const App = memo(({ signOut, user }) => {
       selectedMode: 'image',
       idToken: idToken + '',
       accessToken: accessToken + '',
+      imageModel: imageModel,
+      stylePreset: stylePreset,
+      heightWidth: heightWidth,
     };
   
     const currentTime = new Date();
@@ -432,10 +439,11 @@ const App = memo(({ signOut, user }) => {
       messageWithTime,
       {
         role: 'assistant',
-        content: '',
+        content: `Generating Image of: *${prompt}* with model: *${imageModel}*. Please wait..`,
         isStreaming: true,
         timestamp: null,
-        isImage: true,
+        model: imageModel,
+        isImage: false,
         imageAlt: prompt
       },
     ]);
@@ -495,7 +503,12 @@ const App = memo(({ signOut, user }) => {
           updatedMessages[lastIndex] = {
             ...updatedMessages[lastIndex],
             content: message.image_url,
+            prompt: message.prompt,
             isStreaming: false,
+            isImage: true,
+            model: message.modelId,
+            outputTokenCount: 0,
+            inputTokenCount: 0,
             timestamp: new Date().toLocaleString(),
           };
           return updatedMessages;
@@ -524,6 +537,10 @@ const App = memo(({ signOut, user }) => {
 
   const updateMessages = (message) => {
     // console.log('message:', message)
+    //if message starts with the text "\nBot: " then strip this from the message
+    if (message && message.delta && message.delta.text && message.delta.text.startsWith('\nBot: ')) {
+      message.delta.text = message.delta.text.substring(6);
+    }
     if (message && message.delta && message.delta.text) {
       setMessages((prevMessages) => {
         const updatedMessages = [...prevMessages];
@@ -683,6 +700,7 @@ const App = memo(({ signOut, user }) => {
           monthlyOutputTokens={monthlyOutputTokens}
           knowledgebasesOrAgents={knowledgebasesOrAgents}
           selectedModel={selectedModel}
+          imageModel={imageModel}
         />
         <div className="chat-history" ref={chatHistoryRef}>
           <ChatHistory messages={messages} selectedMode={selectedMode} setMessages={setMessages} />
@@ -720,6 +738,12 @@ const App = memo(({ signOut, user }) => {
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
             setRegion={setRegion}
+            imageModel={imageModel}
+            setImageModel={setImageModel}
+            stylePreset={stylePreset}
+            setStylePreset={setStylePreset}
+            heightWidth={heightWidth}
+            setHeightWidth={setHeightWidth}
           />
         </Suspense>
       </div>

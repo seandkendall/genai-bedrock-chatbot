@@ -40,11 +40,12 @@ def lambda_handler(event, context):
         return {'statusCode': 200}
 
     except Exception as e:    
-        logger.error("Error (766): " + str(e))
+        logger.error("Error (766)", extra={'exception':e})
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 @tracer.capture_method
 def process_websocket_message(event):
     global system_prompt
+    logger.info('process_websocket_message event:', extra={'event':event})
     # Extract the request body and session ID from the WebSocket event
     request_body = json.loads(event['body'])
     message_type = request_body.get('type', '')
@@ -102,11 +103,31 @@ def process_websocket_message(event):
                 'anthropic_version': 'bedrock-2023-05-31'
             }
         elif 'amazon' in selected_model_id.lower():
+            logger.info('Processing message for amazon bedrock')
+            formatted_text = ''
+            if existing_history:
+                for message in existing_history:
+                    if message['role'] == 'user':
+                        formatted_text += f'User: {replace_user_bot(message["content"])}\n'
+                    elif message['role'] == 'assistant':
+                        formatted_text += f'Bot: {replace_user_bot(message["content"])}\n'
+
+            # Adding the latest prompt
+            formatted_text += f'User: {replace_user_bot(prompt)}\nBot:'
+
+            # Final formatted inputText
+            formatted_text = formatted_text.strip()
+            maxTokenCount = 4096
+            #if model_id contains text 'premier' set maxTokenCount to  3072
+            if 'premier' in selected_model_id.lower():
+                maxTokenCount = 3072
             bedrock_request = {
-                'input_text': existing_history + ' ' +  prompt,
-                'text_generation_config':{
-                    'max_token_count': 4096,
-                    'stop_sequences': ['User:']
+                'inputText': formatted_text,
+                'textGenerationConfig': {
+                    'maxTokenCount': maxTokenCount,
+                    'stopSequences': [],
+                    'temperature': 0.7,
+                    'topP': 1
                 }
             }
         elif 'ai21' in selected_model_id.lower():
@@ -126,8 +147,9 @@ def process_websocket_message(event):
             }
         else:
             logger.warn(selected_model_id+' Not yet implemented')
-            
-
+        
+        
+        logger.info('Bedrock request_body and Request from UI',extra={'request_body':request_body,'bedrock_request':bedrock_request })
         if bedrock_request:
             try:
                 tracer.put_annotation(key="Model", value=selected_model_id)
@@ -137,7 +159,7 @@ def process_websocket_message(event):
                 if 'anthropic' in selected_model_id.lower():
                     assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'anthropic',selected_model_id)
                 elif 'amazon' in selected_model_id.lower():
-                    assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'amazon',selected_model_id)
+                    assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request),connection_id,user_id,'amazon',selected_model_id)
                 elif 'ai21' in selected_model_id.lower():
                     assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'ai21',selected_model_id)
                 elif 'mistral' in selected_model_id.lower():
@@ -168,6 +190,8 @@ def delete_conversation_history(session_id):
     except Exception as e:
         logger.error(f"Error deleting conversation history (9781): {str(e)}")
 
+def replace_user_bot(text):
+    return text.replace('User:', 'User;').replace('Bot:', 'Bot;')
 @tracer.capture_method
 def process_bedrock_response(response_stream, prompt, connection_id, user_id, model_provider, model_name):
     result_text = ""
@@ -181,7 +205,35 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id, mo
             if chunk.get('bytes'):
                 content_chunk = json.loads(chunk['bytes'].decode('utf-8'))
 
-                if model_provider == 'mistral':
+                if model_provider == 'amazon':
+                    if 'outputText' in content_chunk:
+                        msg_text = content_chunk['outputText']
+                        result_text += msg_text
+                        if counter == 0:
+                            send_websocket_message(connection_id, {
+                            'type': 'message_start',
+                            'message': {"model": model_name},
+                            'delta': {'text': msg_text},
+                            'message_id': counter
+                            })
+                        else:
+                            send_websocket_message(connection_id, {
+                                'type': 'content_block_delta',
+                                'delta': {'text': msg_text},
+                                'message_id': counter
+                            })
+                    # if completionReason exists and is not null or not None
+                    if 'completionReason' in content_chunk and content_chunk['completionReason'] is not None:
+                        amazon_bedrock_invocationMetrics = content_chunk.get('amazon-bedrock-invocationMetrics', {})
+                        current_input_tokens = amazon_bedrock_invocationMetrics.get('inputTokenCount', 0)
+                        current_output_tokens = amazon_bedrock_invocationMetrics.get('outputTokenCount', 0)
+                        logger.info(f"TokenCounts: {str(current_input_tokens)}/{str(current_output_tokens)}")
+                        
+                        send_websocket_message(connection_id, {
+                            'type': 'message_stop',
+                            'amazon-bedrock-invocationMetrics': amazon_bedrock_invocationMetrics
+                        })
+                elif model_provider == 'mistral':
                     if counter == 0:
                         message_type = 'message_start'
                     else:
@@ -220,7 +272,6 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id, mo
                             'type': message_type,
                             'amazon-bedrock-invocationMetrics': content_chunk.get('amazon-bedrock-invocationMetrics', {})
                         })
-
                 elif content_chunk['type'] == 'message_start':
                     # Send the message_start event to the WebSocket client
                     send_websocket_message(connection_id, {

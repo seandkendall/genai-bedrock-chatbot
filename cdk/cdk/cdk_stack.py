@@ -78,7 +78,20 @@ class ChatbotWebsiteStack(Stack):
         image_bucket = s3.Bucket(self, "GeneratedImagesBucket",
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
-            enforce_ssl=True
+            enforce_ssl=True,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    id="TransitionAndDelete",
+                    enabled=True,
+                    transitions=[
+                        s3.Transition(
+                            storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+                            transition_after=Duration.days(30)
+                        )
+                    ],
+                    expiration=Duration.days(60)
+                )
+            ]
         )
 
         # Deploy agent schemas to the S3 bucket
@@ -186,7 +199,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the Lambda function for image generation
         image_generation_function = _lambda.Function(self, "ImageGenerationFunction",
             runtime=_lambda.Runtime.PYTHON_3_12,
-            handler="lambda_function.lambda_handler",
+            handler="genai_bedrock_image_fn.lambda_handler",
             code=_lambda.Code.from_asset("lambda_functions/genai_bedrock_image_fn/"),
             timeout=Duration.seconds(300),
             architecture=_lambda.Architecture.ARM_64,
@@ -208,7 +221,7 @@ class ChatbotWebsiteStack(Stack):
         config_function = _lambda.Function(
             self, "genai_bedrock_config_fn",
             runtime=_lambda.Runtime.PYTHON_3_12,
-            handler="lambda_function.lambda_handler",
+            handler="genai_bedrock_config_fn.lambda_handler",
             code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_config_fn/"),
             timeout=Duration.seconds(30),
             architecture=_lambda.Architecture.ARM_64,
@@ -234,7 +247,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the "genai_bedrock_agents_client_fn" Lambda function
         agents_client_function = _lambda.Function(self, "genai_bedrock_agents_client_fn",
                                      runtime=_lambda.Runtime.PYTHON_3_12,
-                                     handler="lambda_function.lambda_handler",
+                                     handler="genai_bedrock_agents_client_fn.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_agents_client_fn/"),
                                      timeout=Duration.seconds(900),
                                      architecture=_lambda.Architecture.ARM_64,
@@ -260,7 +273,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the "genai_bedrock_agents_fn" Lambda function
         agents_function = _lambda.Function(self, "genai_bedrock_agents_fn",
                                      runtime=_lambda.Runtime.PYTHON_3_12,
-                                     handler="lambda_function.lambda_handler",
+                                     handler="genai_bedrock_agents_fn.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_agents_fn/"),
                                      timeout=Duration.seconds(120),
                                      architecture=_lambda.Architecture.ARM_64,
@@ -284,7 +297,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the "genai_bedrock_fn_async" Lambda function
         lambda_fn_async = _lambda.Function(self, "genai_bedrock_fn_async",
                                      runtime=_lambda.Runtime.PYTHON_3_12,
-                                     handler="lambda_function.lambda_handler",
+                                     handler="genai_bedrock_async_fn.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_async_fn/"),
                                      timeout=Duration.seconds(900),
                                      architecture=_lambda.Architecture.ARM_64,
@@ -331,7 +344,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the "genai_bedrock_fn" Lambda function
         lambda_router_fn = _lambda.Function(self, "genai_bedrock_router_fn",
                                      runtime=_lambda.Runtime.PYTHON_3_12,
-                                     handler="lambda_function.lambda_handler",
+                                     handler="genai_bedrock_fn.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_fn/"),
                                      timeout=Duration.seconds(20),
                                      architecture=_lambda.Architecture.ARM_64,

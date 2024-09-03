@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, TextField, IconButton } from '@mui/material';
+import { Box, TextField, IconButton, Tooltip } from '@mui/material';
 import { FaPaperPlane } from 'react-icons/fa';
 
 const MessageInput = ({ onSend, disabled }) => {
   const [message, setMessage] = useState('');
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -26,7 +28,19 @@ const MessageInput = ({ onSend, disabled }) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       handleSend();
       e.preventDefault();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const { selectionStart, selectionEnd } = e.target;
+      const newMessage = message.substring(0, selectionStart) + '\t' + message.substring(selectionEnd);
+      setMessage(newMessage);
+      setTimeout(() => {
+        e.target.selectionStart = e.target.selectionEnd = selectionStart + 1;
+      }, 0);
     }
+  };
+
+  const handleMouseMove = (event) => {
+    setMousePosition({ x: event.clientX, y: event.clientY });
   };
 
   return (
@@ -41,18 +55,39 @@ const MessageInput = ({ onSend, disabled }) => {
         boxShadow: '0 -2px 4px rgba(0, 0, 0, 0.1)',
       }}
     >
-      <TextField
-        inputRef={inputRef}
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Type your message..."
-        disabled={disabled}
-        multiline
-        fullWidth
-        variant="outlined"
-        sx={{ mr: 2 }}
-      />
+      <Tooltip
+        title="Generate an image by prefixing your message with 'Image:'. Example: 'Image: Dogs'"
+        open={tooltipOpen}
+        followCursor
+        PopperProps={{
+          anchorEl: {
+            getBoundingClientRect: () => ({
+              top: mousePosition.y,
+              left: mousePosition.x,
+              right: mousePosition.x,
+              bottom: mousePosition.y,
+              width: 0,
+              height: 0,
+            }),
+          },
+        }}
+      >
+        <TextField
+          inputRef={inputRef}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onMouseEnter={() => setTooltipOpen(true)}
+          onMouseLeave={() => setTooltipOpen(false)}
+          onMouseMove={handleMouseMove}
+          placeholder="Type your message..."
+          disabled={disabled}
+          multiline
+          fullWidth
+          variant="outlined"
+          sx={{ mr: 2 }}
+        />
+      </Tooltip>
       <IconButton
         disabled={disabled}
         color="primary"

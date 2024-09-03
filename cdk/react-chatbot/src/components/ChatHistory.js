@@ -30,7 +30,9 @@ const ChatHistory = memo(forwardRef(({ messages, selectedMode, setMessages }, re
           <ChatMessage 
           {...message} 
           imageAlt={message.imageAlt || ''}
-          isImage={message.isImage || false}/>
+          isImage={message.isImage || false}
+          prompt={message.prompt || ''}
+          />
         </div>
       ))}
     </Box>

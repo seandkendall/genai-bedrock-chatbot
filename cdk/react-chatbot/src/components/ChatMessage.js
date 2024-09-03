@@ -5,15 +5,18 @@ import { okaidia } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import CodeBlock from './CodeBlock';
 import MessageHeader from './MessageHeader';
 
-const ChatMessage = memo(({ role, content, responseTime, isStreaming, timestamp, outputTokenCount, model, isImage, imageAlt }) => {
+const ChatMessage = memo(({ role, content, responseTime, isStreaming, timestamp, outputTokenCount, model, isImage, imageAlt, prompt }) => {
   const renderContent = () => {
     if (isImage) {
       return (
-        <img
-          src={content}
-          alt={imageAlt || 'Generated image'}
-          style={{ maxWidth: '100%', height: 'auto' }}
-        />
+        <>
+          <Typography>Generated Image of: {prompt}</Typography>
+          <img
+            src={content}
+            alt={imageAlt || 'Generated image'}
+            style={{ maxWidth: '100%', height: 'auto' }}
+          />
+        </>
       );
     }
   
