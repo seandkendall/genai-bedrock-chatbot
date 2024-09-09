@@ -499,7 +499,7 @@ const App = memo(({ signOut, user }) => {
       timestamp: currentTime.toISOString()
     };
     setMessages((prevMessages) => [
-      ...prevMessages,
+      ...prevMessages? prevMessages: [],
       messageWithTime,
       {
         role: 'assistant',
@@ -562,7 +562,7 @@ const App = memo(({ signOut, user }) => {
         scrollToBottom();
       } else if (message.type === 'image_generated') {
         setMessages((prevMessages) => {
-          const updatedMessages = [...prevMessages];
+          const updatedMessages = [...prevMessages? prevMessages: []];
           const lastIndex = updatedMessages.length - 1;
           updatedMessages[lastIndex] = {
             ...updatedMessages[lastIndex],
@@ -614,7 +614,8 @@ const App = memo(({ signOut, user }) => {
     }
     if (message && message.delta && message.delta.text) {
       setMessages((prevMessages) => {
-        const updatedMessages = [...prevMessages];
+
+        const updatedMessages = [...prevMessages? prevMessages: []];
         const lastIndex = updatedMessages.length - 1;
         const lastMessage = updatedMessages[lastIndex];
         if (lastMessage && lastMessage.role === 'assistant') {
@@ -631,7 +632,7 @@ const App = memo(({ signOut, user }) => {
 
   const updateMessagesOnStop = (messageStop) => {
     setMessages((prevMessages) => {
-      const updatedMessages = [...prevMessages];
+      const updatedMessages = [...prevMessages? prevMessages: []];
       const lastIndex = updatedMessages.length - 1;
       const invocationMetrics = messageStop?.['amazon-bedrock-invocationMetrics'] || null; // Handle the case when 'amazon-bedrock-invocationMetrics' is not present
       const inputTokenCount = invocationMetrics ? invocationMetrics.inputTokenCount : 0;
