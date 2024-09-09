@@ -80,7 +80,6 @@ const MessageInput = ({ onSend, disabled, selectedMode }) => {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          //on mopuse enter, selectedMode === 'bedrock' and message is null or empty
           onMouseEnter={() => setTooltipOpen(selectedMode === 'bedrock' && (!message || message.trim() === '' ))  }
           onMouseLeave={() => setTooltipOpen(false)}
           onMouseMove={handleMouseMove}
