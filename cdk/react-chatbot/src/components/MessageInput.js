@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Box, TextField, IconButton, Tooltip } from '@mui/material';
 import { FaPaperPlane } from 'react-icons/fa';
 
-const MessageInput = ({ onSend, disabled }) => {
+const MessageInput = ({ onSend, disabled, selectedMode }) => {
   const [message, setMessage] = useState('');
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -36,6 +36,9 @@ const MessageInput = ({ onSend, disabled }) => {
       setTimeout(() => {
         e.target.selectionStart = e.target.selectionEnd = selectionStart + 1;
       }, 0);
+    }
+    if (message && message.trim() !== ''){
+      setTooltipOpen(false);
     }
   };
 
@@ -77,7 +80,8 @@ const MessageInput = ({ onSend, disabled }) => {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          onMouseEnter={() => setTooltipOpen(true)}
+          //on mopuse enter, selectedMode === 'bedrock' and message is null or empty
+          onMouseEnter={() => setTooltipOpen(selectedMode === 'bedrock' && (!message || message.trim() === '' ))  }
           onMouseLeave={() => setTooltipOpen(false)}
           onMouseMove={handleMouseMove}
           placeholder="Type your message..."

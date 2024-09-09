@@ -784,7 +784,7 @@ const App = memo(({ signOut, user }) => {
         <div className="chat-history" ref={chatHistoryRef}>
           <ChatHistory messages={messages} selectedMode={selectedMode} setMessages={setMessages} selectedPromptFlow={selectedPromptFlow} knowledgebasesOrAgents={knowledgebasesOrAgents} />
         </div>
-        <MessageInput onSend={onSend} disabled={isDisabled || isLoading} /> {/* Disable MessageInput when loading or disabled */}
+        <MessageInput onSend={onSend} disabled={isDisabled || isLoading} selectedMode={selectedMode} /> {/* Disable MessageInput when loading or disabled */}
         {showPopup && <Popup message={popupMessage}
           type={popupType}
           onClose={() => setShowPopup(false)}

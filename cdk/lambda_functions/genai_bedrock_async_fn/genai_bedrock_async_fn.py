@@ -1,16 +1,19 @@
-import json, os, boto3, random, string
+import json, os, boto3, jwt
 from datetime import datetime
 from django.utils import timezone
 from botocore.exceptions import ClientError
-import jwt
 #use AWS powertools for logging
 from aws_lambda_powertools import Logger, Metrics, Tracer
+from llm_conversion_functions import (
+    generate_random_string,
+    process_message_history,
+    process_message_history_mistral_large,
+    replace_user_bot
+)
+
 logger = Logger()
 metrics = Metrics()
 tracer = Tracer()
-
-
-
 
 # Initialize DynamoDB client
 dynamodb = boto3.client('dynamodb')
@@ -44,6 +47,7 @@ def lambda_handler(event, context):
     except Exception as e:    
         logger.error("Error (766)", extra={'exception':e})
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+
 @tracer.capture_method
 def process_websocket_message(event):
     global system_prompt
@@ -189,8 +193,7 @@ def delete_conversation_history(session_id):
     except Exception as e:
         logger.error(f"Error deleting conversation history (9781): {str(e)}")
 
-def replace_user_bot(text):
-    return text.replace('User:', 'User;').replace('Bot:', 'Bot;')
+
 @tracer.capture_method
 def process_bedrock_response(response_stream, prompt, connection_id, user_id, model_provider, model_name):
     result_text = ""
@@ -340,6 +343,7 @@ def send_websocket_message(connection_id, message):
         logger.info(f"WebSocket connection is closed (connectionId: {connection_id})")
     except Exception as e:
         logger.error(f"Error sending WebSocket message (9012): {str(e)}")
+
 @tracer.capture_method
 def query_existing_history(session_id):
     try:
@@ -357,6 +361,7 @@ def query_existing_history(session_id):
     except Exception as e:
         logger.error("Error querying existing history: " + str(e))
         return []
+
 @tracer.capture_method
 def get_monthly_token_usage(user_id):
     current_date_ym = datetime.now().strftime('%Y-%m')
@@ -367,6 +372,7 @@ def get_monthly_token_usage(user_id):
     )
     if 'Item' in response:
         return response['Item']['input_tokens']['N'], response['Item']['output_tokens']['N']
+
 @tracer.capture_method    
 def save_token_usage(user_id, input_tokens,output_tokens):
     current_date_ymd = datetime.now().strftime('%Y-%m-%d')
@@ -402,6 +408,7 @@ def save_token_usage(user_id, input_tokens,output_tokens):
                         ':message_count': {'N': str(1)}
                     }
                 )
+
 @tracer.capture_method    
 def store_conversation_history(session_id, existing_history, user_message, assistant_message, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id):
     if user_message.strip() and assistant_message.strip():
@@ -492,28 +499,6 @@ def load_and_send_conversation_history(session_id, connection_id):
         return []
     
 @tracer.capture_method
-def split_message(message, max_chunk_size=30 * 1024):  # 30 KB chunk size
-    chunks = []
-    current_chunk = []
-    current_chunk_size = 0
-
-    for msg in message:
-        msg_json = json.dumps({'role': msg['role'], 'content': msg['content'], 'timestamp': msg['timestamp'], 'message_id': msg['message_id']})
-        msg_size = len(msg_json.encode('utf-8'))
-
-        if current_chunk_size + msg_size > max_chunk_size:
-            chunks.append(json.dumps(current_chunk))
-            current_chunk = []
-            current_chunk_size = 0
-
-        current_chunk.append(msg)
-        current_chunk_size += msg_size
-
-    if current_chunk:
-        chunks.append(json.dumps(current_chunk))
-
-    return chunks
-@tracer.capture_method
 def load_system_prompt_config(system_prompt_user_or_system, user_id):
     try:
         user_key = 'system'
@@ -536,56 +521,3 @@ def load_system_prompt_config(system_prompt_user_or_system, user_id):
 
     except Exception as e:
         raise e
-    
-def process_message_history(existing_history):
-    normalized_history = []
-    for message in existing_history:
-        # Extract role and content
-        role = message.get('role')
-        content = message.get('content')
-
-        # Ensure role is present and valid
-        if not role or role not in ['user', 'assistant']:
-            continue  # Skip messages with invalid or missing roles
-
-        # Normalize content format
-        if isinstance(content, str):
-            content = [{'type': 'text', 'text': content}]
-        elif isinstance(content, list):
-            # Ensure each item in the list is correctly formatted
-            content = [{'type': 'text', 'text': item['text']} if isinstance(item, dict) and 'text' in item else {'type': 'text', 'text': str(item)} for item in content]
-        else:
-            content = [{'type': 'text', 'text': str(content)}]
-
-        # Create normalized message
-        normalized_message = {'role': role, 'content': content}
-
-        normalized_history.append(normalized_message)
-
-    return normalized_history
-
-def process_message_history_mistral_large(existing_history):
-    normalized_history = []
-
-    for message in existing_history:
-        role = message.get('role')
-        content = message.get('content')
-
-        if role in ['user', 'assistant']:
-            # Ensure content is a string
-            content = str(content) if content is not None else ''
-            
-            # Create normalized message
-            normalized_message = {
-                'role': role,
-                'content': content
-            }
-            
-            normalized_history.append(normalized_message)
-
-    return normalized_history
-
-def generate_random_string(length=8):
-    characters = string.ascii_lowercase + string.digits
-    random_part = ''.join(random.choice(characters) for _ in range(length))
-    return f"RES{random_part}"
