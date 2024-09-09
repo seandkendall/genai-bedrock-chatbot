@@ -39,6 +39,8 @@ const Header = ({
   knowledgebasesOrAgents,
   selectedModel,
   imageModel,
+  selectedPromptFlow,
+  setSelectedPromptFlow,
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
@@ -76,6 +78,8 @@ const Header = ({
     if (knowledgebasesOrAgents === 'knowledgeBases') {
       return isMobile ? 'KB' : 'KnowledgeBases';
     } else if (knowledgebasesOrAgents === 'agents') {
+      if(selectedPromptFlow)
+        return isMobile ? 'AG' : `Agents (PFlow:${selectedPromptFlow.name})`;
       return isMobile ? 'AG' : 'Agents';
     } else {
       return isMobile ? 'BR' : 'Bedrock';

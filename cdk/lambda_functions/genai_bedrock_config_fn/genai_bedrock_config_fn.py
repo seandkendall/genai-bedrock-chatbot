@@ -10,6 +10,8 @@ table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
 cognito_client = boto3.client('cognito-idp')
 bedrock_client = boto3.client(service_name='bedrock')
+bedrock_agent_client = boto3.client(service_name='bedrock-agent')
+
 region = os.environ['REGION']
 user_cache = {}
 tracer = Tracer()
@@ -32,9 +34,13 @@ def lambda_handler(event, context):
                 'statusCode': 403,
                 'body': json.dumps({'error': not_allowed_message})
             }
-        if action == 'load_models':
+        if action == 'load_prompt_flows':
+            return load_prompt_flows()
+        elif action == 'load_models':
             return load_models()
-        elif config_type not in ['system', 'user', 'load_models']:
+        elif action == 'load_image_models':
+            return load_image_models()
+        elif config_type not in ['system', 'user', 'load_models','load_image_models']:
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': 'Invalid config_type. Must be "system" or "user".'})
@@ -47,7 +53,7 @@ def lambda_handler(event, context):
         else:
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': 'Invalid action. Must be "load_models", "load" or "save".'})
+                'body': json.dumps({'error': 'Invalid action. Must be "load_models", "load_image_models", "load" or "save".'})
             }
 
     except Exception as e:
@@ -130,6 +136,42 @@ def save_config(user, config_type, config):
             'body': json.dumps({'error': str(e)})
         }
 @tracer.capture_method
+def load_prompt_flows():
+    try:
+        response = bedrock_agent_client.list_flows()
+        flow_summaries = response.get('flowSummaries', [])
+        ret = []
+        
+        # Convert datetime objects to ISO format strings
+        for flow in flow_summaries:
+            flow_id = flow['id']
+            flow_alias_response = bedrock_agent_client.list_flow_aliases(
+                flowIdentifier=flow_id,
+            )
+            flow_aliases = flow_alias_response['flowAliasSummaries']
+            # add  to ret
+            ret.extend(flow_aliases)
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'type': 'load_prompt_flows',
+                'prompt_flows': ret
+            }, default=datetime_to_iso)
+        }
+    except Exception as e:
+        print(f"Error loading prompt flows: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'type': 'error',
+                'message': str(e)
+            })
+        }
+
+
+
+@tracer.capture_method
 def load_models():
     try:
         # Call the Bedrock API to list available foundation models
@@ -142,7 +184,7 @@ def load_models():
                 'modelArn': model['modelArn']
             }
             for model in response['modelSummaries']
-            if ('Anthropic' in model['providerName'] or 'Mistral' in model['providerName'] or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
+            if ('Anthropic' in model['providerName'] or ('Mistral' in model['providerName'] and 'Large' in model['modelName']) or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
         ]
 
         # Send the available models to the frontend
@@ -154,6 +196,31 @@ def load_models():
     except Exception as e:
         print(f"Error loading models: {str(e)}")
         return []
+    
+def load_image_models():
+    try:
+        # Call the Bedrock API to list available foundation models
+        response = bedrock_client.list_foundation_models()
+        available_models = [
+            {
+                'providerName': model['providerName'],
+                'modelName': model['modelName'],
+                'modelId': model['modelId'],
+                'modelArn': model['modelArn']
+            }
+            for model in response['modelSummaries']
+            if ('Stability' in model['providerName'] or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'IMAGE' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
+        ]
+
+        # Send the available models to the frontend
+        retObj = {
+            'statusCode': 200,
+            'body': json.dumps({'type': 'load_image_models', 'models': available_models})
+        }
+        return retObj
+    except Exception as e:
+        print(f"Error loading image models: {str(e)}")
+        return []
 
 @tracer.capture_method    
 def validate_jwt_token(id_token, access_token):
@@ -163,7 +230,6 @@ def validate_jwt_token(id_token, access_token):
         user_attributes = user_cache[access_token]
     else:
         # Call cognito_client.get_user if access_token is not in the cache
-        print('calling cognito_client.get_user 1')
         response = cognito_client.get_user(AccessToken=access_token)
         user_attributes = response['UserAttributes']
         
@@ -192,3 +258,7 @@ def validate_jwt_token(id_token, access_token):
         return True, ''
     return False, f'You have not been allow-listed for this application. You require a domain ending with: {allowlist_domain}'
         
+def datetime_to_iso(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError("Type not serializable")

@@ -4,7 +4,9 @@ import base64
 import uuid
 import os
 import logging
+from datetime import datetime
 from aws_lambda_powertools import Tracer
+from django.utils import timezone
 
 # Configure logging
 logger = logging.getLogger()
@@ -29,6 +31,8 @@ def lambda_handler(event, context):
         stylePreset = request_body.get('stylePreset', 'photographic')
         heightWidth = request_body.get('heightWidth', '1024x1024')
         height, width = map(int, heightWidth.split('x'))
+        message_id = request_body.get('message_id', None)
+        message_received_timestamp_utc = request_body.get('timestamp', datetime.now(timezone.utc).isoformat())
         #if modelId contains titan then 
         if 'titan' in modelId:
             image_base64 = generate_image_titan(modelId, prompt, width, height)
@@ -44,12 +48,17 @@ def lambda_handler(event, context):
             'type': 'image_generated',
             'image_url': image_url,
             'prompt': prompt,
-            'modelId': modelId
+            'modelId': modelId,
+            'message_id': message_id,
+            'timestamp': message_received_timestamp_utc,
         })
+        # set new string variable message_end_timestand as current UTC timestamp in this format: 9/9/2024, 6:58:45 AM
         send_websocket_message(connection_id, {
             'type': 'message_stop',
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'modelId': modelId,
-            'backend_type': 'image_generated'
+            'backend_type': 'image_generated',
+            'message_id': message_id,
         })
 
         logger.info("Image URL sent successfully")
@@ -88,21 +97,34 @@ def generate_image_titan(modelId, prompt, width, height):
     return response_body['images'][0]
 
 def generate_image_stable_diffusion(modelId, prompt, width, height, style_preset):
-    logger.info("Generating image using Stable Diffusion XL")
-    response = bedrock.invoke_model(
-        modelId=modelId,
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps({
-            "text_prompts": [{"text": prompt}],
-            "cfg_scale": 10,
-            "seed": 0,
-            "steps": 30,
-            "width": width,
-            "height": height,
-            "style_preset": style_preset
-        })
-    )
+    # write log printing modelId
+    logger.info(f"Generating image using Model ID: {modelId}")
+    # if modelId contains sd3-large
+    if 'stable-diffusion-xl-v1' not in modelId:
+            response = bedrock.invoke_model(
+            modelId=modelId,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps({
+                "prompt": prompt,
+                "seed": 0,
+            })
+        )
+    else:
+        response = bedrock.invoke_model(
+            modelId=modelId,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps({
+                "text_prompts": [{"text": prompt}],
+                "cfg_scale": 10,
+                "seed": 0,
+                "steps": 30,
+                "width": width,
+                "height": height,
+                "style_preset": style_preset
+            })
+        )
     response_body = json.loads(response['body'].read())
     return response_body['artifacts'][0]['base64']
 

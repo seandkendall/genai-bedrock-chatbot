@@ -1,4 +1,6 @@
-import json, datetime, os, boto3
+import json, os, boto3, random, string
+from datetime import datetime
+from django.utils import timezone
 from botocore.exceptions import ClientError
 import jwt
 #use AWS powertools for logging
@@ -94,12 +96,15 @@ def process_websocket_message(event):
             selected_model_id = selected_model
         else:
             selected_model_id = selected_model.get('modelId').replace(' ','')
-            
+        
+        message_id = request_body.get('message_id', None)
+        message_received_timestamp_utc = request_body.get('timestamp', datetime.now(timezone.utc).isoformat())
         if 'anthropic' in selected_model_id.lower():
+            filtered_history = process_message_history(existing_history)
             bedrock_request = {
                 'max_tokens': 4096,
                 'system': system_prompt,
-                'messages': existing_history + [{'role': 'user', 'content': [{'type': 'text', 'text': prompt}]}],
+                'messages': filtered_history + [{'role': 'user', 'content': [{'type': 'text', 'text': prompt}]}],
                 'anthropic_version': 'bedrock-2023-05-31'
             }
         elif 'amazon' in selected_model_id.lower():
@@ -131,19 +136,13 @@ def process_websocket_message(event):
                 }
             }
         elif 'ai21' in selected_model_id.lower():
-            bedrock_request = {
-                'max_tokens': 4096,
-                'prompt': existing_history + ' ' +  prompt
-            }
+            # TODO: implement ai21 Labs
+            print('TODO: Implement AI21 Labs')
         elif 'mistral' in selected_model_id.lower():
-            if existing_history:
-                instruction = f"{existing_history}</s><s>[INST] {prompt} [/INST] "
-            else:
-                instruction = f"<s>[INST] {prompt} [/INST]"
-
+            max_tokens = 8192
             bedrock_request = {
-                'max_tokens': 4096,
-                'prompt': instruction
+                'max_tokens': max_tokens,
+                'messages': process_message_history_mistral_large(existing_history)+[{'role': 'user', 'content': prompt}]
             }
         else:
             logger.warn(selected_model_id+' Not yet implemented')
@@ -157,16 +156,16 @@ def process_websocket_message(event):
 
                 # Process the response stream and send the content to the WebSocket client
                 if 'anthropic' in selected_model_id.lower():
-                    assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'anthropic',selected_model_id)
+                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'anthropic',selected_model_id)
                 elif 'amazon' in selected_model_id.lower():
-                    assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request),connection_id,user_id,'amazon',selected_model_id)
+                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request),connection_id,user_id,'amazon',selected_model_id)
                 elif 'ai21' in selected_model_id.lower():
-                    assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'ai21',selected_model_id)
+                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'ai21',selected_model_id)
                 elif 'mistral' in selected_model_id.lower():
-                    assistant_response, input_tokens, output_tokens = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'mistral',selected_model_id)
+                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'mistral',selected_model_id)
 
                 # Store the updated conversation history in DynamoDB
-                store_conversation_history(session_id, existing_history, prompt, assistant_response, user_id, input_tokens, output_tokens)
+                store_conversation_history(session_id, existing_history, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id)
             except Exception as e:
                 if 'have access to the model with the specified model ID.' in str(e):
                     model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
@@ -197,8 +196,8 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id, mo
     result_text = ""
     current_input_tokens = 0
     current_output_tokens = 0
-    # new counter starting at 0
     counter = 0
+    message_end_timestamp_utc = ''
     try:
         for event in response_stream:
             chunk = event.get('chunk', {})
@@ -228,9 +227,10 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id, mo
                         current_input_tokens = amazon_bedrock_invocationMetrics.get('inputTokenCount', 0)
                         current_output_tokens = amazon_bedrock_invocationMetrics.get('outputTokenCount', 0)
                         logger.info(f"TokenCounts: {str(current_input_tokens)}/{str(current_output_tokens)}")
-                        
+                        message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
                         send_websocket_message(connection_id, {
                             'type': 'message_stop',
+                            'timestamp': message_end_timestamp_utc,
                             'amazon-bedrock-invocationMetrics': amazon_bedrock_invocationMetrics
                         })
                 elif model_provider == 'mistral':
@@ -268,8 +268,10 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id, mo
                         # TODO: send update monthly usage tokens
                         # {monthly_input_tokens, monthly_output_tokens} = get_monthly_token_usage(user_id)
                         # Send the message_stop event to the WebSocket client
+                        message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
                         send_websocket_message(connection_id, {
                             'type': message_type,
+                            'timestamp': message_end_timestamp_utc,
                             'amazon-bedrock-invocationMetrics': content_chunk.get('amazon-bedrock-invocationMetrics', {})
                         })
                 elif content_chunk['type'] == 'message_start':
@@ -300,8 +302,10 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id, mo
                     # TODO: send update monthly usage tokens
                     # {monthly_input_tokens, monthly_output_tokens} = get_monthly_token_usage(user_id)
                     # Send the message_stop event to the WebSocket client
+                    message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
                     send_websocket_message(connection_id, {
                         'type': 'message_stop',
+                        'timestamp': message_end_timestamp_utc,
                         'amazon-bedrock-invocationMetrics': content_chunk.get('amazon-bedrock-invocationMetrics', {})
                     })
             counter += 1
@@ -316,7 +320,7 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id, mo
         })
 
     # assistant_response,input_tokens, output_tokens
-    return result_text, current_input_tokens, current_output_tokens
+    return result_text, current_input_tokens, current_output_tokens, message_end_timestamp_utc
 
 @tracer.capture_method
 def send_websocket_message(connection_id, message):
@@ -355,7 +359,7 @@ def query_existing_history(session_id):
         return []
 @tracer.capture_method
 def get_monthly_token_usage(user_id):
-    current_date_ym = datetime.datetime.now().strftime('%Y-%m')
+    current_date_ym = datetime.now().strftime('%Y-%m')
     response = dynamodb.get_item(
         TableName=usage_table_name,
         Key={'user_id': user_id+'-'+current_date_ym},
@@ -365,8 +369,8 @@ def get_monthly_token_usage(user_id):
         return response['Item']['input_tokens']['N'], response['Item']['output_tokens']['N']
 @tracer.capture_method    
 def save_token_usage(user_id, input_tokens,output_tokens):
-    current_date_ymd = datetime.datetime.now().strftime('%Y-%m-%d')
-    current_date_ym = datetime.datetime.now().strftime('%Y-%m')
+    current_date_ymd = datetime.now().strftime('%Y-%m-%d')
+    current_date_ym = datetime.now().strftime('%Y-%m')
     
     dynamodb.update_item(
                     TableName=usage_table_name,
@@ -399,12 +403,12 @@ def save_token_usage(user_id, input_tokens,output_tokens):
                     }
                 )
 @tracer.capture_method    
-def store_conversation_history(session_id, existing_history, user_message, assistant_message, user_id, input_tokens, output_tokens):
+def store_conversation_history(session_id, existing_history, user_message, assistant_message, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id):
     if user_message.strip() and assistant_message.strip():
         # Prepare the updated conversation history
         conversation_history = existing_history + [
-            {'role': 'user', 'content': user_message},
-            {'role': 'assistant', 'content': assistant_message}
+            {'role': 'user', 'content': user_message, 'timestamp': message_received_timestamp_utc, 'message_id':message_id},
+            {'role': 'assistant', 'content': assistant_message, 'timestamp': message_end_timestamp_utc, 'message_id':generate_random_string()}
         ]
         conversation_history_size = len(json.dumps(conversation_history).encode('utf-8'))
 
@@ -494,7 +498,7 @@ def split_message(message, max_chunk_size=30 * 1024):  # 30 KB chunk size
     current_chunk_size = 0
 
     for msg in message:
-        msg_json = json.dumps({'role': msg['role'], 'content': msg['content']})
+        msg_json = json.dumps({'role': msg['role'], 'content': msg['content'], 'timestamp': msg['timestamp'], 'message_id': msg['message_id']})
         msg_size = len(msg_json.encode('utf-8'))
 
         if current_chunk_size + msg_size > max_chunk_size:
@@ -532,3 +536,56 @@ def load_system_prompt_config(system_prompt_user_or_system, user_id):
 
     except Exception as e:
         raise e
+    
+def process_message_history(existing_history):
+    normalized_history = []
+    for message in existing_history:
+        # Extract role and content
+        role = message.get('role')
+        content = message.get('content')
+
+        # Ensure role is present and valid
+        if not role or role not in ['user', 'assistant']:
+            continue  # Skip messages with invalid or missing roles
+
+        # Normalize content format
+        if isinstance(content, str):
+            content = [{'type': 'text', 'text': content}]
+        elif isinstance(content, list):
+            # Ensure each item in the list is correctly formatted
+            content = [{'type': 'text', 'text': item['text']} if isinstance(item, dict) and 'text' in item else {'type': 'text', 'text': str(item)} for item in content]
+        else:
+            content = [{'type': 'text', 'text': str(content)}]
+
+        # Create normalized message
+        normalized_message = {'role': role, 'content': content}
+
+        normalized_history.append(normalized_message)
+
+    return normalized_history
+
+def process_message_history_mistral_large(existing_history):
+    normalized_history = []
+
+    for message in existing_history:
+        role = message.get('role')
+        content = message.get('content')
+
+        if role in ['user', 'assistant']:
+            # Ensure content is a string
+            content = str(content) if content is not None else ''
+            
+            # Create normalized message
+            normalized_message = {
+                'role': role,
+                'content': content
+            }
+            
+            normalized_history.append(normalized_message)
+
+    return normalized_history
+
+def generate_random_string(length=8):
+    characters = string.ascii_lowercase + string.digits
+    random_part = ''.join(random.choice(characters) for _ in range(length))
+    return f"RES{random_part}"

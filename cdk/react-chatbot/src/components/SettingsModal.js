@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect,useRef, useCallback } from 'react';
 import { Tooltip, Modal, Box, Typography, TextField, Button, Grid, Paper, Link, Switch, FormControl, RadioGroup, Radio, FormControlLabel, IconButton, InputLabel, Select, MenuItem } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { FaInfoCircle } from 'react-icons/fa';
@@ -27,6 +27,11 @@ const SettingsModal = ({
     setSystemPromptUserOrSystem,
     setReloadPromptConfig,
     models,
+    imageModels,
+    promptFlows,
+    selectedPromptFlow,
+    setSelectedPromptFlow,
+    onPromptFlowChange,
     selectedModel,
     setSelectedModel,
     setRegion,
@@ -36,6 +41,8 @@ const SettingsModal = ({
     setStylePreset,
     heightWidth,
     setHeightWidth,
+    onModeChange,
+    selectedMode
 }) => {
     const theme = useTheme();
     const [error, setError] = useState('');
@@ -50,10 +57,9 @@ const SettingsModal = ({
         pricePer1000OutputTokens,
         knowledgebasesOrAgents,
         selectedModel,
-        systemPrompt: {
-            system: '',
-            user: '',
-        },
+        selectedPromptFlow: null,
+        userSystemPrompt: '',
+        systemSystemPrompt: '',
         systemPromptType: systemPromptUserOrSystem,
         imageModel: localStorage.getItem('imageModel') || 'amazon.titan-image-generator-v2:0',
         stylePreset: localStorage.getItem('stylePreset') || 'photographic',
@@ -96,16 +102,6 @@ const SettingsModal = ({
         '1408x640', '704x320', '1152x640', '1173x640'
     ];
 
-    const handleImageModelChange = useCallback((event) => {
-        const newImageModel = event.target.value;
-        setLocalState(prevState => ({
-            ...prevState,
-            imageModel: newImageModel,
-            heightWidth: '1024x1024', // Reset height/width when model changes
-        }));
-        localStorage.setItem('imageModel', newImageModel);
-    }, []);
-
     const handleStylePresetChange = useCallback((event) => {
         const newStylePreset = event.target.value;
         setLocalState(prevState => ({
@@ -124,6 +120,14 @@ const SettingsModal = ({
         localStorage.setItem('heightWidth', newHeightWidth);
     }, []);
 
+    const handlePromptFlowChange = useCallback((event) => {
+        const selectedArn = event.target.value;
+        const selectedFlow = selectedArn ? promptFlows.find(flow => flow.arn === selectedArn) : null;
+        updateLocalState('selectedPromptFlow', selectedFlow);
+    }, [updateLocalState, onPromptFlowChange, promptFlows]);
+
+
+
     const formatSizeLabel = useCallback((size) => {
         const [height, width] = size.split('x');
         return `${height}(H) x ${width}(W)`;
@@ -138,26 +142,49 @@ const SettingsModal = ({
         if (anthropicModel) return anthropicModel;
         return models.length > 0 ? models[0] : null;
     }, []);
+    
+    const getDefaultImageModel = useCallback((imageModels) => {
+        const defaultImageModel = imageModels.find(
+            (imageModel) => imageModel.modelId === 'stability.stable-diffusion-xl-v1'
+        );
+        if (defaultImageModel) return defaultImageModel;
+        const stabilityModel = imageModels.find((imageModel) => imageModel.providerName === 'Stability AI');
+        if (stabilityModel) return stabilityModel;
+        return imageModels.length > 0 ? imageModels[0] : null;
+    }, []);
 
     const handleModelChange = useCallback((event) => {
         const selectedModelId = event.target.value;
         const selectedModel = models.find((model) => model.modelId === selectedModelId);
         if (selectedModel) {
-            console.log('handleModelChange: Setting New Model As : ' + selectedModel.modelId);
             updateLocalState('selectedModel', selectedModel.modelId);
         }
     }, [models, updateLocalState]);
+    
+    const handleImageModelChange = useCallback((event) => {
+        const selectedImageModelId = event.target.value;
+        const selectedImageModel = imageModels.find((imageModel) => imageModel.modelId === selectedImageModelId);
+    
+        if (selectedImageModel) {
+            setLocalState(prevState => ({
+                ...prevState,
+                imageModel: selectedImageModel.modelId,
+                heightWidth: '1024x1024', // Reset height/width when model changes
+            }));
+            localStorage.setItem('imageModel', selectedImageModel.modelId); // Change this line
+        } else {
+            console.error('Selected image model not found');
+        }
+    }, [imageModels]); // Add imageModels to the dependency array
+
 
     const handleSystemPromptChange = useCallback((event) => {
         const { name, value } = event.target;
         setLocalState(prevState => ({
-            ...prevState,
-            systemPrompt: {
-                ...prevState.systemPrompt,
-                [name]: value,
-            },
+          ...prevState,
+          [name]: value,
         }));
-    }, []);
+      }, []);
 
     const handleSystemPromptTypeChange = useCallback((event) => {
         const value = event.target.checked ? 'user' : 'system';
@@ -199,12 +226,12 @@ const SettingsModal = ({
             }
         }
         if (!imageModel) {
-            const defaultImageModel = localStorage.getItem('imageModel') || 'amazon.titan-image-generator-v2:0';
-            setLocalState(prevState => ({
-                ...prevState,
-                imageModel: defaultImageModel,
-            }));
-            setImageModel(defaultImageModel);
+            const defaultImageModel = getDefaultImageModel(imageModels);
+            if(defaultImageModel){
+                console.log('DefaultImageModel: setting default image model as: ' + defaultImageModel.modelId);
+                updateLocalState('imageModel', defaultImageModel.modelId);
+                setImageModel(defaultImageModel.modelId);
+            }
         }
         if (!stylePreset) {
             const defaultStylePreset = localStorage.getItem('stylePreset') || 'photographic';
@@ -219,7 +246,7 @@ const SettingsModal = ({
             updateLocalState('defaultHeightWidth', defaultHeightWidth);
             setHeightWidth(defaultHeightWidth);
         }
-    }, [models, selectedModel, heightWidth, stylePreset, imageModel, getDefaultModel, setSelectedModel, updateLocalState, setHeightWidth, setImageModel, setStylePreset]);
+    }, [models,imageModels, selectedModel, heightWidth, stylePreset, imageModel, getDefaultModel, setSelectedModel, updateLocalState, setHeightWidth, setImageModel, setStylePreset]);
 
     useEffect(() => {
         const storedOption = localStorage.getItem('knowledgebasesOrAgents');
@@ -249,11 +276,21 @@ const SettingsModal = ({
         }));
     }, [updateLocalState]);
 
-    useEffect(() => {
-        if (lastMessage !== null) {
-            try {
-                const response = JSON.parse(lastMessage.data);
-                if (response) {
+    const usePrevious = (value, initialValue) => {
+        const ref = useRef(initialValue);
+        useEffect(() => {
+          ref.current = value;
+        });
+        return ref.current;
+      };
+
+      const prevLastMessage = usePrevious(lastMessage, null);
+
+      useEffect(() => {
+          if (lastMessage !== null && lastMessage !== prevLastMessage) {
+              try {
+                  const response = JSON.parse(lastMessage.data);
+                  if (response) {
                     if (response.config_type === 'system') {
                         updateLocalState('bedrockKnowledgeBaseID', response.bedrockKnowledgeBaseID || bedrockKnowledgeBaseID);
                         updateLocalState('bedrockAgentsID', response.bedrockAgentsID || bedrockAgentsID);
@@ -261,25 +298,36 @@ const SettingsModal = ({
                         updateLocalState('pricePer1000InputTokens', response.pricePer1000InputTokens || pricePer1000InputTokens);
                         updateLocalState('pricePer1000OutputTokens', response.pricePer1000OutputTokens || pricePer1000OutputTokens);
                         updateLocalState('pricePer1000OutputTokens', response.pricePer1000OutputTokens || pricePer1000OutputTokens);
-                        console.log('updating system response.systemPrompt: '+response.systemPrompt)
-                        updateLocalState('systemPrompt.system', response.systemPrompt || '')
+                        updateLocalState('systemSystemPrompt', response.systemPrompt || '');
                         setRegion(response.region || 'us-west-2');
                         if (response.modelId) {
                             updateLocalState('selectedModel', response.modelId);
                             setSelectedModel(response.modelId);
                         }
-                        updateSystemPrompt('system', response.systemPrompt ?? localState.systemPrompt.system);
+                        updateSystemPrompt('system', response.systemPrompt ?? localState.systemSystemPrompt);
                     } else if (response.config_type === 'user') {
-                        const newImageModel = response.imageModel || 'amazon.titan-image-generator-v2:0';
+                        const newImageModel = response.imageModel || getDefaultImageModel(imageModels);
                         const newStylePreset = response.stylePreset || 'photographic';
                         const newHeightWidth = response.heightWidth || '1024x1024';
+                        if (response.selectedPromptFlow) {
+                            const promptFlowExists = promptFlows.some(flow => flow.arn === response.selectedPromptFlow.arn);
+                            if (promptFlowExists) {
+                              const selectedFlow = promptFlows.find(flow => flow.arn === response.selectedPromptFlow.arn);
+                              updateLocalState('selectedPromptFlow', selectedFlow);
+                              onPromptFlowChange(selectedFlow);
+                            } else {
+                              // If the saved prompt flow no longer exists, remove it from the config
+                              updateLocalState('selectedPromptFlow', null);
+                              onPromptFlowChange(null);
+                              saveConfig('user', { ...response, selectedPromptFlow: null });
+                            }
+                        }
                         updateLocalState('bedrockKnowledgeBaseID', response.bedrockKnowledgeBaseID || bedrockKnowledgeBaseID);
                         updateLocalState('bedrockAgentsID', response.bedrockAgentsID || bedrockAgentsID);
                         updateLocalState('bedrockAgentsAliasID', response.bedrockAgentsAliasID || bedrockAgentsAliasID);
                         updateLocalState('pricePer1000InputTokens', response.pricePer1000InputTokens || pricePer1000InputTokens);
                         updateLocalState('pricePer1000OutputTokens', response.pricePer1000OutputTokens || pricePer1000OutputTokens);
-                        console.log('updating user response.systemPrompt: '+response.systemPrompt)
-                        updateLocalState('systemPrompt.user', response.systemPrompt || '')
+                        updateLocalState('userSystemPrompt', response.systemPrompt || '');
                         updateLocalState('imageModel', newImageModel);
                         updateLocalState('stylePreset', newStylePreset);
                         updateLocalState('heightWidth', newHeightWidth);
@@ -289,8 +337,6 @@ const SettingsModal = ({
                         setStylePreset(newStylePreset)
                         localStorage.setItem('heightWidth', newHeightWidth);
                         setHeightWidth(newHeightWidth)
-
-                        updateSystemPrompt('user', response.systemPrompt ?? localState.systemPrompt.user);
                     } else if (response.message === 'Config saved successfully') {
                         console.log('Configuration saved successfully');
                     } else {
@@ -302,7 +348,21 @@ const SettingsModal = ({
                 setError('Failed to process server response. Please try again.');
             }
         }
-    }, [lastMessage, bedrockAgentsAliasID, bedrockAgentsID, bedrockKnowledgeBaseID, pricePer1000InputTokens, pricePer1000OutputTokens, setRegion, setSelectedModel, updateSystemPrompt, updateLocalState]);
+    }, [
+        lastMessage,
+        prevLastMessage,
+        bedrockAgentsAliasID,
+        bedrockAgentsID,
+        bedrockKnowledgeBaseID,
+        pricePer1000InputTokens,
+        pricePer1000OutputTokens,
+        setRegion,
+        setSelectedModel,
+        updateSystemPrompt,
+        updateLocalState,
+        promptFlows,
+        onPromptFlowChange
+    ]);
 
     const saveConfig = useCallback(async (configType, config) => {
         try {
@@ -316,7 +376,8 @@ const SettingsModal = ({
                 accessToken: accessToken + '',
                 config: {
                     ...config,
-                    systemPrompt: configType === 'system' ? localState.systemPrompt.system : localState.systemPrompt.user,
+                    systemPrompt: configType === 'system' ? localState.systemSystemPrompt : localState.userSystemPrompt,
+                    selectedPromptFlow: configType === 'user' ? localState.selectedPromptFlow : undefined,
                 },
             };
             sendMessage(JSON.stringify(data));
@@ -324,7 +385,7 @@ const SettingsModal = ({
             console.error('Error saving configuration:', error);
             setError('Failed to save configuration. Please try again.');
         }
-    }, [getCurrentSession, sendMessage, user.username, localState.systemPrompt]);
+    }, [getCurrentSession, sendMessage, user.username, localState.systemSystemPrompt,localState.userSystemPrompt, localState.selectedPromptFlow]);
 
 
     const handleSave = useCallback(() => {
@@ -339,6 +400,9 @@ const SettingsModal = ({
             setPricePer1000OutputTokens(localState.pricePer1000OutputTokens);
             setKnowledgebasesOrAgents(localState.knowledgebasesOrAgents);
             setSelectedModel(localState.selectedModel);
+            setSelectedPromptFlow(localState.selectedPromptFlow)
+            onPromptFlowChange(localState.selectedPromptFlow);
+            onModeChange(selectedMode)
 
             // Update image-related 
             setImageModel(localState.imageModel);
@@ -352,15 +416,16 @@ const SettingsModal = ({
                 bedrockKnowledgeBaseID: localState.bedrockKnowledgeBaseID,
                 bedrockAgentsID: localState.bedrockAgentsID,
                 bedrockAgentsAliasID: localState.bedrockAgentsAliasID,
-                systemPrompt: localState.systemPrompt,
+                systemPrompt: localState.systemSystemPrompt,
                 modelId: localState.selectedModel || null,
             });
 
             saveConfig('user', {
-                systemPrompt: localState.systemPrompt,
+                systemPrompt: localState.userSystemPrompt,
                 imageModel: localState.imageModel,
                 stylePreset: localState.imageModel === 'stability.stable-diffusion-xl-v1' ? localState.stylePreset : null,
                 heightWidth: localState.heightWidth,
+                selectedPromptFlow: localState.selectedPromptFlow,
             });
 
             onSave(localState.knowledgebasesOrAgents);
@@ -443,6 +508,26 @@ const SettingsModal = ({
 
                 {localState.knowledgebasesOrAgents === 'agents' && (
                     <>
+                        {promptFlows.length > 0 && (
+                            <FormControl fullWidth margin="normal">
+                                <InputLabel id="prompt-flow-label">Prompt Flow Alias</InputLabel>
+                                <Select
+                                    labelId="prompt-flow-label"
+                                    value={localState.selectedPromptFlow ? localState.selectedPromptFlow.arn : ''}
+                                    onChange={handlePromptFlowChange}
+                                    label="Prompt Flow"
+                                >
+                                    <MenuItem value="">
+                                        <em>None</em>
+                                    </MenuItem>
+                                    {promptFlows.map((flow) => (
+                                        <MenuItem key={flow.arn} value={flow.arn}>
+                                            {`${flow.name} (${flow.flowId}/${flow.id})`}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        )}
                         <Tooltip title="Enter the Bedrock Agents ID" arrow>
                             <TextField
                                 label="Bedrock Agents ID"
@@ -495,7 +580,7 @@ const SettingsModal = ({
 
                 <Box sx={{ display: 'flex', alignItems: 'center', marginTop: theme.spacing(2) }}>
                     <Typography variant="h6">
-                        Backend Prompt:
+                        Bedrock Backend Prompt (Doesn't apply with KB or Agents):
                     </Typography>
                     <Tooltip
                         title="Add a Backend Prompt to direct the chatbot to give you better answers such as:
@@ -525,14 +610,26 @@ const SettingsModal = ({
 
                 <Tooltip title={`Enter the ${localState.systemPromptType === 'user' ? 'User' : 'System'} Prompt`} arrow>
                     <TextField
-                        label={`${localState.systemPromptType === 'user' ? 'User' : 'System'} Prompt`}
+                        label="System Prompt"
                         multiline
                         rows={4}
-                        value={localState.systemPrompt[localState.systemPromptType]}
+                        value={localState.systemSystemPrompt}
                         onChange={handleSystemPromptChange}
-                        name={localState.systemPromptType}
+                        name="systemSystemPrompt"
                         fullWidth
                         margin="normal"
+                        style={{ display: localState.systemPromptType !== 'user' ? 'block' : 'none' }}
+                    />
+                    <TextField
+                        label="User Prompt"
+                        multiline
+                        rows={4}
+                        value={localState.userSystemPrompt}
+                        onChange={handleSystemPromptChange}
+                        name="userSystemPrompt"
+                        fullWidth
+                        margin="normal"
+                        style={{ display: localState.systemPromptType === 'user' ? 'block' : 'none' }}
                     />
                 </Tooltip>
 
@@ -549,12 +646,32 @@ const SettingsModal = ({
                         onChange={handleImageModelChange}
                         label="Image Model"
                     >
-                        <MenuItem value="amazon.titan-image-generator-v2:0">Amazon Titan Image Generator v1</MenuItem>
-                        <MenuItem value="stability.stable-diffusion-xl-v1">Stability AI Stable Diffusion XL v1</MenuItem>
+                        {imageModels.map((imageModel) => (
+                            <MenuItem key={imageModel.modelId} value={imageModel.modelId}>
+                                {imageModel.providerName} - {imageModel.modelName} ({imageModel.modelId})
+                            </MenuItem>
+                        ))}
                     </Select>
                 </FormControl>
 
-                {localState.imageModel === 'stability.stable-diffusion-xl-v1' && (
+                {/* <FormControl fullWidth margin="normal">
+                    <InputLabel id="image-model-select-label">Image Model</InputLabel>
+                    <Select
+                        labelId="image-model-select-label"
+                        id="image-model-select"
+                        value={localState.imageModel}
+                        onChange={handleImageModelChange}
+                        label="Image Model"
+                    >
+                        <MenuItem value="amazon.titan-image-generator-v2:0">Amazon Titan Image Generator v2</MenuItem>
+                        <MenuItem value="stability.stable-diffusion-xl-v1">Stable Diffusion XL</MenuItem>
+                        <MenuItem value="stability.sd3-large-v1:0">Stable Diffusion 3 Large</MenuItem>
+                        <MenuItem value="stability.stable-image-ultra-v1:0">Stable Image Ultra</MenuItem>
+                        <MenuItem value="stability.stable-image-core-v1:0">Stability Image Core</MenuItem>
+                    </Select>
+                </FormControl> */}
+
+                {localState.imageModel.includes('stable-diffusion-xl-v1') && (
                     <FormControl fullWidth margin="normal">
                         <InputLabel id="style-preset-select-label">Stability AI Style</InputLabel>
                         <Select

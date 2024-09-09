@@ -13,10 +13,14 @@ const MessageHeader = ({ role, timestamp, model }) => {
   };
 
   const formatTimestamp = (timestamp, model) => {
+    // Parse the timestamp in ISO 8601 format
     const date = new Date(timestamp);
-    if (model)
-      return date.toLocaleString()+' ('+model+')';
-    return date.toLocaleString();
+    // Convert the UTC timestamp to the local timezone
+    const formattedTimestamp = date.toLocaleString();
+    if (model) {
+      return `${formattedTimestamp} (${model})`;
+    }
+    return formattedTimestamp;
   };
 
   const formatRole = (role) => {

@@ -1,5 +1,6 @@
 import json, boto3, os
 from aws_lambda_powertools import Tracer
+import logging
 
 
 
@@ -22,7 +23,7 @@ def lambda_handler(event, context):
         # Handle the case where the request body is not valid JSON or does not contain the 'body' key
         request_body = {}
     selected_mode = request_body.get('selectedMode', 'none')
-    print('selected_mode:'+selected_mode)
+    
     id_token = request_body.get('idToken', 'none')
     access_token = request_body.get('accessToken', 'none')
     tracer.put_annotation(key="SelectedMode", value=selected_mode)

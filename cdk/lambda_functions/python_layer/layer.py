@@ -1,1 +1,1 @@
-import boto3, python-jwt
+import boto3, jwt

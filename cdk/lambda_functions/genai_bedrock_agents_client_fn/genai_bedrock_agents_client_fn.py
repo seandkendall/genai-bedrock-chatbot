@@ -1,6 +1,8 @@
 import json
 import boto3
 import os
+from datetime import datetime
+from django.utils import timezone
 from aws_lambda_powertools import Tracer
 
 
@@ -14,6 +16,7 @@ tracer = Tracer()
 
 # AWS API Gateway Management API client
 apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
+bedrock_agent_client = boto3.client(service_name='bedrock-agent')
 
 bedrock_agents_id = ''
 bedrock_agents_alias_id = ''
@@ -22,18 +25,20 @@ bedrock_knowledgebase_id = ''
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
     global bedrock_agents_id, bedrock_agents_alias_id, bedrock_knowledgebase_id; 
-    
     force_null_kb_session_id = False
     while True:
         try:
             if not bedrock_agents_id or not bedrock_agents_alias_id or not bedrock_knowledgebase_id:
                 bedrock_agents_id, bedrock_agents_alias_id, bedrock_knowledgebase_id = load_config()
                 print(f"Bedrock agents id: {bedrock_agents_id}")
-                tracer.put_annotation(key="BedrockAgentsId", value=bedrock_agents_id)
+                if bedrock_agents_id:
+                    tracer.put_annotation(key="BedrockAgentsId", value=bedrock_agents_id)
                 print(f"Bedrock agents alias id: {bedrock_agents_alias_id}")
-                tracer.put_annotation(key="BedrockAgentsAliasId", value=bedrock_agents_alias_id)
+                if bedrock_agents_alias_id:
+                    tracer.put_annotation(key="BedrockAgentsAliasId", value=bedrock_agents_alias_id)
                 print(f"Loaded Bedrock Knowledgebase id: {bedrock_knowledgebase_id}")
-                tracer.put_annotation(key="BedrockKnowledgeBaseId", value=bedrock_knowledgebase_id)
+                if bedrock_knowledgebase_id:
+                    tracer.put_annotation(key="BedrockKnowledgeBaseId", value=bedrock_knowledgebase_id)
                 
             # Check if the event is a WebSocket event
             if event['requestContext']['eventType'] == 'MESSAGE':
@@ -62,6 +67,7 @@ def lambda_handler(event, context):
 def process_websocket_message(event,bedrock_agents_id,bedrock_agents_alias_id,bedrock_knowledgebase_id, force_null_kb_session_id):
     # Extract the request body and session ID from the WebSocket event
     request_body = json.loads(event['body'])
+    backend_type = 'Agent'
     message_type = request_body.get('type', '')
     tracer.put_annotation(key="MessageType", value=message_type)
     session_id = request_body.get('session_id', 'XYZ')
@@ -93,6 +99,7 @@ def process_websocket_message(event,bedrock_agents_id,bedrock_agents_alias_id,be
     else:
         # Handle other message types (e.g., prompt)
         prompt = request_body.get('prompt', '')
+        selected_model_id = ''
         
         if request_body.get('knowledgebasesOrAgents', '') == 'knowledgeBases':
             if not bedrock_knowledgebase_id:
@@ -143,15 +150,37 @@ def process_websocket_message(event,bedrock_agents_id,bedrock_agents_alias_id,be
                     'error': 'No Bedrock Agents alias ID or bedrock Agents ID configured. please enter these on the settings screen'
                 })
             else:
-                response = bedrock.invoke_agent(
-                    agentAliasId=bedrock_agents_alias_id,
-                    agentId=bedrock_agents_id,
-                    enableTrace=False,
-                    endSession=False,
-                    inputText=prompt,
-                    sessionId=session_id
-                )
-                process_bedrock_agents_response(iter(response['completion']), connection_id, 'Agent')
+                flow_alias_identifier = request_body.get('flow_alias_identifier', '')
+                flow_identifier = request_body.get('flow_identifier', '')
+                selected_model_id = request_body.get('model', '')
+                response_stream_key = 'completion'
+                if flow_alias_identifier and flow_identifier:
+                    backend_type = "AgentPromptFlow"
+                    tracer.put_annotation(key="flow_alias_identifier", value=flow_alias_identifier)
+                    tracer.put_annotation(key="flow_identifier", value=flow_identifier)
+                    response = bedrock.invoke_flow(
+                        flowAliasIdentifier=flow_alias_identifier,
+                        flowIdentifier=flow_identifier,
+                        inputs=[
+                            {   'nodeName': 'FlowInputNode',
+                                'nodeOutputName': 'document',
+                                'content': {
+                                    'document': prompt
+                                },
+                            }
+                        ],
+                    )
+                    response_stream_key = 'responseStream'
+                else:
+                    response = bedrock.invoke_agent(
+                        agentAliasId=bedrock_agents_alias_id,
+                        agentId=bedrock_agents_id,
+                        enableTrace=False,
+                        endSession=False,
+                        inputText=prompt,
+                        sessionId=session_id
+                    )
+                process_bedrock_agents_response(iter(response[response_stream_key]), connection_id, backend_type,selected_model_id)
             
 @tracer.capture_method        
 def process_bedrock_knowledgebase_response(response, connection_id, backend_type):
@@ -185,19 +214,21 @@ def process_bedrock_knowledgebase_response(response, connection_id, backend_type
     
     send_websocket_message(connection_id, {
                 'type': 'message_stop',
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'kb_session_id':kb_session_id,
                 'backend_type': backend_type
             })
     
 @tracer.capture_method
-def process_bedrock_agents_response(response_stream, connection_id, backend_type):
+def process_bedrock_agents_response(response_stream, connection_id, backend_type,selected_model_id):
     result_text = ""
-    # new counter starting at 0
     counter = 0
+    message_stop_sent = False
+    message_type = 'content_block_delta'
     try:
         for event in response_stream:
-            chunk = event.get('chunk', {})
-            if chunk:
+            if 'chunk' in event:
+                chunk = event['chunk']
                 try:
                     content_chunk = chunk['bytes'].decode('utf-8')
                 except (UnicodeDecodeError, AttributeError):
@@ -205,43 +236,73 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
                     continue
 
                 if counter == 0:
-                    # Send the message_start event to the WebSocket client
-                    send_websocket_message(connection_id, {
-                        'type': 'message_start',
-                        'message': 'Agent response started'
-                    })
-
-                # Increment counter by 1
-                counter += 1
+                    message_type = 'message_start';
 
                 # Send the content_block_delta event to the WebSocket client
                 send_websocket_message(connection_id, {
-                    'type': 'content_block_delta',
+                    'type': message_type,
+                    'message': {"model": selected_model_id},
                     'delta': {'text': content_chunk},
                     'message_id': counter,
                     'backend_type': backend_type
                 })
+                message_type = 'content_block_delta'
+                counter += 1
 
                 result_text += content_chunk
+            elif 'flowOutputEvent' in event:
+                flow_output_event = event['flowOutputEvent']
+                content = flow_output_event['content']['document']
+                
+                if counter == 0:
+                    message_type = 'message_start';
+                    
+                send_websocket_message(connection_id, {
+                    'type': message_type,
+                    'message': {"model": selected_model_id},
+                    'delta': {'text': content},
+                    'message_id': counter,
+                    'backend_type': backend_type
+                })
+                message_type = 'content_block_delta'
+                counter += 1
+                result_text += content
+            elif 'flowCompletionEvent' in event:
+                flow_completion_event = event['flowCompletionEvent']
+                if flow_completion_event['completionReason'] == 'SUCCESS':
+                    if counter > 0:
+                        # Send the message_stop event to the WebSocket client
+                        send_websocket_message(connection_id, {
+                            'type': 'message_stop',
+                            'timestamp': datetime.now(timezone.utc).isoformat(),
+                            'backend_type': backend_type
+                        })
+                        message_stop_sent = True
+                else:
+                    # Send an error message to the WebSocket client
+                    send_websocket_message(connection_id, {
+                        'type': 'error',
+                        'code': '9200',
+                        'error': 'Flow completion event with non-success reason'
+                    })
 
-        if counter > 0:
+        if counter > 0 and not message_stop_sent:
             # Send the message_stop event to the WebSocket client
             send_websocket_message(connection_id, {
                 'type': 'message_stop',
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'backend_type': backend_type
             })
+        message_stop_sent = True
 
     except Exception as e:
         print(f"Error processing Bedrock response: {str(e)}")
         # Send an error message to the WebSocket client
         send_websocket_message(connection_id, {
             'type': 'error',
-            'code':'9200',
+            'code': '9200',
             'error': str(e)
         })
-        bedrock_agents_id = ''
-        bedrock_agents_alias_id = ''
-        bedrock_knowledgebase_id = ''
         if counter > 0:
             print('Sending message stop now...(error)')
             send_websocket_message(connection_id, {'type': 'message_stop'})
@@ -267,6 +328,7 @@ def send_websocket_message(connection_id, message):
     except Exception as e:
         print(f"Error sending WebSocket message (672): {str(e)}")
 
+        
 @tracer.capture_method
 def load_config():
     try:

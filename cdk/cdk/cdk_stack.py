@@ -241,6 +241,12 @@ class ChatbotWebsiteStack(Stack):
         config_function_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockReadOnly")
         )
+        # Add permissions to the Lambda function's role
+        config_function.add_to_role_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["bedrock:ListFlows", "bedrock:ListFlowAliases"],
+            resources=["arn:aws:bedrock:us-east-1:913245669585:flow/*"]
+        ))
 
         dynamodb_configurations_table.grant_full_access(config_function)
 
