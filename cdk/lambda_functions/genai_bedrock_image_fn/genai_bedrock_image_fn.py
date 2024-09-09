@@ -26,6 +26,9 @@ def lambda_handler(event, context):
     try:
         request_body = json.loads(event['body'])
         prompt = request_body.get('prompt', '')
+        # if prompt length is < 3 then prepend text 'image of '
+        if len(prompt) < 3:
+            prompt = 'image of ' + prompt
         connection_id = event['requestContext']['connectionId']
         modelId = request_body.get('imageModel', 'amazon.titan-image-generator-v2:0')
         stylePreset = request_body.get('stylePreset', 'photographic')

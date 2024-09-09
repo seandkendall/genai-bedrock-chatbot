@@ -387,13 +387,13 @@ const App = memo(({ signOut, user }) => {
 
   const handleError = (errormessage) => {
     let popupMsg = 'Sorry, We encountered an issue, Please try resubmitting your message.'
-    if (errormessage.includes('allow-listed')) {
+    if (errormessage.includes('allow-listed') || errormessage.includes('You have not requested access to a model in Bedrock')) {
       popupMsg = errormessage
     } else if (errormessage.includes('throttlingException')) {
       popupMsg = 'Sorry, We encountered a Throttling issue, Please try resubmitting your message.'
     } else if (errormessage.includes('AUP or AWS Responsible AI')) {
       popupMsg = 'This request has been blocked by our content filters because the generated image(s) may conflict our AUP or AWS Responsible AI Policy. please try again'
-    }
+    } 
     setIsDisabled(false);
     stopTimer();
     setPopupMessage(popupMsg);

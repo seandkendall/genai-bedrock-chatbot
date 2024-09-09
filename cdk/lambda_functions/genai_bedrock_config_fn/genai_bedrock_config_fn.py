@@ -252,11 +252,11 @@ def validate_jwt_token(id_token, access_token):
             
     # if allowlist_domain is not empty and not null then
     if allowlist_domain and allowlist_domain != '':
-        if email.endswith(allowlist_domain):
+        if email.casefold().find(allowlist_domain.casefold()) != -1:
             return True, ''
     else:
         return True, ''
-    return False, f'You have not been allow-listed for this application. You require a domain ending with: {allowlist_domain}'
+    return False, f'You have not been allow-listed for this application. You require a domain containing: {allowlist_domain}'
         
 def datetime_to_iso(obj):
     if isinstance(obj, datetime):
