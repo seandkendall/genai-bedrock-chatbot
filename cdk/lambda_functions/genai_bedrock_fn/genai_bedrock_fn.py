@@ -57,11 +57,9 @@ def lambda_handler(event, context):
         }
 @tracer.capture_method
 def validate_jwt_token(id_token, access_token):
-    # return True, ''
     # Check if the access_token is in the cache
     if access_token in user_cache:
         user_attributes = user_cache[access_token]
-        print('using user cache')
     else:
         # Call cognito_client.get_user if access_token is not in the cache
         response = cognito_client.get_user(AccessToken=access_token)
@@ -77,21 +75,18 @@ def validate_jwt_token(id_token, access_token):
             email_verified = attribute['Value'] == 'true'
         elif attribute['Name'] == 'email':
             email = attribute['Value']
-            tracer.put_annotation(key="Email", value=email)
-    # if allowlist_domain contains a comma, then split it into a list and return true of the email contains any of the domains
+    # if allowlist_domain contains a comma, then split it into a list and return true of the email ends with any of the domains
     if ',' in allowlist_domain:
         allowlist_domains = allowlist_domain.split(',')
         for domain in allowlist_domains:
-            if domain.casefold() in email.casefold():
+            if email.casefold().find(allowlist_domain.casefold()) != -1:
                 return True, ''
-
-                        
+            
     # if allowlist_domain is not empty and not null then
     if allowlist_domain and allowlist_domain != '':
-        tracer.put_annotation(key="AllowListDomain", value=allowlist_domain)
-        if email.endswith(allowlist_domain):
+        if email.casefold().find(allowlist_domain.casefold()) != -1:
             return True, ''
     else:
         return True, ''
-    return False, f'You have not been allow-listed for this application. You require a domain ending with: {allowlist_domain}'
+    return False, f'You have not been allow-listed for this application. You require a domain containing: {allowlist_domain}'
         

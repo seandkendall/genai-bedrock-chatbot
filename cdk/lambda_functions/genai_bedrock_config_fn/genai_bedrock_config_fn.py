@@ -224,7 +224,6 @@ def load_image_models():
 
 @tracer.capture_method    
 def validate_jwt_token(id_token, access_token):
-    # return True, ''
     # Check if the access_token is in the cache
     if access_token in user_cache:
         user_attributes = user_cache[access_token]
@@ -247,7 +246,7 @@ def validate_jwt_token(id_token, access_token):
     if ',' in allowlist_domain:
         allowlist_domains = allowlist_domain.split(',')
         for domain in allowlist_domains:
-            if email.endswith(domain):
+            if email.casefold().find(allowlist_domain.casefold()) != -1:
                 return True, ''
             
     # if allowlist_domain is not empty and not null then
