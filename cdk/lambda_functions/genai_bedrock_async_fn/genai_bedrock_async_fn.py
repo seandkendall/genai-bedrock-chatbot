@@ -8,7 +8,8 @@ from llm_conversion_functions import (
     generate_random_string,
     process_message_history,
     process_message_history_mistral_large,
-    replace_user_bot
+    replace_user_bot,
+    split_message
 )
 
 logger = Logger()

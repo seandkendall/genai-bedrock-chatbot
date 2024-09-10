@@ -39,7 +39,7 @@ def lambda_handler(event, context):
         #if modelId contains titan then 
         if 'titan' in modelId:
             image_base64 = generate_image_titan(modelId, prompt, width, height)
-        elif 'stable' in modelId:
+        elif 'stability' in modelId:
             image_base64 = generate_image_stable_diffusion(modelId, prompt, width, height, stylePreset)
         else:
             raise ValueError(f"Unsupported model: {modelId}")
@@ -104,15 +104,22 @@ def generate_image_stable_diffusion(modelId, prompt, width, height, style_preset
     logger.info(f"Generating image using Model ID: {modelId}")
     # if modelId contains sd3-large
     if 'stable-diffusion-xl-v1' not in modelId:
-            response = bedrock.invoke_model(
+        response = bedrock.invoke_model(
             modelId=modelId,
             contentType="application/json",
             accept="application/json",
             body=json.dumps({
                 "prompt": prompt,
+                "mode": "text-to-image",
                 "seed": 0,
             })
         )
+        print('SDK response:')
+        print(response)
+        print('SDK END response:')
+        model_response = json.loads(response["body"].read())
+        base64_image_data = model_response["images"][0]
+        return base64_image_data
     else:
         response = bedrock.invoke_model(
             modelId=modelId,
@@ -128,8 +135,8 @@ def generate_image_stable_diffusion(modelId, prompt, width, height, style_preset
                 "style_preset": style_preset
             })
         )
-    response_body = json.loads(response['body'].read())
-    return response_body['artifacts'][0]['base64']
+        response_body = json.loads(response['body'].read())
+        return response_body['artifacts'][0]['base64']
 
 def save_image_to_s3_and_get_url(image_base64):
     # Decode base64 image
