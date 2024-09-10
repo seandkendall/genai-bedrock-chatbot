@@ -238,12 +238,21 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id, mo
                             'amazon-bedrock-invocationMetrics': amazon_bedrock_invocationMetrics
                         })
                 elif model_provider == 'mistral':
+                    print('MISTRAL content_chunk:')
+                    print(content_chunk)
+                    iterator_element = 'outputs'
+                    if content_chunk['choices']:
+                        iterator_element = 'choices'
                     if counter == 0:
                         message_type = 'message_start'
                     else:
                         message_type = 'content_block_delta'
-                    for element in content_chunk['outputs']:
-                        msg_text = element['text']
+                    for element in content_chunk[iterator_element]:
+                        # if iterator_element === 'choices'
+                        if iterator_element == 'choices':
+                            msg_text = element['message']['content']
+                        else:    
+                            msg_text = element['text']
                         if element['stop_reason']:
                             message_type = 'message_stop'
                     

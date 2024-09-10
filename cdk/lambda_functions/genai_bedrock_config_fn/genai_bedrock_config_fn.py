@@ -246,7 +246,7 @@ def validate_jwt_token(id_token, access_token):
     if ',' in allowlist_domain:
         allowlist_domains = allowlist_domain.split(',')
         for domain in allowlist_domains:
-            if email.casefold().find(allowlist_domain.casefold()) != -1:
+            if email.casefold().find(domain.casefold()) != -1:
                 return True, ''
             
     # if allowlist_domain is not empty and not null then
