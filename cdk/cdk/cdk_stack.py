@@ -245,7 +245,7 @@ class ChatbotWebsiteStack(Stack):
         config_function.add_to_role_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=["bedrock:ListFlows", "bedrock:ListFlowAliases"],
-            resources=[f"arn:aws:bedrock:{self.region}:{self.account}:flow/*"]
+            resources=["*"]
         ))
 
         dynamodb_configurations_table.grant_full_access(config_function)
