@@ -248,7 +248,6 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id, mo
                     else:
                         message_type = 'content_block_delta'
                     for element in content_chunk[iterator_element]:
-                        # if iterator_element === 'choices'
                         if iterator_element == 'choices':
                             msg_text = element['message']['content']
                         else:    
@@ -256,9 +255,7 @@ def process_bedrock_response(response_stream, prompt, connection_id, user_id, mo
                         if element['stop_reason']:
                             message_type = 'message_stop'
                     
-                    #if message_type equals 'message_start' then
                     if message_type == 'message_start':
-                        # Send the message_start event to the WebSocket client
                         result_text += msg_text
                         send_websocket_message(connection_id, {
                             'type': message_type,

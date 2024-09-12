@@ -143,15 +143,15 @@ def process_websocket_message(event,bedrock_agents_id,bedrock_agents_alias_id,be
                     
                 process_bedrock_knowledgebase_response(response, connection_id, 'Knowledgebase')
         else:
-            if not bedrock_agents_alias_id or not bedrock_agents_id:
+            flow_alias_identifier = request_body.get('flow_alias_identifier', '')
+            flow_identifier = request_body.get('flow_identifier', '')
+            if ((not bedrock_agents_alias_id and not flow_alias_identifier) or (not bedrock_agents_id and not flow_alias_identifier)):
                 send_websocket_message(connection_id, {
                     'type': 'error',
                     'code':'8860',
                     'error': 'No Bedrock Agents alias ID or bedrock Agents ID configured. please enter these on the settings screen'
                 })
             else:
-                flow_alias_identifier = request_body.get('flow_alias_identifier', '')
-                flow_identifier = request_body.get('flow_identifier', '')
                 selected_model_id = request_body.get('model', '')
                 response_stream_key = 'completion'
                 if flow_alias_identifier and flow_identifier:
