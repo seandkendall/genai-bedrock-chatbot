@@ -1,11 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, TextField, IconButton, Tooltip } from '@mui/material';
+import { Box, TextField, IconButton } from '@mui/material';
 import { FaPaperPlane } from 'react-icons/fa';
 
-const MessageInput = ({ onSend, disabled, selectedMode }) => {
+const MessageInput = ({ onSend, disabled, selectedMode, selectedKbMode }) => {
   const [message, setMessage] = useState('');
-  const [tooltipOpen, setTooltipOpen] = useState(false);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -23,6 +21,15 @@ const MessageInput = ({ onSend, disabled, selectedMode }) => {
       setMessage('');
     }
   };
+  const getPlaceholderText = () => {
+    if (!selectedMode || !selectedMode.category) {
+      return "Select a Model, Agent, KnowledgeBase or PromptFlow in the Header";
+    }
+    return (selectedMode && selectedMode.category && selectedMode.category === 'Bedrock KnowledgeBases' && !selectedKbMode) ? "Select a Model for your KnowledgeBase in the Header" : "Type your message..."
+  }
+  const isDisabled = () => {
+    return disabled || !selectedMode || (selectedMode && selectedMode.category && selectedMode.category === 'Bedrock KnowledgeBases' && !selectedKbMode)
+  }
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -37,14 +44,8 @@ const MessageInput = ({ onSend, disabled, selectedMode }) => {
         e.target.selectionStart = e.target.selectionEnd = selectionStart + 1;
       }, 0);
     }
-    if (message && message.trim() !== ''){
-      setTooltipOpen(false);
-    }
   };
 
-  const handleMouseMove = (event) => {
-    setMousePosition({ x: event.clientX, y: event.clientY });
-  };
 
   return (
     <Box
@@ -58,41 +59,20 @@ const MessageInput = ({ onSend, disabled, selectedMode }) => {
         boxShadow: '0 -2px 4px rgba(0, 0, 0, 0.1)',
       }}
     >
-      <Tooltip
-        title="Generate an image by prefixing your message with 'Image:'. Example: 'Image: Dogs'"
-        open={tooltipOpen}
-        followCursor
-        PopperProps={{
-          anchorEl: {
-            getBoundingClientRect: () => ({
-              top: mousePosition.y,
-              left: mousePosition.x,
-              right: mousePosition.x,
-              bottom: mousePosition.y,
-              width: 0,
-              height: 0,
-            }),
-          },
-        }}
-      >
-        <TextField
-          inputRef={inputRef}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onMouseEnter={() => setTooltipOpen(selectedMode === 'bedrock' && (!message || message.trim() === '' ))  }
-          onMouseLeave={() => setTooltipOpen(false)}
-          onMouseMove={handleMouseMove}
-          placeholder="Type your message..."
-          disabled={disabled}
-          multiline
-          fullWidth
-          variant="outlined"
-          sx={{ mr: 2 }}
-        />
-      </Tooltip>
+      <TextField
+        inputRef={inputRef}
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={getPlaceholderText()}
+        disabled={isDisabled()  }
+        multiline
+        fullWidth
+        variant="outlined"
+        sx={{ mr: 2 }}
+      />
       <IconButton
-        disabled={disabled}
+        disabled={isDisabled()}
         color="primary"
         onClick={handleSend}
         aria-label="Send message"

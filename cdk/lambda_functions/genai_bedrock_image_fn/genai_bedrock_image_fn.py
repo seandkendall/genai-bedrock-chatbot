@@ -1,28 +1,22 @@
-import json
-import boto3
-import base64
-import uuid
-import os
-import logging
+import json,boto3,base64,uuid,os
 from datetime import datetime
-from aws_lambda_powertools import Tracer
+from aws_lambda_powertools import Logger, Metrics, Tracer
 from django.utils import timezone
 
-# Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = Logger(service="BedrockImage")
+metrics = Metrics()
+tracer = Tracer()
+
 
 bedrock = boto3.client(service_name="bedrock-runtime")
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 s3_client = boto3.client('s3')
 S3_BUCKET_NAME = os.environ['S3_IMAGE_BUCKET_NAME']
-tracer = Tracer()
 
 apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
-    logger.info(f"Received event: {json.dumps(event)}")
     try:
         request_body = json.loads(event['body'])
         prompt = request_body.get('prompt', '')
@@ -46,7 +40,7 @@ def lambda_handler(event, context):
 
         # Save image to S3 and generate pre-signed URL
         image_url = save_image_to_s3_and_get_url(image_base64)
-        logger.info("Image saved to S3 and URL generated")
+        # logger.info("Image saved to S3 and URL generated")
         send_websocket_message(connection_id, {
             'type': 'image_generated',
             'image_url': image_url,
@@ -64,11 +58,12 @@ def lambda_handler(event, context):
             'message_id': message_id,
         })
 
-        logger.info("Image URL sent successfully")
+        # logger.info("Image URL sent successfully")
         return {'statusCode': 200, 'body': json.dumps('Image generated successfully')}
 
     except Exception as e:
         logger.error(f"Error generating image: {str(e)}", exc_info=True)
+        logger.exception(e)
         send_websocket_message(connection_id, {
             'type': 'error',
             'error': str(e)
@@ -114,9 +109,6 @@ def generate_image_stable_diffusion(modelId, prompt, width, height, style_preset
                 "seed": 0,
             })
         )
-        print('SDK response:')
-        print(response)
-        print('SDK END response:')
         model_response = json.loads(response["body"].read())
         base64_image_data = model_response["images"][0]
         return base64_image_data
@@ -176,3 +168,4 @@ def send_websocket_message(connection_id, message):
         logger.info(f"WebSocket connection is closed (connectionId: {connection_id})")
     except Exception as e:
         logger.error(f"Error sending WebSocket message (92012): {str(e)}")
+        logger.exception(e)

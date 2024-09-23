@@ -1,8 +1,9 @@
 import json, boto3, os
-from aws_lambda_powertools import Tracer
-import logging
+from aws_lambda_powertools import Logger, Metrics, Tracer
 
-
+logger = Logger(service="BedrockRouter")
+metrics = Metrics()
+tracer = Tracer()
 
 lambda_client = boto3.client('lambda')
 cognito_client = boto3.client('cognito-idp')
@@ -13,7 +14,7 @@ region = os.environ['REGION']
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
 image_generation_function_name = os.environ['IMAGE_GENERATION_FUNCTION_NAME']
 user_cache = {}
-tracer = Tracer()
+
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
@@ -23,24 +24,24 @@ def lambda_handler(event, context):
         # Handle the case where the request body is not valid JSON or does not contain the 'body' key
         request_body = {}
     selected_mode = request_body.get('selectedMode', 'none')
-    
+    message_type = request_body.get('type', '')
     id_token = request_body.get('idToken', 'none')
     access_token = request_body.get('accessToken', 'none')
-    tracer.put_annotation(key="SelectedMode", value=selected_mode)
-    
     allowed, not_allowed_message = validate_jwt_token(id_token, access_token)
     if allowed:
-        if selected_mode == 'agents':
+        if selected_mode.get('category') == 'Bedrock Agents' or selected_mode.get('category') == 'Bedrock KnowledgeBases':
             # Invoke genai_bedrock_agents_client_fn
-            lambda_client.invoke(FunctionName=agents_function_name, InvocationType='Event', Payload=json.dumps(event))
+            if message_type != 'load' and message_type != 'clear_conversation':
+                lambda_client.invoke(FunctionName=agents_function_name, InvocationType='Event', Payload=json.dumps(event))
             # Process the response from agents_client_function
-        elif selected_mode == 'bedrock':
+        elif selected_mode.get('category') == 'Bedrock Models':
             # Invoke genai_bedrock_async_fn
             lambda_client.invoke(FunctionName=bedrock_function_name, InvocationType='Event', Payload=json.dumps(event))
             # Process the response from lambda_fn_async
-        elif selected_mode == 'image':
+        elif selected_mode.get('category') == 'Bedrock Image Models':
             # Invoke image generation function
-            lambda_client.invoke(FunctionName=image_generation_function_name, InvocationType='Event', Payload=json.dumps(event))
+            if message_type != 'load':
+                lambda_client.invoke(FunctionName=image_generation_function_name, InvocationType='Event', Payload=json.dumps(event))
         else:
             return {
                 'statusCode': 404,
@@ -57,17 +58,7 @@ def lambda_handler(event, context):
         }
 @tracer.capture_method
 def validate_jwt_token(id_token, access_token):
-    # Check if the access_token is in the cache
-    if access_token in user_cache:
-        user_attributes = user_cache[access_token]
-    else:
-        # Call cognito_client.get_user if access_token is not in the cache
-        response = cognito_client.get_user(AccessToken=access_token)
-        user_attributes = response['UserAttributes']
-        
-        # Store the user attributes in the cache
-        user_cache[access_token] = user_attributes
-
+    user_attributes = get_user_attributes(access_token)
     email_verified = False
     email = None
     for attribute in user_attributes:
@@ -88,5 +79,14 @@ def validate_jwt_token(id_token, access_token):
             return True, ''
     else:
         return True, ''
-    return False, f'You have not been allow-listed for this application. You require a domain containing: {allowlist_domain}'
+    return False, f'You have not been allow-listed for this application. You require a domain containing: {allowlist_domain}', None
         
+@tracer.capture_method
+def get_user_attributes(access_token):
+    if access_token in user_cache:
+        return user_cache[access_token]
+    else:
+        response = cognito_client.get_user(AccessToken=access_token)
+        user_attributes = response['UserAttributes']
+        user_cache[access_token] = user_attributes
+        return user_attributes       

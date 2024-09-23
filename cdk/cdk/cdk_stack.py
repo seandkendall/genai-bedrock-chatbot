@@ -51,7 +51,7 @@ class ChatbotWebsiteStack(Stack):
             code=_lambda.Code.from_asset("lambda_functions/python_layer"),
             compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
             compatible_architectures=[_lambda.Architecture.ARM_64],
-            description="Boto3 library layer"
+            description="Boto3 library with  PyJWT django pytz requests used for arm64/3.12"
         )
         # Add powertools layer
         powertools_layer = _lambda.LayerVersion.from_layer_version_arn(self, "PowertoolsLayer",f"arn:aws:lambda:{self.region}:017000801446:layer:AWSLambdaPowertoolsPythonV2-Arm64:69")
@@ -100,12 +100,6 @@ class ChatbotWebsiteStack(Stack):
                             destination_bucket=schemabucket,
                             prune=True)
 
-        #ORIGINAL  cloud_front_distribution_props={
-        #                    'comment': 'GenAiChatbot Website',
-        #                    'defaultBehavior': {
-        #                        'cachePolicy': cloudfront.CachePolicy.CACHING_DISABLED
-        #                    },
-        #                }
         cloud_front_distribution_props = {
             'comment': 'GenAiChatbot Website',
             'defaultBehavior': {
@@ -165,23 +159,28 @@ class ChatbotWebsiteStack(Stack):
 
         # Create DynamoDB table for bedrock_usage with a user_id (partition key string), input_tokens (number) and output_tokens(number)
         dynamodb_bedrock_usage_table = dynamodb.Table(self, "dynamodb_bedrock_usage_table",
-                                                      partition_key=dynamodb.Attribute(name="user_id", type=dynamodb.AttributeType.STRING))
-        dynamodb_bedrock_usage_table.removal_policy = RemovalPolicy.DESTROY
+                                                      partition_key=dynamodb.Attribute(name="user_id", 
+                                                                                       type=dynamodb.AttributeType.STRING),
+                                                                                       billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+                                                                                       removal_policy=RemovalPolicy.DESTROY, )
         
         dynamodb_conversations_table = dynamodb.Table(self, "dynamodb_conversations_table", 
-                                                      partition_key=dynamodb.Attribute(name="session_id", type=dynamodb.AttributeType.STRING))
-        dynamodb_conversations_table.removal_policy = RemovalPolicy.DESTROY
+                                                      partition_key=dynamodb.Attribute(name="session_id", type=dynamodb.AttributeType.STRING),
+                                                      billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+                                                      removal_policy=RemovalPolicy.DESTROY,)
+        
         dynamodb_incidents_table = dynamodb.Table(self, "dynamodb_incidents_table", 
-                                                  partition_key=dynamodb.Attribute(name="incident_id", type=dynamodb.AttributeType.STRING))
-        dynamodb_incidents_table.removal_policy = RemovalPolicy.DESTROY
+                                                  partition_key=dynamodb.Attribute(name="incident_id", type=dynamodb.AttributeType.STRING),
+                                                  billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+                                                  removal_policy=RemovalPolicy.DESTROY,)
 
         dynamodb_configurations_table = dynamodb.Table(
             self, "dynamodb_configurations_table",
             partition_key=dynamodb.Attribute(name="user", type=dynamodb.AttributeType.STRING),
             sort_key=dynamodb.Attribute(name="config_type", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY
         )
-        dynamodb_configurations_table.removal_policy = RemovalPolicy.DESTROY
 
 
         # Create a WebSocket API
@@ -244,7 +243,7 @@ class ChatbotWebsiteStack(Stack):
         # Add permissions to the Lambda function's role
         config_function.add_to_role_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
-            actions=["bedrock:ListFlows", "bedrock:ListFlowAliases"],
+            actions=["bedrock:ListFlows", "bedrock:ListFlowAliases", "bedrock:ListAgents","bedrock:ListAgentAliases", "bedrock:ListKnowledgeBases"],
             resources=["*"]
         ))
 
@@ -350,8 +349,8 @@ class ChatbotWebsiteStack(Stack):
         # Create the "genai_bedrock_fn" Lambda function
         lambda_router_fn = _lambda.Function(self, "genai_bedrock_router_fn",
                                      runtime=_lambda.Runtime.PYTHON_3_12,
-                                     handler="genai_bedrock_fn.lambda_handler",
-                                     code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_fn/"),
+                                     handler="genai_bedrock_router_fn.lambda_handler",
+                                     code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_router_fn/"),
                                      timeout=Duration.seconds(20),
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
@@ -426,6 +425,13 @@ class ChatbotWebsiteStack(Stack):
                 domain_prefix=cognito_domain_string
             )
         )
+        # TODO Customize Cognito Hosted Login
+        # cfn_user_pool_uICustomization_attachment = cognito.CfnUserPoolUICustomizationAttachment(self, "CfnUserPoolUICustomizationAttachment",
+        #     client_id="ALL",
+        #     user_pool_id=user_pool.user_pool_id,
+        #     # the properties below are optional
+        #     css="css"
+        # )
 
         
         # Deploy the website files and variables.js to the S3 bucket

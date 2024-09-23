@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { AppBar, Toolbar, Typography, Box, IconButton, Menu, MenuItem, Switch, Tooltip } from '@mui/material';
+import React, { useEffect, useState, useMemo } from 'react';
+import useTimer from '../useTimer'
+import { AppBar, Toolbar, Typography, Box, IconButton, Menu, MenuItem, Select, Tooltip, InputLabel, FormControl } from '@mui/material';
 import { tooltipClasses } from '@mui/material/Tooltip';
 import { styled } from '@mui/material/styles';
 import { FaSignOutAlt, FaInfoCircle, FaCog, FaBroom } from 'react-icons/fa';
@@ -15,36 +16,133 @@ const NoMaxWidthTooltip = styled(({ className, ...props }) => (
 });
 
 const Header = ({
-  bedrockSessionId,
-  agentsSessionId,
+  disabled,
+  appSessionid,
   kbSessionId,
+  setKBSessionId,
+  handleOpenSettingsModal,
   signOut,
   onClearConversation,
-  timerVisible,
-  timerValue,
   selectedMode,
   onModeChange,
   showPopup,
   setShowPopup,
   popupMessage,
   popupType,
-  disabled,
   totalInputTokens,
   totalOutputTokens,
-  handleOpenSettingsModal,
   pricePer1000InputTokens,
   pricePer1000OutputTokens,
   monthlyInputTokens,
   monthlyOutputTokens,
-  knowledgebasesOrAgents,
-  selectedModel,
-  imageModel,
-  selectedPromptFlow,
-  setSelectedPromptFlow,
+  bedrockAgents,
+  bedrockKnowledgeBases,
+  models,
+  imageModels,
+  promptFlows,
+  selectedKbMode,
+  onSelectedKbMode
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
+
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
+  const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
   const isMobile = useMediaQuery('(max-width:600px)');
+
+  // load selectedMode from local storage
+  useEffect(() => {
+    if (selectedMode === null) {
+      let savedOption;
+      try {
+        // Attempt to parse the JSON string from localStorage
+        savedOption = JSON.parse(localStorage.getItem('selectedMode'));
+      } catch (error) {
+        localStorage.removeItem('selectedMode')
+      }
+      if (savedOption) {
+        onModeChange(savedOption);
+      }
+    }
+    if (selectedKbMode === null) {
+      let savedKbOption;
+      try {
+        // Attempt to parse the JSON string from 
+        savedKbOption = JSON.parse(localStorage.getItem('selectedKbMode'));
+      } catch (error) {
+        localStorage.removeItem('selectedKbMode')
+      }
+      if (savedKbOption) {
+        onSelectedKbMode(savedKbOption)
+      }
+    }
+  }, []);
+
+  //start and stop header timer
+  useEffect(() => {
+    if (disabled) {
+      startTimer();
+    } else {
+      stopTimer();
+      resetTimer();
+    }
+  }, [disabled]);
+
+  const onSelectedModeChange = (event) => {
+    if (event && event.target && event.target.value) {
+      const [category, modeSelector] = event.target.value.split('%');
+      let selectedObject = null;
+      switch (category) {
+        case 'Bedrock Models':
+          selectedObject = models.find((item) => item.mode_selector === modeSelector);
+          selectedObject.category = category;
+          break;
+        case 'Bedrock Image Models':
+          selectedObject = imageModels.find((item) => item.mode_selector === modeSelector);
+          selectedObject.category = category;
+          break;
+        case 'Bedrock KnowledgeBases':
+          selectedObject = bedrockKnowledgeBases.find((item) => item.mode_selector === modeSelector);
+          selectedObject.category = category;
+          break;
+        case 'Bedrock Agents':
+          selectedObject = bedrockAgents.find((item) => item.mode_selector === modeSelector);
+          selectedObject.category = category;
+          break;
+        case 'Bedrock Prompt Flows':
+          selectedObject = promptFlows.find((item) => item.mode_selector === modeSelector);
+          selectedObject.category = category;
+          break;
+        default:
+          break;
+      }
+      if (selectedObject) {
+        onModeChange(selectedObject);
+        localStorage.setItem('selectedMode', JSON.stringify(selectedObject));
+      }
+    }
+  };
+
+  const onSelectedKbModeChange = (event) => {
+    if (event && event.target && event.target.value) {
+      const [category, modeSelector] = event.target.value.split('%');
+      let selectedObject = null;
+      switch (category) {
+        case 'Bedrock Models':
+          selectedObject = models.find((item) => item.mode_selector === modeSelector);
+          selectedObject.category = category;
+          break;
+        default:
+          break;
+      }
+      if (selectedObject) {
+        onSelectedKbMode(selectedObject);
+        localStorage.setItem('selectedKbMode', JSON.stringify(selectedObject));
+        setKBSessionId('')
+        localStorage.removeItem('kbSessionId');
+
+      }
+    }
+  };
 
   const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -66,25 +164,44 @@ const Header = ({
     setShowInfoTooltip(false);
   };
   const calculateDailyCost = () => {
-    const dailyCost = (totalOutputTokens * (pricePer1000OutputTokens/1000)) + (totalInputTokens * (pricePer1000InputTokens/1000));
+    const dailyCost = (totalOutputTokens * (pricePer1000OutputTokens / 1000)) + (totalInputTokens * (pricePer1000InputTokens / 1000));
     return dailyCost.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   }
   const calculateMonthlyCost = () => {
-    const dailyCost = (monthlyOutputTokens * (pricePer1000OutputTokens/1000)) + (monthlyInputTokens * (pricePer1000InputTokens/1000));
+    const dailyCost = (monthlyOutputTokens * (pricePer1000OutputTokens / 1000)) + (monthlyInputTokens * (pricePer1000InputTokens / 1000));
     return dailyCost.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   }
 
   const getHeaderLabel = () => {
-    if (knowledgebasesOrAgents === 'knowledgeBases') {
-      return isMobile ? 'KB' : 'KnowledgeBases';
-    } else if (knowledgebasesOrAgents === 'agents') {
-      if(selectedPromptFlow)
-        return isMobile ? 'AG' : `Agents (PFlow:${selectedPromptFlow.name})`;
-      return isMobile ? 'AG' : 'Agents';
-    } else {
-      return isMobile ? 'BR' : 'Bedrock';
+    if (selectedMode) {
+      switch (selectedMode.category) {
+        case 'Bedrock Models':
+          return selectedMode.modelName;
+        case 'Bedrock Image Models':
+          return selectedMode.modelName;
+        case 'Bedrock KnowledgeBases':
+          return selectedMode.knowledgeBaseId;
+        case 'Bedrock Agents':
+          return selectedMode.agentAliasId;
+        case 'Bedrock Prompt Flow':
+          return selectedMode.id;
+        default:
+          return isMobile ? 'BR' : 'Bedrock';
+      }
     }
+    return '';
   };
+
+  const selectOptions = useMemo(() => [
+    { title: 'Bedrock Models', data: models },
+    { title: 'Bedrock Image Models', data: imageModels },
+    { title: 'Bedrock KnowledgeBases', data: bedrockKnowledgeBases },
+    { title: 'Bedrock Agents', data: bedrockAgents },
+    { title: 'Bedrock Prompt Flows', data: promptFlows }
+  ], [models, imageModels, bedrockKnowledgeBases, bedrockAgents, promptFlows]);
+  const kbModelOptions = useMemo(() => [
+    { title: 'Bedrock Models', data: models },
+  ], [models]);
 
   return (
     <AppBar position="sticky">
@@ -95,16 +212,13 @@ const Header = ({
             title={
               <Box>
                 <Typography>Solution Designed and Built by Sean Kendall</Typography>
-                <Typography>Active Text Model: {selectedModel}</Typography>
-                <Typography>Active Image Model: {imageModel}</Typography>
-                <Typography>Bedrock Session ID: {bedrockSessionId}</Typography>
-                <Typography>Agents Session ID: {agentsSessionId}</Typography>
+                <Typography>Active Model/Mode: {getHeaderLabel()}</Typography>
+                <Typography>App Session ID: {appSessionid}</Typography>
                 {kbSessionId && <Typography>KnowledgeBase Session ID: {kbSessionId}</Typography>}
                 <Typography>Total Input/Output Tokens (Bedrock only): {totalInputTokens}/{totalOutputTokens}</Typography>
-                <Typography>Bedrock Cost (Today): { calculateDailyCost()} USD</Typography>
-                {monthlyInputTokens > 0 && <Typography>Bedrock Cost (Current Month): { calculateMonthlyCost()} USD</Typography>}
+                <Typography>Bedrock Cost (Today): {calculateDailyCost()} USD</Typography>
+                {monthlyInputTokens > 0 && <Typography>Bedrock Cost (Current Month): {calculateMonthlyCost()} USD</Typography>}
                 <Typography></Typography>
-                <Typography>Note: Generate an image by prefixing your chat with "Image:"</Typography>
               </Box>
             }
             open={showInfoTooltip}
@@ -117,23 +231,105 @@ const Header = ({
             </IconButton>
           </NoMaxWidthTooltip>
         </Typography>
-
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          {!isMobile && timerVisible && <Typography variant="body2" mr={2}>{formatTimer(timerValue)}</Typography>}
-          <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-            <Typography variant="body2" mr={1}>{isMobile ? 'BR' : 'Bedrock'}</Typography>
-            <Switch
-              checked={selectedMode === 'agents'}
-              onChange={() => onModeChange(selectedMode === 'bedrock' ? 'agents' : 'bedrock')}
-              disabled={disabled}
-              color="warning"
-            />
-            <Typography variant="body2" ml={1}>{getHeaderLabel()}</Typography>
-          </Box>
+          {!isMobile && disabled && <Typography variant="body2" mr={2}>{formatTimer(elapsedTime)}</Typography>}
+          <>
+            <FormControl sx={{ m: 1, minWidth: 120 }}>
+              <InputLabel id="mode-select-label" sx={{ color: 'white' }}>Bedrock Chatbot Model</InputLabel>
+              <Select
+                id="mode-select"
+                labelId="mode-select-label"
+                value={selectedMode ? selectedMode.category + '%' + selectedMode.mode_selector : 'DEFAULT'}
+                onChange={onSelectedModeChange}
+                label="Bedrock Chatbot Model"
+                sx={{
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'white',
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: 'white',
+                  },
+                  color: 'white',
+                }}
+              >
+                <MenuItem value="DEFAULT" >
+                  Select a Model
+                </MenuItem>
+                {selectOptions.flatMap(({ title, data }) =>
+                  data.length > 0 ? [
+                    <MenuItem key={`title-${title}`} value={title} disabled>
+                      {title}
+                    </MenuItem>,
+                    ...data.map((item) => (
+                      <MenuItem value={`${title}%${item.mode_selector}`} >
+                        {(() => {
+                          switch (title) {
+                            case 'Bedrock Models':
+                              return item.modelName;
+                            case 'Bedrock Image Models':
+                              return item.modelName;
+                            case 'Bedrock KnowledgeBases':
+                              return item.name;
+                            case 'Bedrock Agents':
+                              return item.agentAliasName;
+                            case 'Bedrock Prompt Flows':
+                              return item.name;
+                            default:
+                              return 'Unknown';
+                          }
+                        })()}
+                      </MenuItem>
+                    ))
+                  ] : [])}
+              </Select>
+            </FormControl>
+            {selectedMode && selectedMode.knowledgeBaseId && (
+              <FormControl sx={{ m: 1, minWidth: 120 }}>
+                <InputLabel id="kbmode-select-label" sx={{ color: 'white' }}>KnowledgeBase Model</InputLabel>
+                <Select
+                  id="kbmode-select"
+                  labelId="kbmode-select-label"
+                  value={selectedKbMode ? selectedKbMode.category + '%' + selectedKbMode.mode_selector : 'DEFAULT'}
+                  onChange={onSelectedKbModeChange}
+                  label="KnowledgeBase Model"
+                  sx={{
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'white',
+                    },
+                    '& .MuiSvgIcon-root': {
+                      color: 'white',
+                    },
+                    color: 'white',
+                  }}
+                >
+                  <MenuItem value="DEFAULT" >
+                    Select a Model
+                  </MenuItem>
+                  {kbModelOptions.flatMap(({ title, data }) =>
+                    data.length > 0 ? [
+                      ...data.map((item) => (
+                        <MenuItem value={`${title}%${item.mode_selector}`} >
+                          {(() => {
+                            switch (title) {
+                              case 'Bedrock Models':
+                                return item.modelName;
+                              default:
+                                return 'Unknown';
+                            }
+                          })()}
+                        </MenuItem>
+                      ))
+                    ] : [])}
+                </Select>
+              </FormControl>
+            )}
+
+          </>
+
           <IconButton color="inherit" onClick={() => handleOpenSettingsModal()}>
             <FaCog />
           </IconButton>
-          <IconButton color="inherit" onClick={onClearConversation} disabled={disabled}>
+          <IconButton color="inherit" onClick={onClearConversation} disabled={disabled || (!selectedMode) || (selectedMode.category === "Bedrock KnowledgeBases") && !selectedKbMode}>
             <FaBroom />
           </IconButton>
           <IconButton color="inherit" onClick={handleMenuOpen} disabled={disabled}>

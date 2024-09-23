@@ -1,17 +1,13 @@
-import json
-import datetime
-import random
-import boto3
-import os
-import logging
+import json, datetime, random, boto3, os
 from botocore.exceptions import ClientError
-from aws_lambda_powertools import Tracer
+from aws_lambda_powertools import Logger, Metrics, Tracer
 
-
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
 dynamodb = boto3.resource('dynamodb')
+
+logger = Logger(service="BedrockAgentsRouter")
+metrics = Metrics()
 tracer = Tracer()
+
 
 try:
     dynamodb_table_name = os.environ['DYNAMODB_TABLE']
@@ -23,7 +19,7 @@ incidents_table = dynamodb.Table(dynamodb_table_name)
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
-
+    # logger.info("Executing Bedrock Agents Function")
     action_group = event.get('actionGroup', '')
     api_path = event.get('apiPath', '')
     http_method = event.get('httpMethod', '')

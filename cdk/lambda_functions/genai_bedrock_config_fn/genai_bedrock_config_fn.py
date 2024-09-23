@@ -1,7 +1,18 @@
-import json, os
-import boto3
+import json, os, boto3
 from datetime import datetime, timezone
-from aws_lambda_powertools import Tracer
+from aws_lambda_powertools import Logger, Metrics, Tracer
+from load_utilities import (
+    load_knowledge_bases,
+    load_agents,
+    load_models,
+    load_prompt_flows,
+    datetime_to_iso
+)
+
+logger = Logger(service="BedrockConfig")
+metrics = Metrics()
+tracer = Tracer()
+
 
 
 # Initialize DynamoDB client
@@ -14,10 +25,17 @@ bedrock_agent_client = boto3.client(service_name='bedrock-agent')
 
 region = os.environ['REGION']
 user_cache = {}
-tracer = Tracer()
+
+
+load_models_response = None
+load_agents_response = None
+load_prompt_flow_response = None
+load_knowledgebase_response = None
+load_agents_response = None
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
+    # logger.info("Executing Bedrock Config Function")
     try:
         # Parse request body
         request_body = json.loads(event.get('body', '{}'))
@@ -34,13 +52,36 @@ def lambda_handler(event, context):
                 'statusCode': 403,
                 'body': json.dumps({'error': not_allowed_message})
             }
-        if action == 'load_prompt_flows':
-            return load_prompt_flows()
-        elif action == 'load_models':
-            return load_models()
-        elif action == 'load_image_models':
-            return load_image_models()
-        elif config_type not in ['system', 'user', 'load_models','load_image_models']:
+
+        # Use a dictionary to map actions to functions
+        action_map = {
+            'load_prompt_flows': lambda: load_prompt_flows(bedrock_agent_client),
+            'load_knowledge_bases': lambda: load_knowledge_bases(bedrock_agent_client),
+            'load_agents': lambda: load_agents(bedrock_agent_client),
+            'load_models': lambda: load_models(bedrock_client)
+        }
+        # split action by ,
+        actions = action.split(',')
+        return_obj = {}
+        for action in actions:
+            if action in action_map:
+                global load_prompt_flow_response, load_knowledgebase_response, load_agents_response, load_models_response
+                response_var = f"load_{action.split('_', 1)[1]}_response"
+                if response_var in globals() and globals()[response_var] is not None:
+                    return_obj[action] = globals()[response_var]
+                else:
+                    # Call the mapped function and store the response in the corresponding global variable
+                    response = action_map[action]()
+                    globals()[response_var] = response
+                    return_obj[action] = response
+
+        if return_obj:
+            return_obj['type'] = 'load_response'
+            return {
+                'statusCode': 200,
+                'body': json.dumps(return_obj, default=datetime_to_iso)
+            }
+        if config_type not in ['system', 'user']:
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': 'Invalid config_type. Must be "system" or "user".'})
@@ -53,14 +94,16 @@ def lambda_handler(event, context):
         else:
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': 'Invalid action. Must be "load_models", "load_image_models", "load" or "save".'})
+                'body': json.dumps({'error': 'Invalid action. Must be "load_prompt_flows", "load_knowledge_bases", "load_agents", "load_models", "load", "save".'})
             }
 
     except Exception as e:
+        logger.exception(e)
         return {
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
         }
+
 
 @tracer.capture_method
 def load_config(user, config_type):
@@ -88,6 +131,7 @@ def load_config(user, config_type):
             }
 
     except Exception as e:
+        logger.exception(e)
         return {
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
@@ -131,110 +175,16 @@ def save_config(user, config_type, config):
         }
 
     except Exception as e:
+        logger.exception(e)
         return {
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
         }
-@tracer.capture_method
-def load_prompt_flows():
-    try:
-        response = bedrock_agent_client.list_flows()
-        flow_summaries = response.get('flowSummaries', [])
-        ret = []
-        
-        # Convert datetime objects to ISO format strings
-        for flow in flow_summaries:
-            flow_id = flow['id']
-            flow_alias_response = bedrock_agent_client.list_flow_aliases(
-                flowIdentifier=flow_id,
-            )
-            flow_aliases = flow_alias_response['flowAliasSummaries']
-            # add  to ret
-            ret.extend(flow_aliases)
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'type': 'load_prompt_flows',
-                'prompt_flows': ret
-            }, default=datetime_to_iso)
-        }
-    except Exception as e:
-        print(f"Error loading prompt flows: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'type': 'error',
-                'message': str(e)
-            })
-        }
 
-
-
-@tracer.capture_method
-def load_models():
-    try:
-        # Call the Bedrock API to list available foundation models
-        response = bedrock_client.list_foundation_models()
-        available_models = [
-            {
-                'providerName': model['providerName'],
-                'modelName': model['modelName'],
-                'modelId': model['modelId'],
-                'modelArn': model['modelArn']
-            }
-            for model in response['modelSummaries']
-            if ('Anthropic' in model['providerName'] or ('Mistral' in model['providerName'] and 'Large' in model['modelName']) or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
-        ]
-
-        # Send the available models to the frontend
-        retObj = {
-            'statusCode': 200,
-            'body': json.dumps({'type': 'load_models', 'models': available_models})
-        }
-        return retObj
-    except Exception as e:
-        print(f"Error loading models: {str(e)}")
-        return []
-    
-def load_image_models():
-    try:
-        # Call the Bedrock API to list available foundation models
-        response = bedrock_client.list_foundation_models()
-        available_models = [
-            {
-                'providerName': model['providerName'],
-                'modelName': model['modelName'],
-                'modelId': model['modelId'],
-                'modelArn': model['modelArn']
-            }
-            for model in response['modelSummaries']
-            if ('Stability' in model['providerName'] or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'IMAGE' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
-        ]
-
-        # Send the available models to the frontend
-        retObj = {
-            'statusCode': 200,
-            'body': json.dumps({'type': 'load_image_models', 'models': available_models})
-        }
-        return retObj
-    except Exception as e:
-        print(f"Error loading image models: {str(e)}")
-        return []
 
 @tracer.capture_method    
 def validate_jwt_token(id_token, access_token):
-    # Check if the access_token is in the cache
-    if access_token in user_cache:
-        user_attributes = user_cache[access_token]
-    else:
-        # Call cognito_client.get_user if access_token is not in the cache
-        response = cognito_client.get_user(AccessToken=access_token)
-        user_attributes = response['UserAttributes']
-        
-        # Store the user attributes in the cache
-        user_cache[access_token] = user_attributes
-
+    user_attributes = get_user_attributes(access_token)
     email_verified = False
     email = None
     for attribute in user_attributes:
@@ -257,7 +207,12 @@ def validate_jwt_token(id_token, access_token):
         return True, ''
     return False, f'You have not been allow-listed for this application. You require a domain containing: {allowlist_domain}'
         
-def datetime_to_iso(obj):
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    raise TypeError("Type not serializable")
+@tracer.capture_method
+def get_user_attributes(access_token):
+    if access_token in user_cache:
+        return user_cache[access_token]
+    else:
+        response = cognito_client.get_user(AccessToken=access_token)
+        user_attributes = response['UserAttributes']
+        user_cache[access_token] = user_attributes
+        return user_attributes

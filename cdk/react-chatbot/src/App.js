@@ -5,7 +5,6 @@ import DOMPurify from 'dompurify';
 import Header from './components/Header';
 import ChatHistory from './components/ChatHistory';
 import MessageInput from './components/MessageInput';
-import useTimer from './useTimer';
 import './App.css';
 import Popup from './components/Popup';
 import { Amplify } from 'aws-amplify';
@@ -92,10 +91,10 @@ marked.setOptions({
 const App = memo(({ signOut, user }) => {
   const [messages, setMessages] = useState([]);
   const [isDisabled, setIsDisabled] = useState(false);
-  const [selectedMode, setSelectedMode] = useState('bedrock');
+  const [selectedMode, setSelectedMode] = useState(null);
   const [responseCompleted, setResponseCompleted] = useState(true);
   const chatHistoryRef = useRef(null);
-  const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
+  // const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
   const [showPopup, setShowPopup] = useState(false);
   const [popupMessage, setPopupMessage] = useState('');
   const [popupType, setPopupType] = useState('success');
@@ -113,24 +112,24 @@ const App = memo(({ signOut, user }) => {
   const [monthlyOutputTokens, setMonthlyOutputTokens] = useState(0)
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [reloadPromptConfig, setReloadPromptConfig] = useState(true);
-  const [bedrockKnowledgeBaseID, setBedrockKnowledgeBaseID] = useState('');
-  const [bedrockAgentsID, setBedrockAgentsID] = useState('');
-  const [bedrockAgentsAliasID, setBedrockAgentsAliasID] = useState('');
-  const [knowledgebasesOrAgents, setKnowledgebasesOrAgents] = useState('knowledgeBases');
-  const [bedrockSessionId, setBedrockSessionId] = useState('');
-  const [agentsSessionId, setAgentsSessionId] = useState('');
-  const [kbSessionId, setKBSessionId] = useState('');
-  const [systemPromptUserOrSystem, setSystemPromptUserOrSystem] = useState('system');
+  
+  // Lists of models, KBs, Agents, prompt flows
+  const [bedrockAgents, setBedrockAgents] = useState([]);
+  const [bedrockKnowledgeBases, setBedrockKnowledgeBases] = useState([]);
   const [models, setModels] = useState([]);
   const [imageModels, setImageModels] = useState([]);
   const [promptFlows, setPromptFlows] = useState([]);
-  const [selectedPromptFlow, setSelectedPromptFlow] = useState(null);
+  
+  const [appSessionid, setAppSessionId] = useState('');
+  const [kbSessionId, setKBSessionId] = useState('');
+  const [systemPromptUserOrSystem, setSystemPromptUserOrSystem] = useState('system');
   const [usedModel, setUsedModel] = useState('');
-  const [selectedModel, setSelectedModel] = useState(null);
   const [region, setRegion] = useState(null);
-  const [imageModel, setImageModel] = useState('amazon.titan-image-generator-v2:0');
   const [stylePreset, setStylePreset] = useState('photographic');
   const [heightWidth, setHeightWidth] = useState('1024x1024');
+
+  const [selectedKbMode, onSelectedKbMode] = useState(null);
+
 
 
   // Use the useWebSocket hook to manage the WebSocket connection
@@ -139,24 +138,17 @@ const App = memo(({ signOut, user }) => {
     shouldReconnect: (closeEvent) => true, // Automatically reconnect on close
     reconnectInterval: 3000, // Reconnect every 3 seconds
   });
-  const handlePromptFlowChange = (newPromptFlow) => {
-    if (newPromptFlow !== selectedPromptFlow)
-      setSelectedPromptFlow(newPromptFlow);
-  };
+
   
 
   useEffect(() => {
-    if (bedrockSessionId !== null) {
-      loadModels(bedrockSessionId, 'bedrock');
-      loadImageModels(bedrockSessionId, 'bedrock');
-      loadPromptFlows(bedrockSessionId, 'bedrock');
-    }
-  }, [bedrockSessionId]);
+    loadConfigSubaction('load_models,load_prompt_flows,load_knowledge_bases,load_agents');
+  },[]);
 
   // Add this function to update the prices based on the selected model
-  const updatePricesFromModel = (selectedModel) => {
-    if (selectedModel) {
-      const modelId = selectedModel;
+  const updatePricesFromModel = () => {
+    if (selectedMode && selectedMode.model && selectedMode.modelId) {
+      const modelId = selectedMode && selectedMode.model && selectedMode.modelId;
       const modelPriceInfo = modelPrices[modelId] || {
         pricePer1000InputTokens: 0.00300,
         pricePer1000OutputTokens: 0.01500,
@@ -173,14 +165,10 @@ const App = memo(({ signOut, user }) => {
     }
   };
   useEffect(() => {
-    updatePricesFromModel(selectedModel)
-  },[selectedModel]);
+    updatePricesFromModel()
+  },[selectedMode]);
   
-  useEffect(() => {
-    if(agentsSessionId){
-      loadConversationHistory(agentsSessionId, 'agents', selectedPromptFlow);
-    }
-  },[selectedPromptFlow]);
+
   
   useEffect(() => {
     const kbSessionId = localStorage.getItem(`kbSessionId`);
@@ -200,47 +188,6 @@ const App = memo(({ signOut, user }) => {
 
     setTotalInputTokens(storedInputTokens);
     setTotalOutputTokens(storedOutputTokens);
-
-    const selectedModeLocal = localStorage.getItem('selectedMode') || 'bedrock';
-    setSelectedMode(selectedModeLocal);
-    if (selectedModeLocal === 'bedrock') {
-      const storedBedrockSessionId = localStorage.getItem('bedrockSessionId');
-      if (storedBedrockSessionId) {
-        setBedrockSessionId(storedBedrockSessionId);
-        loadConversationHistory(storedBedrockSessionId, 'bedrock','');
-      }else{
-        const newBedrockSessionId = generateSessionId();
-        setBedrockSessionId(newBedrockSessionId);
-        localStorage.setItem('bedrockSessionId', newBedrockSessionId);
-      }
-    } else if (selectedModeLocal === 'agents') {
-      const storedAgentsSessionId = localStorage.getItem('agentsSessionId');
-      if(storedAgentsSessionId){
-        setAgentsSessionId(storedAgentsSessionId);
-        loadConversationHistory(storedAgentsSessionId, 'agents', selectedPromptFlow);
-      }else{
-        const newAgentsSessionId = generateSessionId();
-        setAgentsSessionId(newAgentsSessionId);
-        localStorage.setItem('agentsSessionId', newAgentsSessionId);
-      }
-    }
-
-    const storedBedrockKnowledgeBaseID = localStorage.getItem('bedrockKnowledgeBaseID');
-    if (storedBedrockKnowledgeBaseID) {
-      setBedrockKnowledgeBaseID(storedBedrockKnowledgeBaseID);
-    }
-    const storedBedrockAgentsID = localStorage.getItem('bedrockAgentsID');
-    if (storedBedrockAgentsID) {
-      setBedrockAgentsID(storedBedrockAgentsID);
-    }
-    const storedBedrockAgentsAliasID = localStorage.getItem('bedrockAgentsAliasID');
-    if (storedBedrockAgentsAliasID) {
-      setBedrockAgentsAliasID(storedBedrockAgentsAliasID);
-    }
-    const storedKnowledgebasesOrAgents = localStorage.getItem('knowledgebasesOrAgents');
-    if (storedKnowledgebasesOrAgents) {
-      setKnowledgebasesOrAgents(storedKnowledgebasesOrAgents);
-    }
   }, []);
 
   const isValidJSON = (str) => {
@@ -252,104 +199,51 @@ const App = memo(({ signOut, user }) => {
     return true;
   };
 
-  const generateSessionId = () => {
-    return user.username + '-' + Math.random().toString(36).substring(2, 8);
-  };
-
   const handleModeChange = (newMode) => {
     setMessages([]);
-    if (newMode === 'agents') {
-      const loadedAgentsSessionId = localStorage.getItem('agentsSessionId');
-      if (!loadedAgentsSessionId) {
-        const newSessionId = generateSessionId();
-        setAgentsSessionId(newSessionId);
-        localStorage.setItem('agentsSessionId', newSessionId);
-      }else{
-        setAgentsSessionId(loadedAgentsSessionId);
-      }
-    } else if (newMode === 'bedrock') {
-      const loadedBedrockSessionId = localStorage.getItem('bedrockSessionId');
-      if (!loadedBedrockSessionId) {
-        const newSessionId = generateSessionId();
-        setBedrockSessionId(newSessionId);
-        localStorage.setItem('bedrockSessionId', newSessionId);
-      }else{
-        setBedrockSessionId(loadedBedrockSessionId)
-      }
-    } else {
-      console.log('unknown new mode: ' + newMode)
-    }
     setSelectedMode(newMode);
-    localStorage.setItem('selectedMode', newMode);
     scrollToBottom();
   };
 
-  const loadModels = async (sessionId, mode) => {
+  const loadConfigSubaction = async (subaction) => {
     const { accessToken, idToken } = await getCurrentSession()
     const data = {
       action: 'config',
-      subaction: 'load_models',
-      session_id: sessionId,
-      selectedMode: mode,
+      subaction: subaction,
       idToken: idToken + '',
       accessToken: accessToken + '',
-      knowledgebasesOrAgents: knowledgebasesOrAgents,
-    };
-    sendMessage(JSON.stringify(data));
-  }
-  const loadImageModels = async (sessionId, mode) => {
-    const { accessToken, idToken } = await getCurrentSession()
-    const data = {
-      action: 'config',
-      subaction: 'load_image_models',
-      session_id: sessionId,
-      selectedMode: mode,
-      idToken: idToken + '',
-      accessToken: accessToken + '',
-      knowledgebasesOrAgents: knowledgebasesOrAgents,
     };
     sendMessage(JSON.stringify(data));
   }
 
-  const loadPromptFlows = async (sessionId, mode) => {
-    const { accessToken, idToken } = await getCurrentSession()
-    const data = {
-      action: 'config',
-      subaction: 'load_prompt_flows',
-      session_id: sessionId,
-      selectedMode: mode,
-      idToken: idToken + '',
-      accessToken: accessToken + '',
-      knowledgebasesOrAgents: knowledgebasesOrAgents,
-    };
-    sendMessage(JSON.stringify(data));
-  }
-
-  const loadConversationHistory = async (sessionId, mode,selectedPromptFlow, history = []) => {
-    const { accessToken, idToken } = await getCurrentSession()
-    const data = {
-      type: 'load',
-      session_id: sessionId+(selectedPromptFlow?selectedPromptFlow.id:''),
-      kb_session_id: kbSessionId,
-      selectedMode: mode,
-      idToken: idToken + '',
-      accessToken: accessToken + '',
-      knowledgebasesOrAgents: knowledgebasesOrAgents,
-    };
-    sendMessage(JSON.stringify(data));
+  const loadConversationHistory = async (sessId) => {
+    if (models && selectedMode && (appSessionid || sessId)){
+      const { accessToken, idToken } = await getCurrentSession()
+      const data = {
+        type: 'load',
+        session_id: sessId? sessId : appSessionid,
+        kb_session_id: kbSessionId,
+        selectedMode: selectedMode,
+        idToken: idToken + '',
+        accessToken: accessToken + '',
+      };
+      sendMessage(JSON.stringify(data));
+    }
   };
+
   const clearConversationHistory = async () => {
-    const { accessToken, idToken } = await getCurrentSession()
-    const data = {
-      type: 'clear_conversation',
-      session_id: (selectedMode === 'bedrock' ? bedrockSessionId : agentsSessionId)+(selectedPromptFlow?selectedPromptFlow.id:''),
-      kb_session_id: kbSessionId,
-      selectedMode: selectedMode,
-      idToken: idToken + '',
-      accessToken: accessToken + '',
-      knowledgebasesOrAgents: knowledgebasesOrAgents,
-    };
-    sendMessage(JSON.stringify(data));
+    if (models && selectedMode && appSessionid){
+      const { accessToken, idToken } = await getCurrentSession()
+      const data = {
+        type: 'clear_conversation',
+        session_id: appSessionid,
+        kb_session_id: kbSessionId,
+        selectedMode: selectedMode,
+        idToken: idToken + '',
+        accessToken: accessToken + '',
+      };
+      sendMessage(JSON.stringify(data));
+    }
   };
   
   function mergeMessages(existingMessages, newMessages) {
@@ -395,7 +289,7 @@ const App = memo(({ signOut, user }) => {
       popupMsg = 'This request has been blocked by our content filters because the generated image(s) may conflict our AUP or AWS Responsible AI Policy. please try again'
     } 
     setIsDisabled(false);
-    stopTimer();
+    // stopTimer();
     setPopupMessage(popupMsg);
     setPopupType('error');
     setTimeout(() => setShowPopup(false), 3000);
@@ -407,74 +301,64 @@ const App = memo(({ signOut, user }) => {
     setIsDisabled(true);
     setResponseCompleted(false);
     setIsLoading(true);
-    resetTimer();
-    startTimer();
+    // resetTimer();
+    // startTimer();
 
     const sanitizedMessage = DOMPurify.sanitize(message);
     // generate random 8 character alpha/numeric message id
     const randomMessageId = Math.random().toString(36).substring(2, 10);
-    let currentSessionId = selectedMode === 'bedrock' ? bedrockSessionId : agentsSessionId;
-    
-  
-    if (selectedMode === 'bedrock' && sanitizedMessage.trim().toLowerCase().startsWith('image:')) {
-      const imagePrompt = sanitizedMessage.slice(6).trim(); // Remove "Image:" prefix
-      generateImage(imagePrompt, currentSessionId,randomMessageId);
+    if (selectedMode.category === 'Bedrock Image Models') {
+      generateImage(sanitizedMessage,randomMessageId);
       return;
     }
 
-    if (!selectedModel) {
-      handleError('You have not requested access to a model in Bedrock. You can do so by visiting this link:https://'+region+'.console.aws.amazon.com/bedrock/home?region='+region+'#/modelaccess')
-    }else{
-      const { accessToken, idToken } = await getCurrentSession()
-      const message_timestamp = new Date().toISOString();
-      const data = {
-        prompt: sanitizedMessage,
-        message_id: randomMessageId,
-        timestamp: message_timestamp,
-        session_id: currentSessionId,
-        kb_session_id: kbSessionId,
-        flow_alias_identifier: selectedPromptFlow? selectedPromptFlow.id: null,
-        flow_identifier: selectedPromptFlow? selectedPromptFlow.flowId: null,
-        selectedMode: selectedMode,
-        model: selectedModel,
-        idToken: idToken + '',
-        accessToken: accessToken + '',
-        knowledgebasesOrAgents: knowledgebasesOrAgents,
-        reloadPromptConfig: reloadPromptConfig,
-        systemPromptUserOrSystem: systemPromptUserOrSystem
-      };
-      data.model = selectedModel;
-      const messageWithTime = {
-        role: 'user',
-        content: message,
-        message_id: randomMessageId,
-        timestamp: message_timestamp,
-      };
-      setMessages((prevMessages) => [
-        ...prevMessages? prevMessages: [],
-        messageWithTime,
-        {
-          role: 'assistant',
-          content: '',
-          isStreaming: true,
-          timestamp: null,
-        },
-      ]);
-
-      scrollToBottom();
-
-      sendMessage(JSON.stringify(data));
-      setReloadPromptConfig(false);
-
+    const { accessToken, idToken } = await getCurrentSession()
+    const message_timestamp = new Date().toISOString();
+    const data = {
+      prompt: sanitizedMessage,
+      message_id: randomMessageId,
+      timestamp: message_timestamp,
+      session_id: appSessionid,
+      kb_session_id: kbSessionId,
+      selectedMode: selectedMode,
+      idToken: idToken + '',
+      accessToken: accessToken + '',
+      reloadPromptConfig: reloadPromptConfig,
+      systemPromptUserOrSystem: systemPromptUserOrSystem
+    };
+    if(selectedMode.knowledgeBaseId){
+      //add selectedKbMode to data
+      data.selectedKbMode = selectedKbMode;
     }
+    const messageWithTime = {
+      role: 'user',
+      content: message,
+      message_id: randomMessageId,
+      timestamp: message_timestamp,
+    };
+    setMessages((prevMessages) => [
+      ...prevMessages? prevMessages: [],
+      messageWithTime,
+      {
+        role: 'assistant',
+        content: '',
+        isStreaming: true,
+        timestamp: null,
+      },
+    ]);
+
+    scrollToBottom();
+
+    sendMessage(JSON.stringify(data));
+    setReloadPromptConfig(false);
   };
 
-  const generateImage = async (prompt, sessionId, randomMessageId) => {
+  const generateImage = async (prompt, randomMessageId) => {
     setIsDisabled(true);
     setResponseCompleted(false);
     setIsLoading(true);
-    resetTimer();
-    startTimer();
+    // resetTimer();
+    // startTimer();
   
     const { accessToken, idToken } = await getCurrentSession();
     const message_timestamp = new Date().toISOString()
@@ -482,11 +366,10 @@ const App = memo(({ signOut, user }) => {
       prompt: prompt,
       message_id: randomMessageId,
       timestamp: message_timestamp,
-      session_id: sessionId,
-      selectedMode: 'image',
+      session_id: appSessionid,
+      selectedMode: selectedMode,
       idToken: idToken + '',
       accessToken: accessToken + '',
-      imageModel: imageModel,
       stylePreset: stylePreset,
       heightWidth: heightWidth,
     };
@@ -494,7 +377,7 @@ const App = memo(({ signOut, user }) => {
     const currentTime = new Date();
     const messageWithTime = {
       role: 'user',
-      content: `Image: ${prompt}`,
+      content: `Generating Image of: ${prompt}`,
       message_id: randomMessageId,
       timestamp: currentTime.toISOString()
     };
@@ -503,10 +386,10 @@ const App = memo(({ signOut, user }) => {
       messageWithTime,
       {
         role: 'assistant',
-        content: `Generating Image of: *${prompt}* with model: *${imageModel}*. Please wait..`,
+        content: `Generating Image of: *${prompt}* with model: *${selectedMode.modelName}*. Please wait..`,
         isStreaming: true,
         timestamp: null,
-        model: imageModel,
+        model: selectedMode.modelName,
         isImage: false,
         imageAlt: prompt
       },
@@ -555,6 +438,7 @@ const App = memo(({ signOut, user }) => {
         scrollToBottom();
       } else if (message.type === 'error' || message.message === 'Internal server error') {
         updateMessages({ delta: { text: message.error || message.message } })
+        updateMessagesOnStop({});
         handleError(message.error || message.message);
         setIsDisabled(false);
         setResponseCompleted(true);
@@ -578,12 +462,18 @@ const App = memo(({ signOut, user }) => {
           };
           return updatedMessages;
         });
-      } else if (message.type === 'load_models') {
-        setModels(message.models)
-      } else if (message.type === 'load_image_models') {
-        setImageModels(message.models)
-      } else if (message.type === 'load_prompt_flows') {
-        setPromptFlows(message.prompt_flows)
+      } else if (message.type === 'load_response') {
+        if(message.load_models)
+          if(message.load_models.text_models)
+            setModels(message.load_models.text_models)
+          if(message.load_models.image_models)
+            setImageModels(message.load_models.image_models)
+        if(message.load_knowledge_bases && message.load_knowledge_bases.knowledge_bases)
+          setBedrockKnowledgeBases(message.load_knowledge_bases.knowledge_bases)
+        if(message.load_agents && message.load_agents.agents)
+          setBedrockAgents(message.load_agents.agents)
+        if(message.load_prompt_flows && message.load_prompt_flows.prompt_flows)
+          setPromptFlows(message.load_prompt_flows.prompt_flows)
       } else if (message.type === 'conversation_history') {
         // Do nothing, UseEffect will handle this 
       } else {
@@ -674,18 +564,8 @@ const App = memo(({ signOut, user }) => {
 
         setTotalInputTokens(newInputTokens);
         setTotalOutputTokens(newOutputTokens);
-        const selectedMode = localStorage.getItem('selectedMode') || 'bedrock';
-        const sessionId = localStorage.getItem(`${selectedMode}SessionId`);
-        const selectedPromptFlowId = selectedPromptFlow?selectedPromptFlow.id:''
-        // if selectedMode is bedrock or selectedPromptFlowId is null or empty
-        if (selectedMode === 'bedrock') {
-          localStorage.setItem(`chatHistory-${sessionId}`, JSON.stringify(updatedMessages));
-        }else{
-          if(selectedPromptFlowId)
-            localStorage.setItem(`chatHistory-${sessionId}${knowledgebasesOrAgents}${selectedPromptFlowId}`, JSON.stringify(updatedMessages));
-          else
-            localStorage.setItem(`chatHistory-${sessionId}${knowledgebasesOrAgents}`, JSON.stringify(updatedMessages));
-        }
+        
+        localStorage.setItem(`chatHistory-${appSessionid}`, JSON.stringify(updatedMessages));
         return updatedMessages;
       }
     });
@@ -694,22 +574,10 @@ const App = memo(({ signOut, user }) => {
 
   const onClearConversation = () => {
     setMessages([]);
-    setKBSessionId('')
     clearConversationHistory()
-    const newSessionId = generateSessionId();
-    if (selectedMode === 'bedrock') {
-      const bedrockSessionId = localStorage.getItem('bedrockSessionId');
-      localStorage.removeItem(`bedrockHistory-${bedrockSessionId}`);
-      setBedrockSessionId(newSessionId);
-      localStorage.setItem('bedrockSessionId', newSessionId);
-    } else {
-      // setAgentsHistory([]);
-      const agentsSessionId = localStorage.getItem('agentsSessionId');
-      localStorage.removeItem(`agentsHistory-${agentsSessionId}`);
-      setAgentsSessionId(newSessionId);
-      localStorage.setItem('agentsSessionId', newSessionId);
-    }
-
+    setKBSessionId('')
+    localStorage.removeItem('kbSessionId');
+    localStorage.removeItem(`chatHistory-${appSessionid}`)
     setPopupMessage('Conversation Cleared');
     setPopupType('success');
     setShowPopup(true);
@@ -740,12 +608,7 @@ const App = memo(({ signOut, user }) => {
     setShowSettingsModal(false);
   };
 
-  const handleSaveSettings = (newKnowledgebasesOrAgents) => {
-    localStorage.setItem('bedrockKnowledgeBaseID', bedrockKnowledgeBaseID);
-    localStorage.setItem('bedrockAgentsID', bedrockAgentsID);
-    localStorage.setItem('bedrockAgentsAliasID', bedrockAgentsAliasID);
-    localStorage.setItem('knowledgebasesOrAgents', newKnowledgebasesOrAgents);
-    setKnowledgebasesOrAgents(newKnowledgebasesOrAgents);
+  const handleSaveSettings = () => {
     handleCloseSettingsModal();
   };
 
@@ -755,14 +618,12 @@ const App = memo(({ signOut, user }) => {
       <div className="app">
         <Header
           disabled={isDisabled || isLoading}
-          bedrockSessionId={bedrockSessionId}
-          agentsSessionId={agentsSessionId}
+          appSessionid={appSessionid}
           kbSessionId={kbSessionId}
+          setKBSessionId={setKBSessionId}
           handleOpenSettingsModal={handleOpenSettingsModal}
           signOut={signOut}
           onClearConversation={onClearConversation}
-          timerVisible={!responseCompleted}
-          timerValue={elapsedTime}
           selectedMode={selectedMode}
           onModeChange={handleModeChange}
           showPopup={showPopup}
@@ -771,21 +632,22 @@ const App = memo(({ signOut, user }) => {
           popupType={popupType}
           totalInputTokens={totalInputTokens}
           totalOutputTokens={totalOutputTokens}
-          isLoading={isLoading}
           pricePer1000InputTokens={pricePer1000InputTokens}
           pricePer1000OutputTokens={pricePer1000OutputTokens}
           monthlyInputTokens={monthlyInputTokens}
           monthlyOutputTokens={monthlyOutputTokens}
-          knowledgebasesOrAgents={knowledgebasesOrAgents}
-          selectedModel={selectedModel}
-          imageModel={imageModel}
-          selectedPromptFlow={selectedPromptFlow}
-          setSelectedPromptFlow={setSelectedPromptFlow}
+          bedrockAgents={bedrockAgents}
+          bedrockKnowledgeBases={bedrockKnowledgeBases}
+          models={models}
+          imageModels={imageModels}
+          promptFlows={promptFlows}
+          selectedKbMode={selectedKbMode}
+          onSelectedKbMode={onSelectedKbMode}
         />
         <div className="chat-history" ref={chatHistoryRef}>
-          <ChatHistory messages={messages} selectedMode={selectedMode} setMessages={setMessages} selectedPromptFlow={selectedPromptFlow} knowledgebasesOrAgents={knowledgebasesOrAgents} />
+          <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} />
         </div>
-        <MessageInput onSend={onSend} disabled={isDisabled || isLoading} selectedMode={selectedMode} /> {/* Disable MessageInput when loading or disabled */}
+        <MessageInput onSend={onSend} disabled={isDisabled || isLoading} selectedMode={selectedMode} selectedKbMode={selectedKbMode} /> 
         {showPopup && <Popup message={popupMessage}
           type={popupType}
           onClose={() => setShowPopup(false)}
@@ -793,38 +655,20 @@ const App = memo(({ signOut, user }) => {
           setShowPopup={setShowPopup} />}
         <Suspense fallback={<div>Loading...</div>}>
           <SettingsModal
-            open={showSettingsModal}
             onClose={handleCloseSettingsModal}
             onSave={handleSaveSettings}
-            bedrockKnowledgeBaseID={bedrockKnowledgeBaseID}
-            setBedrockKnowledgeBaseID={setBedrockKnowledgeBaseID}
-            bedrockAgentsID={bedrockAgentsID}
-            knowledgebasesOrAgents={knowledgebasesOrAgents}
-            setBedrockAgentsID={setBedrockAgentsID}
-            bedrockAgentsAliasID={bedrockAgentsAliasID}
-            setBedrockAgentsAliasID={setBedrockAgentsAliasID}
+            showSettingsModal={showSettingsModal}
             setPricePer1000InputTokens={setPricePer1000InputTokens}
             pricePer1000InputTokens={pricePer1000InputTokens}
             setPricePer1000OutputTokens={setPricePer1000OutputTokens}
             pricePer1000OutputTokens={pricePer1000OutputTokens}
-            setKnowledgebasesOrAgents={setKnowledgebasesOrAgents}
             user={user}
             websocketUrl={websocketUrl}
             getCurrentSession={getCurrentSession}
             systemPromptUserOrSystem={systemPromptUserOrSystem}
             setSystemPromptUserOrSystem={setSystemPromptUserOrSystem}
             setReloadPromptConfig={setReloadPromptConfig}
-            models={models}
-            imageModels={imageModels}
-            promptFlows={promptFlows}
-            selectedPromptFlow={selectedPromptFlow}
-            setSelectedPromptFlow={setSelectedPromptFlow}
-            onPromptFlowChange={handlePromptFlowChange}
-            selectedModel={selectedModel}
-            setSelectedModel={setSelectedModel}
             setRegion={setRegion}
-            imageModel={imageModel}
-            setImageModel={setImageModel}
             stylePreset={stylePreset}
             setStylePreset={setStylePreset}
             heightWidth={heightWidth}
