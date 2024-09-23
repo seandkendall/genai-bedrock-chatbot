@@ -158,24 +158,24 @@ class ChatbotWebsiteStack(Stack):
         
 
         # Create DynamoDB table for bedrock_usage with a user_id (partition key string), input_tokens (number) and output_tokens(number)
-        dynamodb_bedrock_usage_table = dynamodb.Table(self, "dynamodb_bedrock_usage_table",
+        dynamodb_bedrock_usage_table = dynamodb.Table(self, "bedrock_usage_table",
                                                       partition_key=dynamodb.Attribute(name="user_id", 
                                                                                        type=dynamodb.AttributeType.STRING),
                                                                                        billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
                                                                                        removal_policy=RemovalPolicy.DESTROY, )
         
-        dynamodb_conversations_table = dynamodb.Table(self, "dynamodb_conversations_table", 
+        dynamodb_conversations_table = dynamodb.Table(self, "conversations_table", 
                                                       partition_key=dynamodb.Attribute(name="session_id", type=dynamodb.AttributeType.STRING),
                                                       billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
                                                       removal_policy=RemovalPolicy.DESTROY,)
         
-        dynamodb_incidents_table = dynamodb.Table(self, "dynamodb_incidents_table", 
+        dynamodb_incidents_table = dynamodb.Table(self, "incidents_table", 
                                                   partition_key=dynamodb.Attribute(name="incident_id", type=dynamodb.AttributeType.STRING),
                                                   billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
                                                   removal_policy=RemovalPolicy.DESTROY,)
 
         dynamodb_configurations_table = dynamodb.Table(
-            self, "dynamodb_configurations_table",
+            self, "configurations_table",
             partition_key=dynamodb.Attribute(name="user", type=dynamodb.AttributeType.STRING),
             sort_key=dynamodb.Attribute(name="config_type", type=dynamodb.AttributeType.STRING),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -189,7 +189,7 @@ class ChatbotWebsiteStack(Stack):
         )
         websocket_api.removal_policy = RemovalPolicy.DESTROY
         websocket_api_endpoint = websocket_api.api_endpoint
-        apigwv2.WebSocketStage(self, "mystage",
+        apigwv2.WebSocketStage(self, "prodstage",
             web_socket_api=websocket_api,
             stage_name="ws",
             auto_deploy=True,

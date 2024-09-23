@@ -386,7 +386,7 @@ const App = memo(({ signOut, user }) => {
       messageWithTime,
       {
         role: 'assistant',
-        content: `Generating Image of: *${prompt}* with model: *${selectedMode.modelName}*. Please wait..`,
+        content: `Generating Image of: *${prompt}* with model: *${selectedMode.modelName}*. Please wait.. `,
         isStreaming: true,
         timestamp: null,
         model: selectedMode.modelName,
