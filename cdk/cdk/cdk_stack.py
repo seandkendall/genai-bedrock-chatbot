@@ -189,7 +189,7 @@ class ChatbotWebsiteStack(Stack):
         )
         websocket_api.removal_policy = RemovalPolicy.DESTROY
         websocket_api_endpoint = websocket_api.api_endpoint
-        apigwv2.WebSocketStage(self, "prodstage",
+        apigwv2.WebSocketStage(self, "mystage",
             web_socket_api=websocket_api,
             stage_name="ws",
             auto_deploy=True,
