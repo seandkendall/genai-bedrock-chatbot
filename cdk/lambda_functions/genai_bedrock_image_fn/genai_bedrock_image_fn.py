@@ -2,6 +2,7 @@ import json,boto3,base64,uuid,os
 from datetime import datetime
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from django.utils import timezone
+import random
 
 logger = Logger(service="BedrockImage")
 metrics = Metrics()
@@ -72,6 +73,8 @@ def lambda_handler(event, context):
 
 def generate_image_titan(modelId, prompt, width, height):
     logger.info("Generating image using Titan Image Generator")
+    # generate an integer between 0 and 2,147,483,646
+    seed = random.randint(0, 2147483646)
     response = bedrock.invoke_model(
         modelId=modelId,
         contentType="application/json",
@@ -86,7 +89,7 @@ def generate_image_titan(modelId, prompt, width, height):
                 "numberOfImages": 1,
                 "width": width,
                 "height": height,
-                "seed": 0,
+                "seed": seed,
                 "cfgScale": 8.0
             }
         })
@@ -97,6 +100,7 @@ def generate_image_titan(modelId, prompt, width, height):
 def generate_image_stable_diffusion(modelId, prompt, width, height, style_preset):
     # write log printing modelId
     logger.info(f"Generating image using Model ID: {modelId}")
+    seed = random.randint(0, 2147483646)
     # if modelId contains sd3-large
     if 'stable-diffusion-xl-v1' not in modelId:
         response = bedrock.invoke_model(
@@ -106,13 +110,14 @@ def generate_image_stable_diffusion(modelId, prompt, width, height, style_preset
             body=json.dumps({
                 "prompt": prompt,
                 "mode": "text-to-image",
-                "seed": 0,
+                "seed": seed,
             })
         )
         model_response = json.loads(response["body"].read())
         base64_image_data = model_response["images"][0]
         return base64_image_data
     else:
+        seed = random.randint(0, 2147483646)
         response = bedrock.invoke_model(
             modelId=modelId,
             contentType="application/json",
@@ -120,7 +125,7 @@ def generate_image_stable_diffusion(modelId, prompt, width, height, style_preset
             body=json.dumps({
                 "text_prompts": [{"text": prompt}],
                 "cfg_scale": 10,
-                "seed": 0,
+                "seed": seed,
                 "steps": 30,
                 "width": width,
                 "height": height,

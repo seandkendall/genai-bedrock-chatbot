@@ -65,10 +65,15 @@ const MessageInput = ({ onSend, disabled, selectedMode, selectedKbMode }) => {
         onChange={(e) => setMessage(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={getPlaceholderText()}
-        disabled={isDisabled()  }
+        disabled={isDisabled()}
         multiline
         fullWidth
         variant="outlined"
+        inputProps={
+          selectedMode && selectedMode.category && selectedMode.category === 'Bedrock Image Models'
+            ? { maxLength: 512 }
+            : {}
+        }
         sx={{ mr: 2 }}
       />
       <IconButton

@@ -87,6 +87,39 @@ const Header = ({
     }
   }, [disabled]);
 
+  const truncateText = (text, maxLength) => {
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+  };
+  const renderSelectOptions = (options, maxLength) => {
+    return options.flatMap(({ title, data }) =>
+      data.length > 0 ? [
+        <MenuItem key={`title-${title}`} value={title} disabled>{title}</MenuItem>,
+        ...data.map((item) => (
+          <MenuItem key={`${title}%${item.mode_selector}`} value={`${title}%${item.mode_selector}`}>
+            {truncateText((() => {
+              switch (title) {
+                case 'Bedrock Models':
+                  return item.modelName;
+                case 'Bedrock Image Models':
+                  return item.modelName;
+                case 'Bedrock KnowledgeBases':
+                  return item.name;
+                case 'Bedrock Agents':
+                  return item.agentAliasName;
+                case 'Bedrock Prompt Flows':
+                  return item.name;
+                default:
+                  return 'Unknown';
+              }
+            })(), maxLength)}
+          </MenuItem>
+        ))
+      ] : []
+    );
+  };
+
+
+
   const onSelectedModeChange = (event) => {
     if (event && event.target && event.target.value) {
       const [category, modeSelector] = event.target.value.split('%');
@@ -235,13 +268,13 @@ const Header = ({
           {!isMobile && disabled && <Typography variant="body2" mr={2}>{formatTimer(elapsedTime)}</Typography>}
           <>
             <FormControl sx={{ m: 1, minWidth: 120 }}>
-              <InputLabel id="mode-select-label" sx={{ color: 'white' }}>Bedrock Chatbot Model</InputLabel>
+              <InputLabel id="mode-select-label" sx={{ color: 'white' }}>{isMobile ? 'Model' : 'Bedrock Chatbot Model'}</InputLabel>
               <Select
                 id="mode-select"
                 labelId="mode-select-label"
                 value={selectedMode ? selectedMode.category + '%' + selectedMode.mode_selector : 'DEFAULT'}
                 onChange={onSelectedModeChange}
-                label="Bedrock Chatbot Model"
+                label={isMobile ? 'Model' : 'Bedrock Chatbot Model'}
                 sx={{
                   '& .MuiOutlinedInput-notchedOutline': {
                     borderColor: 'white',
@@ -253,45 +286,20 @@ const Header = ({
                 }}
               >
                 <MenuItem value="DEFAULT" >
-                  Select a Model
+                  <em>{isMobile ? 'Model' : 'Select a Model'}</em>
                 </MenuItem>
-                {selectOptions.flatMap(({ title, data }) =>
-                  data.length > 0 ? [
-                    <MenuItem key={`title-${title}`} value={title} disabled>
-                      {title}
-                    </MenuItem>,
-                    ...data.map((item) => (
-                      <MenuItem value={`${title}%${item.mode_selector}`} >
-                        {(() => {
-                          switch (title) {
-                            case 'Bedrock Models':
-                              return item.modelName;
-                            case 'Bedrock Image Models':
-                              return item.modelName;
-                            case 'Bedrock KnowledgeBases':
-                              return item.name;
-                            case 'Bedrock Agents':
-                              return item.agentAliasName;
-                            case 'Bedrock Prompt Flows':
-                              return item.name;
-                            default:
-                              return 'Unknown';
-                          }
-                        })()}
-                      </MenuItem>
-                    ))
-                  ] : [])}
+                {renderSelectOptions(selectOptions, isMobile ? 20 : 50)}
               </Select>
             </FormControl>
             {selectedMode && selectedMode.knowledgeBaseId && (
               <FormControl sx={{ m: 1, minWidth: 120 }}>
-                <InputLabel id="kbmode-select-label" sx={{ color: 'white' }}>KnowledgeBase Model</InputLabel>
+                <InputLabel id="kbmode-select-label" sx={{ color: 'white' }}>{isMobile ? 'KBModel' : 'KnowledgeBase Model'}</InputLabel>
                 <Select
                   id="kbmode-select"
                   labelId="kbmode-select-label"
                   value={selectedKbMode ? selectedKbMode.category + '%' + selectedKbMode.mode_selector : 'DEFAULT'}
                   onChange={onSelectedKbModeChange}
-                  label="KnowledgeBase Model"
+                  label={isMobile ? 'KBModel' : 'KnowledgeBase Model'}
                   sx={{
                     '& .MuiOutlinedInput-notchedOutline': {
                       borderColor: 'white',
@@ -303,23 +311,9 @@ const Header = ({
                   }}
                 >
                   <MenuItem value="DEFAULT" >
-                    Select a Model
+                    <em>{isMobile ? 'Model' : 'Select a Model'}</em>
                   </MenuItem>
-                  {kbModelOptions.flatMap(({ title, data }) =>
-                    data.length > 0 ? [
-                      ...data.map((item) => (
-                        <MenuItem value={`${title}%${item.mode_selector}`} >
-                          {(() => {
-                            switch (title) {
-                              case 'Bedrock Models':
-                                return item.modelName;
-                              default:
-                                return 'Unknown';
-                            }
-                          })()}
-                        </MenuItem>
-                      ))
-                    ] : [])}
+                  {renderSelectOptions(kbModelOptions, isMobile ? 20 : 50)}
                 </Select>
               </FormControl>
             )}
