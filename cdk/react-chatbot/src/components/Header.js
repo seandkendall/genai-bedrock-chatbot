@@ -323,7 +323,7 @@ const Header = ({
           <IconButton color="inherit" onClick={() => handleOpenSettingsModal()}>
             <FaCog />
           </IconButton>
-          <IconButton color="inherit" onClick={onClearConversation} disabled={disabled || (!selectedMode) || (selectedMode.category === "Bedrock KnowledgeBases") && !selectedKbMode}>
+          <IconButton color="inherit" onClick={onClearConversation} disabled={disabled || (!selectedMode) || (selectedMode.category === "Bedrock KnowledgeBases" && !selectedKbMode)}>
             <FaBroom />
           </IconButton>
           <IconButton color="inherit" onClick={handleMenuOpen} disabled={disabled}>

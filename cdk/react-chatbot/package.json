@@ -7,7 +7,6 @@
     "@babel/core": "^7.24.5",
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@babel/preset-env": "^7.24.5",
-    "@testing-library/react": "^15.0.7",
     "babel-jest": "^29.7.0",
     "jest": "^27.5.1"
   },
@@ -17,14 +16,13 @@
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.15.14",
     "@mui/material": "^5.15.14",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/user-event": "^13.5.0",
     "@uiw/react-prismjs": "^1.3.6",
     "amazon-cognito-identity-js": "^6.3.12",
     "aws-amplify": "^6.0.23",
     "aws-sdk": "^2.1588.0",
     "clipboard": "^2.0.11",
     "dompurify": "^3.0.11",
+    "eslint-config-react-app": "^7.0.1",
     "marked": "^12.0.1",
     "prism-react-renderer": "^2.3.1",
     "prismjs": "^1.29.0",
@@ -34,7 +32,7 @@
     "react-icons": "^5.0.1",
     "react-markdown": "^9.0.1",
     "react-scripts": "^5.0.1",
-    "react-simple-code-editor": "^0.13.1",
+    "react-simple-code-editor": "^0.14.1",
     "react-syntax-highlighter": "^15.5.0",
     "react-syntax-highlighter-virtualized-renderer": "^1.1.0",
     "react-toastify": "^10.0.5",
@@ -48,8 +46,6 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "BUILD_PATH='../static-website-source' react-scripts build",
-    "test": "react-scripts test --watchAll=false --transformIgnorePatterns 'node_modules/(?!react-markdown)'",
-    "test:watch": "react-scripts test --transformIgnorePatterns 'node_modules/(?!react-markdown)'",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

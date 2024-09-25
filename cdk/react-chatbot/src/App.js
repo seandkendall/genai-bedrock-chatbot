@@ -92,18 +92,13 @@ const App = memo(({ signOut, user }) => {
   const [messages, setMessages] = useState([]);
   const [isDisabled, setIsDisabled] = useState(false);
   const [selectedMode, setSelectedMode] = useState(null);
-  const [responseCompleted, setResponseCompleted] = useState(true);
   const chatHistoryRef = useRef(null);
-  // const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
   const [showPopup, setShowPopup] = useState(false);
   const [popupMessage, setPopupMessage] = useState('');
   const [popupType, setPopupType] = useState('success');
-  const [chatHistory, setChatHistory] = useState([]);
   const [totalInputTokens, setTotalInputTokens] = useState(0);
   const [totalOutputTokens, setTotalOutputTokens] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  // eslint-disable-next-line
-  const [retryTimeout, setRetryTimeout] = useState(null);
   const [pricePer1000InputTokens, setPricePer1000InputTokens] = useState(0.00300);
   const [pricePer1000OutputTokens, setPricePer1000OutputTokens] = useState(0.01500);
   // eslint-disable-next-line
@@ -124,7 +119,6 @@ const App = memo(({ signOut, user }) => {
   const [kbSessionId, setKBSessionId] = useState('');
   const [systemPromptUserOrSystem, setSystemPromptUserOrSystem] = useState('system');
   const [usedModel, setUsedModel] = useState('');
-  const [region, setRegion] = useState(null);
   const [stylePreset, setStylePreset] = useState('photographic');
   const [heightWidth, setHeightWidth] = useState('1024x1024');
 
@@ -140,7 +134,6 @@ const App = memo(({ signOut, user }) => {
   });
 
   
-
   useEffect(() => {
     loadConfigSubaction('load_models,load_prompt_flows,load_knowledge_bases,load_agents');
   },[]);
@@ -299,10 +292,7 @@ const App = memo(({ signOut, user }) => {
 
   const onSend = async (message) => {
     setIsDisabled(true);
-    setResponseCompleted(false);
     setIsLoading(true);
-    // resetTimer();
-    // startTimer();
 
     const sanitizedMessage = DOMPurify.sanitize(message);
     // generate random 8 character alpha/numeric message id
@@ -355,10 +345,7 @@ const App = memo(({ signOut, user }) => {
 
   const generateImage = async (prompt, randomMessageId) => {
     setIsDisabled(true);
-    setResponseCompleted(false);
     setIsLoading(true);
-    // resetTimer();
-    // startTimer();
   
     const { accessToken, idToken } = await getCurrentSession();
     const message_timestamp = new Date().toISOString()
@@ -433,7 +420,6 @@ const App = memo(({ signOut, user }) => {
         updateMessages(message);
         updateMessagesOnStop(message);
         setIsDisabled(false);
-        setResponseCompleted(true);
         setIsLoading(false);
         scrollToBottom();
       } else if (message.type === 'error' || message.message === 'Internal server error') {
@@ -441,7 +427,6 @@ const App = memo(({ signOut, user }) => {
         updateMessagesOnStop({});
         handleError(message.error || message.message);
         setIsDisabled(false);
-        setResponseCompleted(true);
         setIsLoading(false);
         scrollToBottom();
       } else if (message.type === 'image_generated') {
@@ -668,7 +653,6 @@ const App = memo(({ signOut, user }) => {
             systemPromptUserOrSystem={systemPromptUserOrSystem}
             setSystemPromptUserOrSystem={setSystemPromptUserOrSystem}
             setReloadPromptConfig={setReloadPromptConfig}
-            setRegion={setRegion}
             stylePreset={stylePreset}
             setStylePreset={setStylePreset}
             heightWidth={heightWidth}

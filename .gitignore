@@ -46,3 +46,4 @@ cdk/cdk.out
 **/.DS_Store
 
 cdk/lambda_functions/genai_bedrock_config_fn/price_utilities.py
+node_modules

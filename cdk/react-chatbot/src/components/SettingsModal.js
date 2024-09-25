@@ -18,7 +18,6 @@ const SettingsModal = ({
     systemPromptUserOrSystem,
     setSystemPromptUserOrSystem,
     setReloadPromptConfig,
-    setRegion,
     stylePreset,
     setStylePreset,
     heightWidth,
@@ -194,7 +193,6 @@ const SettingsModal = ({
                         updateLocalState('pricePer1000OutputTokens', response.pricePer1000OutputTokens || pricePer1000OutputTokens);
                         updateLocalState('pricePer1000OutputTokens', response.pricePer1000OutputTokens || pricePer1000OutputTokens);
                         updateLocalState('systemSystemPrompt', response.systemPrompt || '');
-                        setRegion(response.region || 'us-west-2');
                         updateSystemPrompt('system', response.systemPrompt ?? localState.systemSystemPrompt);
                     } else if (response.config_type === 'user') {
                         const newStylePreset = response.stylePreset || 'photographic';
@@ -227,7 +225,6 @@ const SettingsModal = ({
         prevLastMessage,
         pricePer1000InputTokens,
         pricePer1000OutputTokens,
-        setRegion,
         updateSystemPrompt,
         updateLocalState,
         setStylePreset,
@@ -262,10 +259,7 @@ const SettingsModal = ({
         setError('');
         setPricePer1000InputTokens(localState.pricePer1000InputTokens);
         setPricePer1000OutputTokens(localState.pricePer1000OutputTokens);
-        console.log('SDK 63524 selectedMode')
-        console.log(selectedMode)
         onModeChange(selectedMode)
-        console.log('SDK END 63524 selectedMode')
 
         // Update image-related 
         setStylePreset(localState.stylePreset);
