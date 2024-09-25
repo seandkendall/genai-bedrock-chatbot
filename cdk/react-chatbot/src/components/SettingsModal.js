@@ -160,7 +160,7 @@ const SettingsModal = ({
             loadConfig('user');
             setConfigLoaded(true);
         }
-    }, [configLoaded, loadConfig, updateLocalState]);//TODO SDK do i need updateLocalstate
+    }, [configLoaded, loadConfig, updateLocalState]);
 
     useEffect(() => {
         setReloadPromptConfig(true);
@@ -200,6 +200,9 @@ const SettingsModal = ({
                         updateLocalState('pricePer1000InputTokens', response.pricePer1000InputTokens || pricePer1000InputTokens);
                         updateLocalState('pricePer1000OutputTokens', response.pricePer1000OutputTokens || pricePer1000OutputTokens);
                         updateLocalState('userSystemPrompt', response.systemPrompt || '');
+                        const newSystemPromptUserOrSystem = response.systemPromptUserOrSystem || 'system';
+                        updateLocalState('systemPromptType', newSystemPromptUserOrSystem);
+                        setSystemPromptUserOrSystem(newSystemPromptUserOrSystem);
 
                         updateLocalState('stylePreset', newStylePreset);
                         localStorage.setItem('stylePreset', newStylePreset);
@@ -275,6 +278,7 @@ const SettingsModal = ({
             systemPrompt: localState.userSystemPrompt,
             stylePreset: localState.stylePreset,
             heightWidth: localState.heightWidth,
+            systemPromptUserOrSystem: localState.systemPromptType,
         });
 
         onSave();
