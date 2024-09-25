@@ -107,9 +107,6 @@ def lambda_handler(event, context):
 
 @tracer.capture_method
 def load_config(user, config_type):
-    print(f"Loading config for {user} of type {config_type}")
-    print(user)
-    print(config_type)
     try:
         response = table.get_item(
             Key={
