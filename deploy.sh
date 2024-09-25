@@ -24,6 +24,45 @@ else
     RED_COLOR=""
 fi
 
+version_greater_than_or_equal() {
+  local version1="$1"
+  local version2="$2"
+
+  local v1=(${version1//./ })
+  local v2=(${version2//./ })
+
+  for ((i=0; i<${#v1[@]} || i<${#v2[@]}; i++)); do
+    local v1_part=${v1[i]-0}
+    local v2_part=${v2[i]-0}
+
+    if (( v1_part > v2_part )); then
+      return 0
+    elif (( v1_part < v2_part )); then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+# Check CDK version
+cdk_version=$(cdk --version | cut -d' ' -f1)
+required_version="2.160.0"
+
+if ! version_greater_than_or_equal "$cdk_version" "$required_version"; then
+  # The CDK version is less than the required version
+  echo -e "${RED_COLOR}Error: Your CDK version ($cdk_version) is outdated. Please upgrade to $required_version or later.${DEFAULT_COLOR}"
+  echo -e "${GREEN_COLOR}To upgrade, run the following commands:${DEFAULT_COLOR}"
+  echo -e "${GREEN_COLOR}npm uninstall -g aws-cdk${DEFAULT_COLOR}"
+  echo -e "${GREEN_COLOR}npm install -g aws-cdk@latest${DEFAULT_COLOR}"
+  echo -e " "
+  echo -e "${DEFAULT_COLOR}or if you get permission errors, try these commands:${DEFAULT_COLOR}"
+  echo -e " "
+  echo -e "${GREEN_COLOR}sudo npm uninstall -g aws-cdk${DEFAULT_COLOR}"
+  echo -e "${GREEN_COLOR}sudo npm install -g aws-cdk@latest${DEFAULT_COLOR}"
+  exit 1
+fi
+
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in

@@ -116,7 +116,7 @@ if [[ "$OS" == "macOS" ]]; then
     case "$install_cdk" in
       y|Y)
         # Install AWS CDK
-        npm install -g aws-cdk
+        npm install -g aws-cdk@latest
         ;;
       *)
         echo "AWS CDK is required. Please install AWS CDK and try again."
