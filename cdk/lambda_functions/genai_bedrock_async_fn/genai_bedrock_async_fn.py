@@ -1,6 +1,8 @@
-import json, os, boto3, jwt
-from datetime import datetime
-from django.utils import timezone
+import json
+import os
+import boto3
+import jwt
+from datetime import datetime, timezone
 from botocore.exceptions import ClientError
 #use AWS powertools for logging
 from aws_lambda_powertools import Logger, Metrics, Tracer
@@ -8,10 +10,13 @@ from llm_conversion_functions import (
     generate_random_string,
     process_message_history,
     process_message_history_mistral_large,
+    process_message_history_converse,
     replace_user_bot,
-    split_message
+    split_message,
+    process_bedrock_converse_response,
+    process_bedrock_response,
+    send_websocket_message
 )
-
 logger = Logger(service="BedrockAsync")
 metrics = Metrics()
 tracer = Tracer()
@@ -38,6 +43,7 @@ system_prompt = ''
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):   
+    """Lambda Hander Function"""
     # logger.info("Executing Bedrock Async Function")
     try:
         # Check if the event is a WebSocket event
@@ -54,6 +60,7 @@ def lambda_handler(event, context):
 
 @tracer.capture_method
 def process_websocket_message(event):
+    """Function to process a websocket message"""
     global system_prompt
     # Extract the request body and session ID from the WebSocket event
     request_body = json.loads(event['body'])
@@ -100,10 +107,12 @@ def process_websocket_message(event):
             system_prompt = load_system_prompt_config(system_prompt_user_or_system,user_id)
         selected_mode = request_body.get('selectedMode', '')
         selected_model_id = selected_mode.get('modelId','')
+        model_provider = selected_model_id.split('.')[0]
         message_id = request_body.get('message_id', None)
-        message_received_timestamp_utc = request_body.get('timestamp', datetime.now(timezone.utc).isoformat())
+        message_received_timestamp_utc = request_body.get('timestamp', datetime.now(tz=timezone.utc).isoformat())
         bedrock_request = None
-        if 'anthropic' in selected_model_id.lower():
+        use_converse = False
+        if 'anthropic' in model_provider.lower():
             filtered_history = process_message_history(existing_history)
             bedrock_request = {
                 'max_tokens': 4096,
@@ -111,7 +120,7 @@ def process_websocket_message(event):
                 'messages': filtered_history + [{'role': 'user', 'content': [{'type': 'text', 'text': prompt}]}],
                 'anthropic_version': 'bedrock-2023-05-31'
             }
-        elif 'amazon' in selected_model_id.lower():
+        elif 'amazon' in model_provider.lower():
             formatted_text = ''
             if existing_history:
                 for message in existing_history:
@@ -125,45 +134,63 @@ def process_websocket_message(event):
 
             # Final formatted inputText
             formatted_text = formatted_text.strip()
-            maxTokenCount = 4096
-            #if model_id contains text 'premier' set maxTokenCount to  3072
+            max_token_count = 4096
+            #if model_id contains text 'premier' set max_token_count to  3072
             if 'premier' in selected_model_id.lower():
-                maxTokenCount = 3072
+                max_token_count = 3072
             bedrock_request = {
                 'inputText': formatted_text,
                 'textGenerationConfig': {
-                    'maxTokenCount': maxTokenCount,
+                    'maxTokenCount': max_token_count,
                     'stopSequences': [],
                     'temperature': 0.7,
                     'topP': 1
                 }
             }
-        elif 'ai21' in selected_model_id.lower():
+        elif 'ai21' in model_provider.lower():
             # TODO: implement ai21 Labs
             logger.warn('TODO: Implement AI21 Labs')
-        elif 'mistral' in selected_model_id.lower():
+        elif 'mistral' in model_provider.lower():
             max_tokens = 8192
             bedrock_request = {
                 'max_tokens': max_tokens,
                 'messages': process_message_history_mistral_large(existing_history)+[{'role': 'user', 'content': prompt}]
             }
+        elif 'meta' in model_provider.lower():
+            use_converse = True
+            bedrock_request = {
+                'messages': process_message_history_converse(existing_history)+[{'role': 'user', 'content': [{'text': prompt}]}],
+                'max_gen_len': 2048
+            }
         else:
-            logger.warn(selected_model_id+' Not yet implemented')
+            logger.warning(f"Model '{selected_model_id}' from provider '{model_provider}' is not yet implemented")
         
         if bedrock_request:
             try:
                 tracer.put_annotation(key="Model", value=selected_model_id)
-                response = bedrock.invoke_model_with_response_stream(body=json.dumps(bedrock_request), modelId=selected_model_id)
+                if use_converse:
+                    system_prompt_array = []
+                    if system_prompt:
+                        system_prompt_array.append({'text': system_prompt})
+                    response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
+                                                       modelId=selected_model_id,
+                                                       system=system_prompt_array,
+                                                       additionalModelRequestFields={'max_gen_len':bedrock_request.get('max_gen_len')})
+                else:
+                    response = bedrock.invoke_model_with_response_stream(body=json.dumps(bedrock_request), modelId=selected_model_id)
+                    
 
                 # Process the response stream and send the content to the WebSocket client
-                if 'anthropic' in selected_model_id.lower():
-                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'anthropic',selected_model_id)
-                elif 'amazon' in selected_model_id.lower():
-                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request),connection_id,user_id,'amazon',selected_model_id)
-                elif 'ai21' in selected_model_id.lower():
-                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'ai21',selected_model_id)
-                elif 'mistral' in selected_model_id.lower():
-                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, 'mistral',selected_model_id)
+                if 'meta' in model_provider.lower() or use_converse:
+                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_converse_response(response,selected_model_id,connection_id)
+                elif 'amazon' in model_provider.lower():
+                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request),connection_id,user_id,model_provider,selected_model_id)
+                elif 'ai21' in model_provider.lower():
+                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, model_provider,selected_model_id)
+                elif 'mistral' in model_provider.lower():
+                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, model_provider,selected_model_id)
+                elif 'anthropic' in model_provider.lower():
+                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_response(iter(response['body']),json.dumps(bedrock_request), connection_id, user_id, model_provider,selected_model_id)
 
                 # Store the updated conversation history in DynamoDB
                 store_conversation_history(session_id, existing_history, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id)
@@ -187,6 +214,7 @@ def process_websocket_message(event):
         
 @tracer.capture_method
 def delete_conversation_history(session_id):
+    """Function to delete conversation history from DDB"""
     try:
         dynamodb.delete_item(
             TableName=table_name,
@@ -197,164 +225,9 @@ def delete_conversation_history(session_id):
         logger.error(f"Error deleting conversation history (9781): {str(e)}")
         logger.exception(e)
 
-
-@tracer.capture_method
-def process_bedrock_response(response_stream, prompt, connection_id, user_id, model_provider, model_name):
-    result_text = ""
-    current_input_tokens = 0
-    current_output_tokens = 0
-    counter = 0
-    message_end_timestamp_utc = ''
-    try:
-        for event in response_stream:
-            chunk = event.get('chunk', {})
-            if chunk.get('bytes'):
-                content_chunk = json.loads(chunk['bytes'].decode('utf-8'))
-
-                if model_provider == 'amazon':
-                    if 'outputText' in content_chunk:
-                        msg_text = content_chunk['outputText']
-                        result_text += msg_text
-                        if counter == 0:
-                            send_websocket_message(connection_id, {
-                            'type': 'message_start',
-                            'message': {"model": model_name},
-                            'delta': {'text': msg_text},
-                            'message_id': counter
-                            })
-                        else:
-                            send_websocket_message(connection_id, {
-                                'type': 'content_block_delta',
-                                'delta': {'text': msg_text},
-                                'message_id': counter
-                            })
-                    # if completionReason exists and is not null or not None
-                    if 'completionReason' in content_chunk and content_chunk['completionReason'] is not None:
-                        amazon_bedrock_invocationMetrics = content_chunk.get('amazon-bedrock-invocationMetrics', {})
-                        current_input_tokens = amazon_bedrock_invocationMetrics.get('inputTokenCount', 0)
-                        current_output_tokens = amazon_bedrock_invocationMetrics.get('outputTokenCount', 0)
-                        logger.info(f"TokenCounts: {str(current_input_tokens)}/{str(current_output_tokens)}")
-                        message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
-                        send_websocket_message(connection_id, {
-                            'type': 'message_stop',
-                            'timestamp': message_end_timestamp_utc,
-                            'amazon-bedrock-invocationMetrics': amazon_bedrock_invocationMetrics
-                        })
-                elif model_provider == 'mistral':
-                    iterator_element = 'outputs'
-                    if content_chunk['choices']:
-                        iterator_element = 'choices'
-                    if counter == 0:
-                        message_type = 'message_start'
-                    else:
-                        message_type = 'content_block_delta'
-                    for element in content_chunk[iterator_element]:
-                        if iterator_element == 'choices':
-                            msg_text = element['message']['content']
-                        else:    
-                            msg_text = element['text']
-                        if element['stop_reason']:
-                            message_type = 'message_stop'
-                    
-                    if message_type == 'message_start':
-                        result_text += msg_text
-                        send_websocket_message(connection_id, {
-                            'type': message_type,
-                            'message': {"model": model_name},
-                            'delta': {'text': msg_text},
-                            'message_id': counter
-                        })
-                    elif message_type == 'content_block_delta':
-                        result_text += msg_text
-                        send_websocket_message(connection_id, {
-                            'type': message_type,
-                            'delta': {'text': msg_text},
-                            'message_id': counter
-                        })
-                    elif message_type == 'message_stop':
-                        amazon_bedrock_invocationMetrics =  content_chunk.get('amazon-bedrock-invocationMetrics', {})
-                        current_input_tokens = amazon_bedrock_invocationMetrics.get('inputTokenCount', 0)
-                        current_output_tokens = amazon_bedrock_invocationMetrics.get('outputTokenCount', 0)
-                        logger.info(f"TokenCounts: {str(current_input_tokens)}/{str(current_output_tokens)}")
-                        # TODO: send update monthly usage tokens
-                        # {monthly_input_tokens, monthly_output_tokens} = get_monthly_token_usage(user_id)
-                        # Send the message_stop event to the WebSocket client
-                        message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
-                        send_websocket_message(connection_id, {
-                            'type': message_type,
-                            'timestamp': message_end_timestamp_utc,
-                            'amazon-bedrock-invocationMetrics': content_chunk.get('amazon-bedrock-invocationMetrics', {})
-                        })
-                elif content_chunk['type'] == 'message_start':
-                    # Send the message_start event to the WebSocket client
-                    send_websocket_message(connection_id, {
-                        'type': 'message_start',
-                        'message': content_chunk['message']
-                    })
-
-                elif content_chunk['type'] == 'content_block_delta':
-                    if content_chunk['delta']['text']:
-                        # Escape any HTML tags before sending
-                        escaped_text = content_chunk['delta']['text']
-                        # Append the text to the result_text string
-                        result_text += escaped_text
-                        # Send the content_block_delta event to the WebSocket client
-                        send_websocket_message(connection_id, {
-                            'type': 'content_block_delta',
-                            'delta': {'text': escaped_text},
-                            'message_id': counter
-                        })
-
-                elif content_chunk['type'] == 'message_stop':
-                    amazon_bedrock_invocationMetrics =  content_chunk.get('amazon-bedrock-invocationMetrics', {})
-                    current_input_tokens = amazon_bedrock_invocationMetrics.get('inputTokenCount', 0)
-                    current_output_tokens = amazon_bedrock_invocationMetrics.get('outputTokenCount', 0)
-                    logger.info(f"TokenCounts: {str(current_input_tokens)}/{str(current_output_tokens)}")
-                    # TODO: send update monthly usage tokens
-                    # {monthly_input_tokens, monthly_output_tokens} = get_monthly_token_usage(user_id)
-                    # Send the message_stop event to the WebSocket client
-                    message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
-                    send_websocket_message(connection_id, {
-                        'type': 'message_stop',
-                        'timestamp': message_end_timestamp_utc,
-                        'amazon-bedrock-invocationMetrics': content_chunk.get('amazon-bedrock-invocationMetrics', {})
-                    })
-            counter += 1
-
-    except Exception as e:
-        logger.error(f"Error processing Bedrock response (9926)")
-        logger.exception(e)
-        # Send an error message to the WebSocket client
-        send_websocket_message(connection_id, {
-            'type': 'error',
-            'error': str(e)
-        })
-
-    # assistant_response,input_tokens, output_tokens
-    return result_text, current_input_tokens, current_output_tokens, message_end_timestamp_utc
-
-@tracer.capture_method
-def send_websocket_message(connection_id, message):
-    try:
-        # Check if the WebSocket connection is open
-        connection = apigateway_management_api.get_connection(ConnectionId=connection_id)
-        connection_state = connection.get('ConnectionStatus', 'OPEN')
-        if connection_state != 'OPEN':
-            logger.warn(f"WebSocket connection is not open (state: {connection_state})")
-            return
-
-        apigateway_management_api.post_to_connection(
-            ConnectionId=connection_id,
-            Data=json.dumps(message).encode()
-        )
-    except apigateway_management_api.exceptions.GoneException:
-        logger.info(f"WebSocket connection is closed (connectionId: {connection_id})")
-    except Exception as e:
-        logger.error(f"Error sending WebSocket message (9012): {str(e)}")
-        logger.exception(e)
-
 @tracer.capture_method
 def query_existing_history(session_id):
+    """Function to query existing history from DDB"""
     try:
         response = dynamodb.get_item(
             TableName=table_name,
@@ -364,8 +237,8 @@ def query_existing_history(session_id):
 
         if 'Item' in response:
             return json.loads(response['Item']['conversation_history']['S'])
-        else:
-            return []
+
+        return []
 
     except Exception as e:
         logger.error("Error querying existing history: " + str(e))
@@ -374,7 +247,8 @@ def query_existing_history(session_id):
 
 @tracer.capture_method
 def get_monthly_token_usage(user_id):
-    current_date_ym = datetime.now().strftime('%Y-%m')
+    """Function to get monthly token usage from DDB"""
+    current_date_ym = datetime.now(tz=timezone.utc).strftime('%Y-%m')
     response = dynamodb.get_item(
         TableName=usage_table_name,
         Key={'user_id': user_id+'-'+current_date_ym},
@@ -385,8 +259,9 @@ def get_monthly_token_usage(user_id):
 
 @tracer.capture_method    
 def save_token_usage(user_id, input_tokens,output_tokens):
-    current_date_ymd = datetime.now().strftime('%Y-%m-%d')
-    current_date_ym = datetime.now().strftime('%Y-%m')
+    """Function to save token usage in DDB"""
+    current_date_ymd = datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')
+    current_date_ym = datetime.now(tz=timezone.utc).strftime('%Y-%m')
     
     dynamodb.update_item(
                     TableName=usage_table_name,
@@ -421,6 +296,7 @@ def save_token_usage(user_id, input_tokens,output_tokens):
 
 @tracer.capture_method    
 def store_conversation_history(session_id, existing_history, user_message, assistant_message, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id):
+    """Function to store conversation history in DDB or S3"""
     if user_message.strip() and assistant_message.strip():
         # Prepare the updated conversation history
         conversation_history = existing_history + [
@@ -460,16 +336,15 @@ def store_conversation_history(session_id, existing_history, user_message, assis
                     'conversation_history_in_s3': {'BOOL': False}
                 }
             )
-        
         save_token_usage(user_id, input_tokens, output_tokens)
     else:
         if not user_message.strip():
             logger.info(f"User message is empty, skipping storage for session ID: {session_id}")
         if not assistant_message.strip():
             logger.info(f"Assistant response is empty, skipping storage for session ID: {session_id}")
-
 @tracer.capture_method
 def load_and_send_conversation_history(session_id, connection_id):
+    """Function to load and send conversation history"""
     try:
         response = dynamodb.get_item(
             TableName=table_name,
@@ -502,30 +377,25 @@ def load_and_send_conversation_history(session_id, connection_id):
             return []
 
     except Exception as e:
-        logger.error(f"Error loading conversation history")
+        logger.error("Error loading conversation history")
         logger.exception(e)
         return []
     
 @tracer.capture_method
 def load_system_prompt_config(system_prompt_user_or_system, user_id):
-    try:
-        user_key = 'system'
-        if system_prompt_user_or_system == 'user':
-            user_key = user_id if user_id else 'system'
-        if system_prompt_user_or_system == 'global':
-            system_prompt_user_or_system = 'system'
-        # Get the configuration from DynamoDB
-        response = config_table.get_item(
-        Key={
-            'user': user_key,
-            'config_type': system_prompt_user_or_system
-        }
-    )
-        config = response.get('Item', {})
-        config_item = config.get('config', {})
-        system_prompt = config_item.get('systemPrompt', '')
-
-        return system_prompt
-
-    except Exception as e:
-        raise e
+    """Function to load system prompt from DDB config"""
+    user_key = 'system'
+    if system_prompt_user_or_system == 'user':
+        user_key = user_id if user_id else 'system'
+    if system_prompt_user_or_system == 'global':
+        system_prompt_user_or_system = 'system'
+    # Get the configuration from DynamoDB
+    response = config_table.get_item(
+    Key={
+        'user': user_key,
+        'config_type': system_prompt_user_or_system
+    }
+)
+    config = response.get('Item', {})
+    config_item = config.get('config', {})
+    return config_item.get('systemPrompt', '')

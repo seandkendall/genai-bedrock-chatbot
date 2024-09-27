@@ -1,4 +1,8 @@
-import json, datetime, random, boto3, os
+import json
+from datetime import datetime, timezone
+import random
+import boto3
+import os
 from botocore.exceptions import ClientError
 from aws_lambda_powertools import Logger, Metrics, Tracer
 
@@ -19,6 +23,7 @@ incidents_table = dynamodb.Table(dynamodb_table_name)
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
+    """Lambda handler function"""
     # logger.info("Executing Bedrock Agents Function")
     action_group = event.get('actionGroup', '')
     api_path = event.get('apiPath', '')
@@ -48,6 +53,7 @@ def lambda_handler(event, context):
 
 @tracer.capture_method
 def validate_incident_data(incident_data):
+    """Function to validate incident data"""
     required_fields = ['firstName', 'lastName', 'location', 'description']
     missing_fields = [field for field in required_fields if field not in incident_data]
     if missing_fields:
@@ -68,7 +74,8 @@ def validate_incident_data(incident_data):
 
 @tracer.capture_method
 def create_incident(action_group, incident_data, session_attributes, prompt_session_attributes, api_path, http_method):
-    now = datetime.datetime.now()
+    """Function to create an incident into DDB"""
+    now = datetime.now(tz=timezone.utc)
     incident_id_prefix = f"INC{now.year}{now.month:02d}{now.day:02d}{now.hour:02d}{now.minute:02d}{now.second:02d}"
     incident_id_suffix = f"{random.randint(1000, 9999)}"
     incident_id = f"{incident_id_prefix}{incident_id_suffix}"
@@ -97,6 +104,7 @@ def create_incident(action_group, incident_data, session_attributes, prompt_sess
 
 @tracer.capture_method
 def get_incident(action_group, session_attributes, prompt_session_attributes, event, api_path, http_method):
+    """Function to get an incident from DDB"""
     incident_id = None
     for param in event.get('parameters', []):
         if param['name'] == 'incident_id':

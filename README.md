@@ -4,7 +4,12 @@
 ## Tdlr;
 > [!NOTE]
 > Use [Cloud9](https://aws.amazon.com/pm/cloud9) for a fast start, using any instance size larger than a 'small' size.
+> 
+> Not all AWS accounts (Speficically new AWS accounts) have access to Cloud9 since the anouncement:
 >
+>>  *AWS Cloud9 is no longer available to new customers. Existing customers of AWS Cloud9 can continue to use the service as normal [Learn More](https://aws.amazon.com/blogs/devops/how-to-migrate-from-aws-cloud9-to-aws-ide-toolkits-or-aws-cloudshell/)*
+>
+> If this is the case for you, please try deploying local, and feel free to reach out to me for guidance.
 
 
 
@@ -17,7 +22,15 @@ cd genai-bedrock-chatbot
 ./deploy.sh
 ```
 
-This is a serverless application that provides a chatbot interface using AWS services and the Anthropic Claude-3 language model. The application features two modes: Bedrock Agents and Bedrock. In Bedrock Agents mode, users can interact with Bedrock Agents powered by a knowledgebase containing HSE (health and safety) data. In Bedrock mode, users can engage in open-ended conversations with the Claude-3 language model.
+This is a serverless application that provides a chatbot interface using Serverless AWS services and multiple Large Language Models (LLM) provided by Amazon Bedrock such as Anthropic Claude 3 Sonnet, Anthropic Claude 3.5 Sonnet, Anthropic Claude 3 Opus, Amazon Titan models (including Titan Text G1 - Lite, Titan Text G1 - Express, Titan Image Generator G1 and Titan Image Generator G1 v2 for Image generation), Meta Llama models (including but not limited to Llama 2, Llama 3, Llama 3.1 and Llama 3.2 models and model variants), Mistral AI models, Stability AI models (such as SDXL 1.0, SD3 Large 1.0, Stable Image Core 1.0, Stable Image Ultra 1.0). 
+
+The application features multiple modes allowing you to interact directly with Large Language Models or integrate your data by creating a Bedrock KnowledgeBase. If you would like more complex functionality, this demo also support Amazon Bedrock Agents allowing you to orchestrate between LLM Knowledge, Bedrock KnowledgeBases and Function calling with integrations to AWS Lambda. 
+
+Finally, you can utilize Amazon Bedrock Prompt Flows to build your own orchestration/flow with Bedrock, and use this interface to interact with the Prompt Flow
+
+Included in this code base is an Amazon Bedrock Agent powered by a Bedrock Knowledgebase containing HSE (health and safety) data.
+
+Once you create a published Bedrock Agent, KnowledgeBase or Prompt Flow, it will show up in the "Select a Model" Dropdown located in the application header. If the created/published item does not show up immediately, it can take up to 15 minutes to refresh the header cache. 
 
 ## Architecture
 
@@ -29,22 +42,22 @@ The application utilizes the following AWS services:
 - **AWS S3**: Hosting the website content and storing conversation histories.
 - **AWS CloudFront**: Content Delivery Network for efficient distribution of the website.
 - **AWS Cognito**: User authentication and management.
-- **AWS Bedrock**: Bedrock Agents and Bedrock runtime for language model interactions.
+- **AWS Bedrock**: Bedrock Agents, Bedrock KnowledgeBases, Bedrock Prompt Flows and Bedrock Runtime for large language model interactions.
 
 ![Architecture diagram](./readme-images/bedrock-chatbot-archietcture.png)
 
 ## Screenshots
 
 1. This is what the interface looks like, here we are simply communicating with Anthropic Claude3 Sonnet
-![Simple interaction with Anthropic Clause 3 Sonnet](./readme-images/1-bedrock-runtime-interface.png)
+![Simple interaction with Anthropic Clause 3.5 Sonnet](./readme-images/1-bedrock-runtime-interface.png)
 
-2. You can ask the chatbot to write code for you. Here we are using Anthropic Claude 3 Sonnet to show us python code
-![Writing code with Anthropic Claude 3 Sonnet](./readme-images/2-bedrock-runtime-code-example.png)
+2. You can ask the chatbot to write code for you. Here we are using Anthropic Claude 3.5 Sonnet to show us python code
+![Writing code with Anthropic Claude 3.5 Sonnet](./readme-images/2-bedrock-runtime-code-example.png)
 
-3. There are settings you can change at a user and global level (Global if you have multiple users using this app). You can configure a Bedrock KnowledgeBase ID to simply enable RAG. You can also configure the Agent ID and Agent Alias ID if you would like to use this chatbot with a Bedrock Agent. You can set a system prompt at the user or system level so all interactions have a standard context set. You can also set custom pricing per 1000 input/output tokens, however without saving this value, the app will use the price saved in the code which is built from the AWS Bedrock pricing page. Finally, you can select your model.
+3. There are settings you can change at a user and global level (Global if you have multiple users using this app). You can set a system prompt at the user or system level so all interactions have a standard context set. You can also set custom pricing per 1000 input/output tokens, however without saving this value, the app will use the price saved in the code which is built from the AWS Bedrock pricing page. Finally, you can select "SDXL 1.0" Image properties once this model is selected in the header.
 ![Setting in the Application](./readme-images/3-settings-modal.png)
 
-4. This is an example of interacting with Bedrock Knowledgebases, enabling RAG with Anthropic Claude3 Sonnet
+4. This is an example of interacting with Bedrock Knowledgebases, enabling RAG with Anthropic Claude Instant
 ![AWS Bedrock Knowledgebases RAG example](./readme-images/4-knowledgebases-RAG-example.png)
 
 5. This is an example of interacting with Bedrock Agents, where we can ask questions about the data sitting behind our KnowledgeBase or have the chatbot interact with API's in the backend. This example shows how Bedrock Agents can use an AWS Lambda function to log an inciden into a DynamoDB Table. The sample code for this demo is also included in thie repository if you wish to test by manually creating the KnowledgeBase and Agent. If you need help with this, feel free to reach out to me at [Seandall@Amazon.com](mailto:Seandall@Amazon.com)

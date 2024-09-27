@@ -1,6 +1,9 @@
 
 import json
 from datetime import datetime, timezone
+from aws_lambda_powertools import Logger
+
+logger = Logger(service="BedrockConfigLoadUtilities")
 
 def datetime_to_iso(obj):
     if isinstance(obj, datetime):
@@ -45,6 +48,7 @@ def load_agents(bedrock_agent_client):
         # Convert datetime objects to ISO format strings
         for agent in agent_summaries:
             agent_id = agent['agentId']
+            agent_name = agent['agentName']
             agent_alias_response = bedrock_agent_client.list_agent_aliases(
                 maxResults=100,
                 agentId=agent_id,
@@ -55,6 +59,7 @@ def load_agents(bedrock_agent_client):
                 alias['agentId'] = agent_id
                 alias['mode_selector'] = alias['agentAliasId']
                 alias['mode_selector_name'] = alias['agentAliasName']
+                alias['agent_name'] = agent_name
                 ret.append(alias)
         
         return {
@@ -121,7 +126,7 @@ def load_models(bedrock_client):
                 'mode_selector_name': model['modelName'],
             }
             for model in response['modelSummaries']
-            if ('Anthropic' in model['providerName'] or ('Mistral' in model['providerName'] and 'Large' in model['modelName']) or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
+            if ('Meta' in model['providerName'] or 'Anthropic' in model['providerName'] or ('Mistral' in model['providerName'] and 'Large' in model['modelName']) or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
         ]
 
         # Filter and process image models

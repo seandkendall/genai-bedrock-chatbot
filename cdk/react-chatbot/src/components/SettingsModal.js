@@ -66,8 +66,7 @@ const SettingsModal = ({
     ];
 
     const stabilityDiffusionSizes = [
-        '1024x1024', '1152x896', '1216x832', '1344x768', '1536x640',
-        '640x1536', '768x1344', '832x1216', '896x1152'
+        '1024x1024', '1152x896', '896x1152'
     ];
 
     const titanImageSizes = [
@@ -355,7 +354,7 @@ const SettingsModal = ({
                     <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', marginTop: theme.spacing(2) }}>
                             <Typography variant="h6">
-                                Bedrock Backend Prompt (Doesn't apply with KB or Agents):
+                                Bedrock Backend/System Prompt (Only applies to Anthropic and Meta models):
                             </Typography>
                             <Tooltip
                                 title="Add a Backend Prompt to direct the chatbot to give you better answers such as:

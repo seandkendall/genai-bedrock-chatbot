@@ -1,6 +1,5 @@
 import json, boto3, os
-from datetime import datetime
-from django.utils import timezone
+from datetime import datetime, timezone
 from aws_lambda_powertools import Logger, Metrics, Tracer
 
 

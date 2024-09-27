@@ -1,7 +1,6 @@
 import json,boto3,base64,uuid,os
-from datetime import datetime
+from datetime import datetime, timezone
 from aws_lambda_powertools import Logger, Metrics, Tracer
-from django.utils import timezone
 import random
 
 logger = Logger(service="BedrockImage")

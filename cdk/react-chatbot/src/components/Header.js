@@ -99,13 +99,13 @@ const Header = ({
             {truncateText((() => {
               switch (title) {
                 case 'Bedrock Models':
-                  return item.modelName;
+                  return `${item.providerName} ${item.modelName}`;
                 case 'Bedrock Image Models':
-                  return item.modelName;
+                  return `${item.providerName} ${item.modelName}`;
                 case 'Bedrock KnowledgeBases':
                   return item.name;
                 case 'Bedrock Agents':
-                  return item.agentAliasName;
+                  return `${item.agent_name} (${item.agentAliasName})`;
                 case 'Bedrock Prompt Flows':
                   return item.name;
                 default:

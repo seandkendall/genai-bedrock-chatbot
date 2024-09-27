@@ -15,51 +15,9 @@ import amplifyConfig from './config.json';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import useWebSocket from 'react-use-websocket';
+import { modelPrices } from './modelPrices.js';
 
-// hard-coded pricing for now, until amazon releases an API for this
-// reference: https://aws.amazon.com/bedrock/pricing/
-const modelPrices = {
-  'amazon.titan-text-express-v1': {
-    pricePer1000InputTokens: 0.0008,
-    pricePer1000OutputTokens: 0.0016,
-  },
-  'amazon.titan-text-lite-v1': {
-    pricePer1000InputTokens: 0.0003,
-    pricePer1000OutputTokens: 0.0004,
-  },
-  'anthropic.claude-v2': {
-    pricePer1000InputTokens: 0.008,
-    pricePer1000OutputTokens: 0.024,
-  },
-  'anthropic.claude-v2:1': {
-    pricePer1000InputTokens: 0.008,
-    pricePer1000OutputTokens: 0.024,
-  },
-  'anthropic.claude-3-sonnet-20240229-v1:0': {
-    pricePer1000InputTokens: 0.003,
-    pricePer1000OutputTokens: 0.015,
-  },
-  'anthropic.claude-3-haiku-20240307-v1:0': {
-    pricePer1000InputTokens: 0.00025,
-    pricePer1000OutputTokens: 0.00125,
-  },
-  'anthropic.claude-3-opus-20240229-v1:0': {
-    pricePer1000InputTokens: 0.015,
-    pricePer1000OutputTokens: 0.075,
-  },
-  'anthropic.claude-instant-v1': {
-    pricePer1000InputTokens: 0.0008,
-    pricePer1000OutputTokens: 0.0024,
-  },
-  'mistral.mistral-large-2402-v1:0': {
-    pricePer1000InputTokens: 0.004,
-    pricePer1000OutputTokens: 0.012,
-  },
-  'mistral.mistral-large-2407-v1:0': {
-    pricePer1000InputTokens: 0.003,
-    pricePer1000OutputTokens: 0.009,
-  },
-};
+
 
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
 
@@ -549,8 +507,15 @@ const App = memo(({ signOut, user }) => {
 
         setTotalInputTokens(newInputTokens);
         setTotalOutputTokens(newOutputTokens);
-        
-        localStorage.setItem(`chatHistory-${appSessionid}`, JSON.stringify(updatedMessages));
+        if (updatedMessages.length > 0 && updatedMessages[updatedMessages.length - 1].role && updatedMessages[updatedMessages.length - 1].content) {
+          if (updatedMessages[updatedMessages.length - 1].role.includes('assistant') && updatedMessages[updatedMessages.length - 1].content.startsWith('An error occurred')) {
+            console.log('An error occurred: not adding to local storage');
+          } else {
+            localStorage.setItem(`chatHistory-${appSessionid}`, JSON.stringify(updatedMessages));
+          }
+        } else {
+          console.log('No messages to save to local storage');
+        }
         return updatedMessages;
       }
     });

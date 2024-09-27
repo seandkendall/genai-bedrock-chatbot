@@ -22,7 +22,7 @@ const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages
       setAppSessionId(sessionId)
       const chatHistory = localStorage.getItem(`chatHistory-${sessionId}`);
       setMessages(JSON.parse(chatHistory));
-      loadConversationHistory(`chatHistory-${sessionId}`);
+      loadConversationHistory(`${sessionId}`);
     }
   }, [selectedMode,user,appSessionid]);
 
