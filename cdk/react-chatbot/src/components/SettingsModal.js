@@ -213,6 +213,8 @@ const SettingsModal = ({
 
                     } else if (response.message === 'Config saved successfully') {
                         console.log('Configuration saved successfully');
+                    } else if (response.message === 'Config not found') {
+                        console.log('No Custom config yet saved');
                     } else {
                         console.log('Other settings response:', response);
                     }

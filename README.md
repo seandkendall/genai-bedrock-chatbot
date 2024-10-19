@@ -163,6 +163,11 @@ Additionally, here are some other helpful resources for learning Git:
 - [Git Handbook](https://guides.github.com/introduction/git-handbook/)
 - [Git Tutorial for Beginners](https://www.vogella.com/tutorials/GitTutorial/article.html)
 
+## Useful Links
+ - Bedrock Converse API Capabilities per model: [https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)
+ - Bedrock Runtime Documentation: (https://docs.aws.amazon.com/bedrock/latest/userguide/service_code_examples_bedrock-runtime.html)[https://docs.aws.amazon.com/bedrock/latest/userguide/service_code_examples_bedrock-runtime.html]
+ - Bedrock Runtime Boto3 Documentation: (https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime.html)[https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime.html]
+ 
 
 ## Contributing
 

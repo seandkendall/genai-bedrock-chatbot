@@ -7,21 +7,26 @@
     "@babel/core": "^7.24.5",
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@babel/preset-env": "^7.24.5",
-    "babel-jest": "^29.7.0",
-    "jest": "^27.5.1"
+    "@biomejs/biome": "1.9.4",
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^16.0.1",
+    "@testing-library/user-event": "^14.5.2",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
   },
   "dependencies": {
-    "@aws-amplify/ui-react": "^6.1.6",
+    "@aws-amplify/ui-react": "^6.5.2",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.0",
-    "@mui/icons-material": "^6.1.1",
-    "@mui/material": "^6.1.1",
+    "@mui/icons-material": "^6.1.2",
+    "@mui/material": "^6.1.2",
     "@uiw/react-prismjs": "^1.3.6",
     "amazon-cognito-identity-js": "^6.3.12",
-    "aws-amplify": "^6.6.2",
+    "aws-amplify": "^6.6.3",
     "aws-sdk": "^2.1588.0",
+    "axios": "^1.7.7",
     "clipboard": "^2.0.11",
-    "dompurify": "^3.0.11",
+    "dompurify": "^3.1.7",
     "eslint-config-react-app": "^7.0.1",
     "marked": "^12.0.1",
     "prism-react-renderer": "^2.3.1",
@@ -36,7 +41,7 @@
     "react-syntax-highlighter": "^15.5.0",
     "react-syntax-highlighter-virtualized-renderer": "^1.1.0",
     "react-toastify": "^10.0.5",
-    "react-use-websocket": "^4.8.1",
+    "react-use-websocket": "^4.9.0",
     "rehype-katex": "^7.0.0",
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
@@ -46,7 +51,8 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "BUILD_PATH='../static-website-source' react-scripts build",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "test": "jest"
   },
   "eslintConfig": {
     "extends": [

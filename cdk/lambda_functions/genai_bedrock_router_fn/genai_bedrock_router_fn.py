@@ -1,4 +1,7 @@
-import json, boto3, os
+import json
+import boto3
+import os
+from chatbot_commons import commons
 from aws_lambda_powertools import Logger, Metrics, Tracer
 
 logger = Logger(service="BedrockRouter")
@@ -25,9 +28,8 @@ def lambda_handler(event, context):
         request_body = {}
     selected_mode = request_body.get('selectedMode', 'none')
     message_type = request_body.get('type', '')
-    id_token = request_body.get('idToken', 'none')
     access_token = request_body.get('accessToken', 'none')
-    allowed, not_allowed_message = validate_jwt_token(id_token, access_token)
+    allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
     if allowed:
         if selected_mode.get('category') == 'Bedrock Agents' or selected_mode.get('category') == 'Bedrock KnowledgeBases':
             # Invoke genai_bedrock_agents_client_fn
@@ -56,37 +58,3 @@ def lambda_handler(event, context):
             'statusCode': 403,
             'body': json.dumps(not_allowed_message)
         }
-@tracer.capture_method
-def validate_jwt_token(id_token, access_token):
-    user_attributes = get_user_attributes(access_token)
-    email_verified = False
-    email = None
-    for attribute in user_attributes:
-        if attribute['Name'] == 'email_verified':
-            email_verified = attribute['Value'] == 'true'
-        elif attribute['Name'] == 'email':
-            email = attribute['Value']
-    # if allowlist_domain contains a comma, then split it into a list and return true of the email ends with any of the domains
-    if ',' in allowlist_domain:
-        allowlist_domains = allowlist_domain.split(',')
-        for domain in allowlist_domains:
-            if email.casefold().find(domain.casefold()) != -1:
-                return True, ''
-            
-    # if allowlist_domain is not empty and not null then
-    if allowlist_domain and allowlist_domain != '':
-        if email.casefold().find(allowlist_domain.casefold()) != -1:
-            return True, ''
-    else:
-        return True, ''
-    return False, f'You have not been allow-listed for this application. You require a domain containing: {allowlist_domain}', None
-        
-@tracer.capture_method
-def get_user_attributes(access_token):
-    if access_token in user_cache:
-        return user_cache[access_token]
-    else:
-        response = cognito_client.get_user(AccessToken=access_token)
-        user_attributes = response['UserAttributes']
-        user_cache[access_token] = user_attributes
-        return user_attributes       

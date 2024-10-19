@@ -1,5 +1,6 @@
 import json, os, boto3
 from datetime import datetime, timezone
+from chatbot_commons import commons
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from load_utilities import (
     load_knowledge_bases,
@@ -19,9 +20,13 @@ tracer = Tracer()
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
+schedule_name = os.environ['SCHEDULE_NAME']
+
 cognito_client = boto3.client('cognito-idp')
 bedrock_client = boto3.client(service_name='bedrock')
 bedrock_agent_client = boto3.client(service_name='bedrock-agent')
+s3_client = boto3.client('s3')
+events_client = boto3.client('scheduler')
 
 region = os.environ['REGION']
 user_cache = {}
@@ -39,14 +44,13 @@ def lambda_handler(event, context):
     try:
         # Parse request body
         request_body = json.loads(event.get('body', '{}'))
-        id_token = request_body.get('idToken', 'none')
         access_token = request_body.get('accessToken', 'none')
         config_type = request_body.get('config_type')
         action = request_body.get('subaction')
         user = request_body.get('user', 'system')
         config = request_body.get('config')
         
-        allowed, not_allowed_message = validate_jwt_token(id_token, access_token)
+        allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
         if not allowed:
             return {
                 'statusCode': 403,
@@ -55,11 +59,16 @@ def lambda_handler(event, context):
 
         # Use a dictionary to map actions to functions
         action_map = {
-            'load_prompt_flows': lambda: load_prompt_flows(bedrock_agent_client),
-            'load_knowledge_bases': lambda: load_knowledge_bases(bedrock_agent_client),
-            'load_agents': lambda: load_agents(bedrock_agent_client),
-            'load_models': lambda: load_models(bedrock_client)
+            'load_prompt_flows': lambda: load_prompt_flows(bedrock_agent_client,table),
+            'load_knowledge_bases': lambda: load_knowledge_bases(bedrock_agent_client,table),
+            'load_agents': lambda: load_agents(bedrock_agent_client,table),
+            'load_models': lambda: load_models(bedrock_client,table)
         }
+        # if actions contains ,modelscan then set modelscan = true, then remove ',modelscan' from action
+        modelscan = False
+        if ',modelscan' in action:
+            modelscan = True
+            action = action.replace(',modelscan', '')
         # split action by ,
         actions = action.split(',')
         return_obj = {}
@@ -77,6 +86,7 @@ def lambda_handler(event, context):
 
         if return_obj:
             return_obj['type'] = 'load_response'
+            return_obj['modelscan'] = modelscan
             return {
                 'statusCode': 200,
                 'body': json.dumps(return_obj, default=datetime_to_iso)
@@ -91,6 +101,8 @@ def lambda_handler(event, context):
             return load_config(user, config_type)
         elif action == 'save':
             return save_config(user, config_type, config)
+        elif action == 'get-presigned-url':
+            return get_presigned_url(event)
         else:
             return {
                 'statusCode': 400,
@@ -180,39 +192,6 @@ def save_config(user, config_type, config):
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
         }
-
-
-@tracer.capture_method    
-def validate_jwt_token(id_token, access_token):
-    user_attributes = get_user_attributes(access_token)
-    email_verified = False
-    email = None
-    for attribute in user_attributes:
-        if attribute['Name'] == 'email_verified':
-            email_verified = attribute['Value'] == 'true'
-        elif attribute['Name'] == 'email':
-            email = attribute['Value']
-    # if allowlist_domain contains a comma, then split it into a list and return true of the email ends with any of the domains
-    if ',' in allowlist_domain:
-        allowlist_domains = allowlist_domain.split(',')
-        for domain in allowlist_domains:
-            if email.casefold().find(domain.casefold()) != -1:
-                return True, ''
-            
-    # if allowlist_domain is not empty and not null then
-    if allowlist_domain and allowlist_domain != '':
-        if email.casefold().find(allowlist_domain.casefold()) != -1:
-            return True, ''
-    else:
-        return True, ''
-    return False, f'You have not been allow-listed for this application. You require a domain containing: {allowlist_domain}'
         
-@tracer.capture_method
-def get_user_attributes(access_token):
-    if access_token in user_cache:
-        return user_cache[access_token]
-    else:
-        response = cognito_client.get_user(AccessToken=access_token)
-        user_attributes = response['UserAttributes']
-        user_cache[access_token] = user_attributes
-        return user_attributes
+def enable_eventbridge_schedule(schedule_name):
+    logger.info('TODO: not yet implemented')

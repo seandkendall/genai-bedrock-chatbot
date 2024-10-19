@@ -1,6 +1,6 @@
 {
-  "short_name": "GenAIChatBot",
-  "name": "AWS Bedrock Chatbot App",
+  "short_name": "KendallChat",
+  "name": "KendallChat",
  "icons": [
   {
    "src": "\/android-icon-36x36.png",

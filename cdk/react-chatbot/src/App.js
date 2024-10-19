@@ -65,14 +65,15 @@ const App = memo(({ signOut, user }) => {
   const [monthlyOutputTokens, setMonthlyOutputTokens] = useState(0)
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [reloadPromptConfig, setReloadPromptConfig] = useState(true);
-  
+
   // Lists of models, KBs, Agents, prompt flows
   const [bedrockAgents, setBedrockAgents] = useState([]);
   const [bedrockKnowledgeBases, setBedrockKnowledgeBases] = useState([]);
   const [models, setModels] = useState([]);
   const [imageModels, setImageModels] = useState([]);
+  const [kbModels, setKbModels] = useState([]);
   const [promptFlows, setPromptFlows] = useState([]);
-  
+
   const [appSessionid, setAppSessionId] = useState('');
   const [kbSessionId, setKBSessionId] = useState('');
   const [systemPromptUserOrSystem, setSystemPromptUserOrSystem] = useState('system');
@@ -81,6 +82,8 @@ const App = memo(({ signOut, user }) => {
   const [heightWidth, setHeightWidth] = useState('1024x1024');
 
   const [selectedKbMode, onSelectedKbMode] = useState(null);
+  const [previousSentMessage, setPreviousSentMessage] = useState({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
 
 
@@ -91,10 +94,43 @@ const App = memo(({ signOut, user }) => {
     reconnectInterval: 3000, // Reconnect every 3 seconds
   });
 
+  //persist models to local storage if changed
+  useEffect(() => {
+    if (models && models.length > 0)
+      localStorage.setItem('local-models', JSON.stringify(models));
+  }, [models]);
+  //persist image models to local storage if changed
+  useEffect(() => {
+    if (imageModels && imageModels.length > 0)
+      localStorage.setItem('local-image-models', JSON.stringify(imageModels));
+  }, [imageModels]);
+  useEffect(() => {
+    if (kbModels && kbModels.length > 0) 
+      localStorage.setItem('local-kb-models', JSON.stringify(kbModels));
+  }, [kbModels]);
   
+  //persist prompt flows to local storage if changed
+  useEffect(() => {
+    if (promptFlows && promptFlows.length > 0)
+      localStorage.setItem('local-prompt-flows', JSON.stringify(promptFlows));
+  }, [promptFlows]);
+
+  //persist bedrockAgents to local storage if changed
+  useEffect(() => {
+    if (bedrockAgents && bedrockAgents.length > 0)
+      localStorage.setItem('local-bedrock-agents', JSON.stringify(bedrockAgents));
+  }, [bedrockAgents]);
+
+  //persist bedrockKnowledgeBases to local storage if changed
+  useEffect(() => {
+    if (bedrockKnowledgeBases && bedrockKnowledgeBases.length > 0)
+      localStorage.setItem('local-bedrock-knowledge-bases', JSON.stringify(bedrockKnowledgeBases));
+  }, [bedrockKnowledgeBases]);
+
+
   useEffect(() => {
     loadConfigSubaction('load_models,load_prompt_flows,load_knowledge_bases,load_agents');
-  },[]);
+  }, []);
 
   // Add this function to update the prices based on the selected model
   const updatePricesFromModel = () => {
@@ -106,7 +142,7 @@ const App = memo(({ signOut, user }) => {
       };
       setPricePer1000InputTokens(modelPriceInfo.pricePer1000InputTokens);
       setPricePer1000OutputTokens(modelPriceInfo.pricePer1000OutputTokens);
-    }else{
+    } else {
       const modelPriceInfo = {
         pricePer1000InputTokens: 0.00300,
         pricePer1000OutputTokens: 0.01500,
@@ -117,10 +153,10 @@ const App = memo(({ signOut, user }) => {
   };
   useEffect(() => {
     updatePricesFromModel()
-  },[selectedMode]);
-  
+  }, [selectedMode]);
 
-  
+
+
   useEffect(() => {
     const kbSessionId = localStorage.getItem(`kbSessionId`);
     setKBSessionId(kbSessionId)
@@ -128,7 +164,7 @@ const App = memo(({ signOut, user }) => {
     setPricePer1000InputTokens(storedPricePer1000InputTokens);
     const storedPricePer1000OutputTokens = localStorage.getItem(`pricePer1000OutputTokens`);
     setPricePer1000OutputTokens(storedPricePer1000OutputTokens);
-    
+
     const currentDate = new Date().toDateString();
     const storedInputTokens = isValidJSON(localStorage.getItem(`inputTokens-${currentDate}`))
       ? JSON.parse(localStorage.getItem(`inputTokens-${currentDate}`))
@@ -161,18 +197,40 @@ const App = memo(({ signOut, user }) => {
     const data = {
       action: 'config',
       subaction: subaction,
-      idToken: idToken + '',
-      accessToken: accessToken + '',
+      idToken: `${idToken}`,
+      accessToken: `${accessToken}`,
     };
     sendMessage(JSON.stringify(data));
   }
 
+  const triggerModelScan = async () => {
+    console.log('triggerModelScan')
+    setIsRefreshing(true);
+    try{
+      const { accessToken, idToken } = await getCurrentSession()
+      const data = {
+        action: 'modelscan',
+        idToken: `${idToken}`,
+        accessToken: `${accessToken}`,
+      };
+      sendMessage(JSON.stringify(data));
+    } catch (error) {
+      console.error('Error refreshing models:', error);
+    }
+  }
+  const triggerModelScanFinished = async (newModels) => {
+    console.log('SDK newModels Arrived')
+    console.log(newModels)
+    console.log('SDK newModels Arrived Done')
+    loadConfigSubaction('load_models,load_prompt_flows,load_knowledge_bases,load_agents,modelscan');
+  }
+
   const loadConversationHistory = async (sessId) => {
-    if (models && selectedMode && (appSessionid || sessId)){
+    if (models && selectedMode && (appSessionid || sessId)) {
       const { accessToken, idToken } = await getCurrentSession()
       const data = {
         type: 'load',
-        session_id: sessId? sessId : appSessionid,
+        session_id: sessId ? sessId : appSessionid,
         kb_session_id: kbSessionId,
         selectedMode: selectedMode,
         idToken: idToken + '',
@@ -183,7 +241,7 @@ const App = memo(({ signOut, user }) => {
   };
 
   const clearConversationHistory = async () => {
-    if (models && selectedMode && appSessionid){
+    if (models && selectedMode && appSessionid) {
       const { accessToken, idToken } = await getCurrentSession()
       const data = {
         type: 'clear_conversation',
@@ -196,67 +254,68 @@ const App = memo(({ signOut, user }) => {
       sendMessage(JSON.stringify(data));
     }
   };
-  
-  function mergeMessages(existingMessages, newMessages) {
-    const mergedMessages = [...existingMessages];
-  
-    for (const newMessage of newMessages) {
-      const existingMessageIndex = mergedMessages.findIndex(
-        (message) =>
-          message.message_id === newMessage.message_id ||
-          (newMessage.message_id && !message.message_id)
-      );
-  
-      if (existingMessageIndex === -1) {
-        mergedMessages.push(newMessage);
-      } else {
-        mergedMessages[existingMessageIndex] = {
-          ...mergedMessages[existingMessageIndex],
-          ...newMessage,
-        };
-      }
-    }
-  
-    return mergedMessages;
-  }
 
   useEffect(() => {
     if (lastMessage !== null) {
       const message = JSON.parse(lastMessage.data);
       if (message.type === 'conversation_history') {
         const messageChunk = convertRuleToHuman(JSON.parse(message.chunk));
-        setMessages((prevMessages) => mergeMessages(prevMessages?prevMessages:[], messageChunk));
+        if (JSON.stringify(messageChunk) !== JSON.stringify(messages)){
+          setMessages(messageChunk);
+        }
       }
     }
   }, [lastMessage, sendMessage]);
 
-  const handleError = (errormessage) => {
-    let popupMsg = 'Sorry, We encountered an issue, Please try resubmitting your message.'
+  const handleError = (message) => {
+    const errormessage = typeof message === 'string' ? message : message.error || message.message;
+  
+    let popupMsg = 'Sorry, we encountered an issue. Please try resubmitting your message.';
+  
     if (errormessage.includes('allow-listed') || errormessage.includes('You have not requested access to a model in Bedrock')) {
-      popupMsg = errormessage
+      popupMsg = errormessage;
     } else if (errormessage.includes('throttlingException')) {
-      popupMsg = 'Sorry, We encountered a Throttling issue, Please try resubmitting your message.'
+      popupMsg = 'Sorry, we encountered a throttling issue. Please try resubmitting your message.';
     } else if (errormessage.includes('AUP or AWS Responsible AI')) {
-      popupMsg = 'This request has been blocked by our content filters because the generated image(s) may conflict our AUP or AWS Responsible AI Policy. please try again'
-    } 
+      popupMsg = 'This request has been blocked by our content filters because the generated image(s) may conflict with our AUP or AWS Responsible AI Policy. Please try again.';
+    }
+  
     setIsDisabled(false);
-    // stopTimer();
     setPopupMessage(popupMsg);
     setPopupType('error');
-    setTimeout(() => setShowPopup(false), 3000);
     setShowPopup(true);
+    setTimeout(() => setShowPopup(false), 3000);
+  
     console.error('WebSocket error:', errormessage);
   };
+  
+  function reformat_attachments(attachments) {
+    return attachments.map(attachment => {
+      if (attachment.type.startsWith('image')) {
+        return { image: {s3source:{s3key:attachment.url}} };
+      } else {
+        return { document: {s3source:{s3key:attachment.url}} };
+      }
+    });
+  }
 
-  const onSend = async (message) => {
-    setIsDisabled(true);
+  const onSend = async (message, attachments,retryPreviousMessage) => {
+    
+    if (retryPreviousMessage){
+      message = previousSentMessage.message;
+      attachments = previousSentMessage.attachments;
+    }else{
+      setPreviousSentMessage({'message': message, 'attachments': attachments })
+    }
+      
+    console.log('Attachments before processing:', attachments);
     setIsLoading(true);
 
     const sanitizedMessage = DOMPurify.sanitize(message);
-    // generate random 8 character alpha/numeric message id
     const randomMessageId = Math.random().toString(36).substring(2, 10);
+
     if (selectedMode.category === 'Bedrock Image Models') {
-      generateImage(sanitizedMessage,randomMessageId);
+      generateImage(sanitizedMessage, randomMessageId);
       return;
     }
 
@@ -272,20 +331,39 @@ const App = memo(({ signOut, user }) => {
       idToken: idToken + '',
       accessToken: accessToken + '',
       reloadPromptConfig: reloadPromptConfig,
-      systemPromptUserOrSystem: systemPromptUserOrSystem
+      systemPromptUserOrSystem: systemPromptUserOrSystem,
+      attachments: await Promise.all(
+        attachments.map(async (file) => {
+          try {
+            return {
+              name: file.name,
+              type: file.type,
+              url: file.url,
+            };
+          } catch (error) {
+            console.error('Error processing file:', file.name, error);
+            return null;
+          }
+        }).filter(Boolean)
+      )
     };
-    if(selectedMode.knowledgeBaseId){
+    console.log('Processed data:', data);
+    if (selectedMode.knowledgeBaseId) {
       //add selectedKbMode to data
       data.selectedKbMode = selectedKbMode;
     }
+    const reformatted_attachments = reformat_attachments(attachments)
     const messageWithTime = {
       role: 'user',
-      content: message,
+      content: [
+        { text: message },
+        ...reformatted_attachments
+      ],
       message_id: randomMessageId,
       timestamp: message_timestamp,
     };
     setMessages((prevMessages) => [
-      ...prevMessages? prevMessages: [],
+      ...prevMessages ? prevMessages : [],
       messageWithTime,
       {
         role: 'assistant',
@@ -302,9 +380,8 @@ const App = memo(({ signOut, user }) => {
   };
 
   const generateImage = async (prompt, randomMessageId) => {
-    setIsDisabled(true);
     setIsLoading(true);
-  
+
     const { accessToken, idToken } = await getCurrentSession();
     const message_timestamp = new Date().toISOString()
     const data = {
@@ -318,7 +395,7 @@ const App = memo(({ signOut, user }) => {
       stylePreset: stylePreset,
       heightWidth: heightWidth,
     };
-  
+
     const currentTime = new Date();
     const messageWithTime = {
       role: 'user',
@@ -327,7 +404,7 @@ const App = memo(({ signOut, user }) => {
       timestamp: currentTime.toISOString()
     };
     setMessages((prevMessages) => [
-      ...prevMessages? prevMessages: [],
+      ...prevMessages ? prevMessages : [],
       messageWithTime,
       {
         role: 'assistant',
@@ -339,9 +416,9 @@ const App = memo(({ signOut, user }) => {
         imageAlt: prompt
       },
     ]);
-  
+
     scrollToBottom();
-  
+
     sendMessage(JSON.stringify(data));
   };
 
@@ -381,15 +458,14 @@ const App = memo(({ signOut, user }) => {
         setIsLoading(false);
         scrollToBottom();
       } else if (message.type === 'error' || message.message === 'Internal server error') {
-        updateMessages({ delta: { text: message.error || message.message } })
-        updateMessagesOnStop({});
-        handleError(message.error || message.message);
+        updateMessagesOnStop(message);
+        handleError(message);
         setIsDisabled(false);
         setIsLoading(false);
         scrollToBottom();
       } else if (message.type === 'image_generated') {
         setMessages((prevMessages) => {
-          const updatedMessages = [...prevMessages? prevMessages: []];
+          const updatedMessages = [...prevMessages ? prevMessages : []];
           const lastIndex = updatedMessages.length - 1;
           updatedMessages[lastIndex] = {
             ...updatedMessages[lastIndex],
@@ -401,24 +477,33 @@ const App = memo(({ signOut, user }) => {
             model: message.modelId,
             outputTokenCount: 0,
             inputTokenCount: 0,
-            timestamp: message.timestamp
+            timestamp: message.timestamp,
+            raw_message: message
           };
           return updatedMessages;
         });
       } else if (message.type === 'load_response') {
-        if(message.load_models)
-          if(message.load_models.text_models)
+        if (message.load_models)
+          if (message.load_models.text_models)
             setModels(message.load_models.text_models)
-          if(message.load_models.image_models)
-            setImageModels(message.load_models.image_models)
-        if(message.load_knowledge_bases && message.load_knowledge_bases.knowledge_bases)
+        if (message.load_models.image_models)
+          setImageModels(message.load_models.image_models)
+        if (message.load_models.kb_models)
+          setKbModels(message.load_models.kb_models)
+        if (message.load_knowledge_bases && message.load_knowledge_bases.knowledge_bases)
           setBedrockKnowledgeBases(message.load_knowledge_bases.knowledge_bases)
-        if(message.load_agents && message.load_agents.agents)
+        if (message.load_agents && message.load_agents.agents)
           setBedrockAgents(message.load_agents.agents)
-        if(message.load_prompt_flows && message.load_prompt_flows.prompt_flows)
+        if (message.load_prompt_flows && message.load_prompt_flows.prompt_flows)
           setPromptFlows(message.load_prompt_flows.prompt_flows)
+        if (message.load_models?.text_models){
+          setIsRefreshing(false);
+        }
       } else if (message.type === 'conversation_history') {
         // Do nothing, UseEffect will handle this 
+      } else if (message.type === 'modelscan') {
+        const new_refreshed_models = message.results
+        triggerModelScanFinished(new_refreshed_models);
       } else {
         if (typeof message === 'object' && message !== null) {
           const messageString = JSON.stringify(message);
@@ -440,22 +525,22 @@ const App = memo(({ signOut, user }) => {
   }, [lastMessage]);
 
   const updateMessages = (message) => {
-    // console.log('message:', message)
     //if message starts with the text "\nBot: " then strip this from the message
     if (message && message.delta && message.delta.text && message.delta.text.startsWith('\nBot: ')) {
       message.delta.text = message.delta.text.substring(6);
     }
-    if (message && message.delta && message.delta.text) {
+    if (message && ((message.delta && message.delta.text))) {
       setMessages((prevMessages) => {
 
-        const updatedMessages = [...prevMessages? prevMessages: []];
+        const updatedMessages = [...prevMessages ? prevMessages : []];
         const lastIndex = updatedMessages.length - 1;
         const lastMessage = updatedMessages[lastIndex];
         if (lastMessage && lastMessage.role === 'assistant') {
-          const newContent = lastMessage.content + message.delta.text;
+          const newContent =  message.delta && message.delta.text ? lastMessage.content + message.delta.text : (message.error ? message.error : 'no content');
           updatedMessages[lastIndex] = {
             ...lastMessage,
             content: newContent,
+            raw_message: message
           };
         }
         return updatedMessages;
@@ -465,12 +550,14 @@ const App = memo(({ signOut, user }) => {
 
   const updateMessagesOnStop = (messageStop) => {
     setMessages((prevMessages) => {
-      const updatedMessages = [...prevMessages? prevMessages: []];
+      const updatedMessages = [...prevMessages ? prevMessages : []];
       const lastIndex = updatedMessages.length - 1;
       const invocationMetrics = messageStop?.['amazon-bedrock-invocationMetrics'] || null; // Handle the case when 'amazon-bedrock-invocationMetrics' is not present
       const inputTokenCount = invocationMetrics ? invocationMetrics.inputTokenCount : 0;
       const outputTokenCount = invocationMetrics ? invocationMetrics.outputTokenCount : 0;
-      const tokenidentifier = invocationMetrics ? invocationMetrics.inputTokenCount + '' + invocationMetrics.outputTokenCount + '' + invocationMetrics.invocationLatency + '' + invocationMetrics.firstByteLatency : 'R' + Math.floor(Math.random() * 1000000);
+      const tokenidentifier = invocationMetrics
+        ? `${invocationMetrics.inputTokenCount || ''}_${invocationMetrics.outputTokenCount || ''}_${invocationMetrics.invocationLatency || ''}_${invocationMetrics.firstByteLatency || ''}`
+        : `R${Math.floor(Math.random() * 1000000)}`;
 
       const currentDate = new Date().toDateString();
       const existingInputTokens = isValidJSON(localStorage.getItem(`inputTokens-${currentDate}`))
@@ -489,7 +576,6 @@ const App = memo(({ signOut, user }) => {
         localStorage.setItem('lastTokenIdentifier', tokenidentifier);
         // console.log('inputTokens:', inputTokenCount)
         // console.log('outputTokens:', outputTokenCount)
-
         updatedMessages[lastIndex] = {
           ...updatedMessages[lastIndex],
           isStreaming: false,
@@ -497,6 +583,7 @@ const App = memo(({ signOut, user }) => {
           model: usedModel,
           outputTokenCount: outputTokenCount,
           inputTokenCount: inputTokenCount,
+          raw_message: messageStop,
         };
 
         const newInputTokens = existingInputTokens + inputTokenCount;
@@ -508,9 +595,13 @@ const App = memo(({ signOut, user }) => {
         setTotalInputTokens(newInputTokens);
         setTotalOutputTokens(newOutputTokens);
         if (updatedMessages.length > 0 && updatedMessages[updatedMessages.length - 1].role && updatedMessages[updatedMessages.length - 1].content) {
-          if (updatedMessages[updatedMessages.length - 1].role.includes('assistant') && updatedMessages[updatedMessages.length - 1].content.startsWith('An error occurred')) {
+          if (updatedMessages[updatedMessages.length - 1].role.includes('assistant') && updatedMessages[updatedMessages.length - 1].error && updatedMessages[updatedMessages.length - 1].error.trim() !== '') {
             console.log('An error occurred: not adding to local storage');
           } else {
+            // SDK TODO:  Strip any error messages from array?
+            console.log('SDK7656: updatedMessages')
+            console.log(updatedMessages)
+            console.log('SDK7656: END updatedMessages')
             localStorage.setItem(`chatHistory-${appSessionid}`, JSON.stringify(updatedMessages));
           }
         } else {
@@ -561,7 +652,6 @@ const App = memo(({ signOut, user }) => {
   const handleSaveSettings = () => {
     handleCloseSettingsModal();
   };
-
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -590,14 +680,17 @@ const App = memo(({ signOut, user }) => {
           bedrockKnowledgeBases={bedrockKnowledgeBases}
           models={models}
           imageModels={imageModels}
+          kbModels={kbModels}
           promptFlows={promptFlows}
           selectedKbMode={selectedKbMode}
           onSelectedKbMode={onSelectedKbMode}
+          triggerModelScan={triggerModelScan}
+          isRefreshing={isRefreshing}
         />
         <div className="chat-history" ref={chatHistoryRef}>
-          <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} />
+          <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />
         </div>
-        <MessageInput onSend={onSend} disabled={isDisabled || isLoading} selectedMode={selectedMode} selectedKbMode={selectedKbMode} /> 
+        <MessageInput appSessionid={appSessionid} onSend={onSend} disabled={isDisabled || isLoading} setIsDisabled={setIsDisabled} selectedMode={selectedMode} selectedKbMode={selectedKbMode} sendMessage={sendMessage} getCurrentSession={getCurrentSession} />
         {showPopup && <Popup message={popupMessage}
           type={popupType}
           onClose={() => setShowPopup(false)}

@@ -1,6 +1,7 @@
 import json,boto3,base64,uuid,os
 from datetime import datetime, timezone
 from aws_lambda_powertools import Logger, Metrics, Tracer
+from chatbot_commons import commons
 import random
 
 logger = Logger(service="BedrockImage")
@@ -41,7 +42,7 @@ def lambda_handler(event, context):
         # Save image to S3 and generate pre-signed URL
         image_url = save_image_to_s3_and_get_url(image_base64)
         # logger.info("Image saved to S3 and URL generated")
-        send_websocket_message(connection_id, {
+        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'image_generated',
             'image_url': image_url,
             'prompt': prompt,
@@ -50,7 +51,7 @@ def lambda_handler(event, context):
             'timestamp': message_received_timestamp_utc,
         })
         # set new string variable message_end_timestand as current UTC timestamp in this format: 9/9/2024, 6:58:45 AM
-        send_websocket_message(connection_id, {
+        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'message_stop',
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'modelId': modelId,
@@ -62,9 +63,9 @@ def lambda_handler(event, context):
         return {'statusCode': 200, 'body': json.dumps('Image generated successfully')}
 
     except Exception as e:
-        logger.error(f"Error generating image: {str(e)}", exc_info=True)
         logger.exception(e)
-        send_websocket_message(connection_id, {
+        logger.error(f"Error generating image: {str(e)}", exc_info=True)
+        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'error',
             'error': str(e)
         })
@@ -153,23 +154,3 @@ def save_image_to_s3_and_get_url(image_base64):
     cloudfront_url = f"https://{os.environ['CLOUDFRONT_DOMAIN']}/{filename}"
     
     return cloudfront_url
-
-@tracer.capture_method
-def send_websocket_message(connection_id, message):
-    try:
-        # Check if the WebSocket connection is open
-        connection = apigateway_management_api.get_connection(ConnectionId=connection_id)
-        connection_state = connection.get('ConnectionStatus', 'OPEN')
-        if connection_state != 'OPEN':
-            logger.warn(f"WebSocket connection is not open (state: {connection_state})")
-            return
-
-        apigateway_management_api.post_to_connection(
-            ConnectionId=connection_id,
-            Data=json.dumps(message).encode()
-        )
-    except apigateway_management_api.exceptions.GoneException:
-        logger.info(f"WebSocket connection is closed (connectionId: {connection_id})")
-    except Exception as e:
-        logger.error(f"Error sending WebSocket message (92012): {str(e)}")
-        logger.exception(e)
