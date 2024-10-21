@@ -580,6 +580,15 @@ class ChatbotWebsiteStack(Stack):
         )
         # add env variable to lambda function model_scan_function
         config_function.add_environment("SCHEDULE_NAME", module_scan_schedule.schedule_name)
+        config_function.add_environment("SCHEDULE_GROUP_NAME", scheduler_group_name)
+        # add scheduler:GetSchedule to config_function role to module_scan_schedule custom policy
+        #TODO: module_scan_schedule.schedule_arn fails because the construct is in alpha, fix this once its out of alpha 
+        config_function_role.add_to_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["scheduler:GetSchedule","scheduler:UpdateSchedule","iam:PassRole"],
+            resources=["*"],
+            # resources=[module_scan_schedule.schedule_arn],
+        ))
         
         # Deploy the website files and variables.js to the S3 bucket
         s3deploy.BucketDeployment(self, "s3FilesDeployment",
