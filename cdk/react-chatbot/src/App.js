@@ -84,6 +84,8 @@ const App = memo(({ signOut, user }) => {
   const [selectedKbMode, onSelectedKbMode] = useState(null);
   const [previousSentMessage, setPreviousSentMessage] = useState({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  
 
 
 
@@ -204,7 +206,6 @@ const App = memo(({ signOut, user }) => {
   }
 
   const triggerModelScan = async () => {
-    console.log('triggerModelScan')
     setIsRefreshing(true);
     try{
       const { accessToken, idToken } = await getCurrentSession()
@@ -218,10 +219,7 @@ const App = memo(({ signOut, user }) => {
       console.error('Error refreshing models:', error);
     }
   }
-  const triggerModelScanFinished = async (newModels) => {
-    console.log('SDK newModels Arrived')
-    console.log(newModels)
-    console.log('SDK newModels Arrived Done')
+  const triggerModelScanFinished = async () => {
     loadConfigSubaction('load_models,load_prompt_flows,load_knowledge_bases,load_agents,modelscan');
   }
 
@@ -233,8 +231,8 @@ const App = memo(({ signOut, user }) => {
         session_id: sessId ? sessId : appSessionid,
         kb_session_id: kbSessionId,
         selectedMode: selectedMode,
-        idToken: idToken + '',
-        accessToken: accessToken + '',
+        idToken: `${idToken}`,
+        accessToken: `${accessToken}`,
       };
       sendMessage(JSON.stringify(data));
     }
@@ -248,8 +246,8 @@ const App = memo(({ signOut, user }) => {
         session_id: appSessionid,
         kb_session_id: kbSessionId,
         selectedMode: selectedMode,
-        idToken: idToken + '',
-        accessToken: accessToken + '',
+        idToken: `${idToken}`,
+        accessToken: `${accessToken}`,
       };
       sendMessage(JSON.stringify(data));
     }
@@ -291,11 +289,9 @@ const App = memo(({ signOut, user }) => {
   
   function reformat_attachments(attachments) {
     return attachments.map(attachment => {
-      if (attachment.type.startsWith('image')) {
+      if (attachment.type.startsWith('image')) 
         return { image: {s3source:{s3key:attachment.url}} };
-      } else {
-        return { document: {s3source:{s3key:attachment.url}} };
-      }
+      return { document: {s3source:{s3key:attachment.url}} };
     });
   }
 
@@ -308,7 +304,6 @@ const App = memo(({ signOut, user }) => {
       setPreviousSentMessage({'message': message, 'attachments': attachments })
     }
       
-    console.log('Attachments before processing:', attachments);
     setIsLoading(true);
 
     const sanitizedMessage = DOMPurify.sanitize(message);
@@ -328,8 +323,8 @@ const App = memo(({ signOut, user }) => {
       session_id: appSessionid,
       kb_session_id: kbSessionId,
       selectedMode: selectedMode,
-      idToken: idToken + '',
-      accessToken: accessToken + '',
+      idToken: `${idToken}`,
+      accessToken: `${accessToken}`,
       reloadPromptConfig: reloadPromptConfig,
       systemPromptUserOrSystem: systemPromptUserOrSystem,
       attachments: await Promise.all(
@@ -347,7 +342,7 @@ const App = memo(({ signOut, user }) => {
         }).filter(Boolean)
       )
     };
-    console.log('Processed data:', data);
+
     if (selectedMode.knowledgeBaseId) {
       //add selectedKbMode to data
       data.selectedKbMode = selectedKbMode;
@@ -390,8 +385,8 @@ const App = memo(({ signOut, user }) => {
       timestamp: message_timestamp,
       session_id: appSessionid,
       selectedMode: selectedMode,
-      idToken: idToken + '',
-      accessToken: accessToken + '',
+      idToken: `${idToken}`,
+      accessToken: `${accessToken}`,
       stylePreset: stylePreset,
       heightWidth: heightWidth,
     };
@@ -502,8 +497,7 @@ const App = memo(({ signOut, user }) => {
       } else if (message.type === 'conversation_history') {
         // Do nothing, UseEffect will handle this 
       } else if (message.type === 'modelscan') {
-        const new_refreshed_models = message.results
-        triggerModelScanFinished(new_refreshed_models);
+        triggerModelScanFinished();
       } else {
         if (typeof message === 'object' && message !== null) {
           const messageString = JSON.stringify(message);
@@ -570,55 +564,66 @@ const App = memo(({ signOut, user }) => {
         ? JSON.parse(localStorage.getItem('lastTokenIdentifier'))
         : '';
 
-      if (tokenidentifier === lastStoredTokenIdentifier) {
+      if (tokenidentifier === lastStoredTokenIdentifier) 
         return updatedMessages;
-      } else {
-        localStorage.setItem('lastTokenIdentifier', tokenidentifier);
-        // console.log('inputTokens:', inputTokenCount)
-        // console.log('outputTokens:', outputTokenCount)
-        updatedMessages[lastIndex] = {
-          ...updatedMessages[lastIndex],
-          isStreaming: false,
-          timestamp: new Date().toISOString(),
-          model: usedModel,
-          outputTokenCount: outputTokenCount,
-          inputTokenCount: inputTokenCount,
-          raw_message: messageStop,
-        };
 
-        const newInputTokens = existingInputTokens + inputTokenCount;
-        const newOutputTokens = existingOutputTokens + outputTokenCount;
+      localStorage.setItem('lastTokenIdentifier', tokenidentifier);
+      // console.log('inputTokens:', inputTokenCount)
+      // console.log('outputTokens:', outputTokenCount)
+      updatedMessages[lastIndex] = {
+        ...updatedMessages[lastIndex],
+        isStreaming: false,
+        timestamp: new Date().toISOString(),
+        model: usedModel,
+        outputTokenCount: outputTokenCount,
+        inputTokenCount: inputTokenCount,
+        raw_message: messageStop,
+      };
 
-        localStorage.setItem(`inputTokens-${currentDate}`, newInputTokens.toString());
-        localStorage.setItem(`outputTokens-${currentDate}`, newOutputTokens.toString());
+      const newInputTokens = existingInputTokens + inputTokenCount;
+      const newOutputTokens = existingOutputTokens + outputTokenCount;
 
-        setTotalInputTokens(newInputTokens);
-        setTotalOutputTokens(newOutputTokens);
-        if (updatedMessages.length > 0 && updatedMessages[updatedMessages.length - 1].role && updatedMessages[updatedMessages.length - 1].content) {
-          if (updatedMessages[updatedMessages.length - 1].role.includes('assistant') && updatedMessages[updatedMessages.length - 1].error && updatedMessages[updatedMessages.length - 1].error.trim() !== '') {
-            console.log('An error occurred: not adding to local storage');
-          } else {
-            // SDK TODO:  Strip any error messages from array?
-            console.log('SDK7656: updatedMessages')
-            console.log(updatedMessages)
-            console.log('SDK7656: END updatedMessages')
-            localStorage.setItem(`chatHistory-${appSessionid}`, JSON.stringify(updatedMessages));
-          }
+      localStorage.setItem(`inputTokens-${currentDate}`, newInputTokens.toString());
+      localStorage.setItem(`outputTokens-${currentDate}`, newOutputTokens.toString());
+
+      setTotalInputTokens(newInputTokens);
+      setTotalOutputTokens(newOutputTokens);
+      if (updatedMessages.length > 0 && updatedMessages[updatedMessages.length - 1].role && updatedMessages[updatedMessages.length - 1].content) {
+        if (updatedMessages[updatedMessages.length - 1].role.includes('assistant') && updatedMessages[updatedMessages.length - 1].error && updatedMessages[updatedMessages.length - 1].error.trim() !== '') {
+          console.log('An error occurred: not adding to local storage');
         } else {
-          console.log('No messages to save to local storage');
+          //Remove any error messages and the cooresponding message before (which is the user message) only for persistence 
+          const filteredMessages = updatedMessages.filter((message, index, array) => {
+            if (index > 0 && message.raw_message && message.raw_message.type === 'error') {
+              // Skip this message and the previous one
+              return false;
+            }
+            if (index < array.length - 1 && 
+                array[index + 1].raw_message && 
+                array[index + 1].raw_message.type === 'error') {
+              // Skip this message as it's followed by an error
+              return false;
+            }
+            return true;
+          });
+          //save conversation to local storage
+          localStorage.setItem(`chatHistory-${appSessionid}`, JSON.stringify(filteredMessages));
         }
-        return updatedMessages;
+      } else {
+        console.log('No messages to save to local storage');
       }
+      return updatedMessages;
     });
     scrollToBottom();
   };
 
   const onClearConversation = () => {
     setMessages([]);
-    clearConversationHistory()
-    setKBSessionId('')
+    setAttachments([]);
+    clearConversationHistory();
+    setKBSessionId('');
     localStorage.removeItem('kbSessionId');
-    localStorage.removeItem(`chatHistory-${appSessionid}`)
+    localStorage.removeItem(`chatHistory-${appSessionid}`);
     setPopupMessage('Conversation Cleared');
     setPopupType('success');
     setShowPopup(true);
@@ -690,7 +695,7 @@ const App = memo(({ signOut, user }) => {
         <div className="chat-history" ref={chatHistoryRef}>
           <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />
         </div>
-        <MessageInput appSessionid={appSessionid} onSend={onSend} disabled={isDisabled || isLoading} setIsDisabled={setIsDisabled} selectedMode={selectedMode} selectedKbMode={selectedKbMode} sendMessage={sendMessage} getCurrentSession={getCurrentSession} />
+        <MessageInput appSessionid={appSessionid} onSend={onSend} disabled={isDisabled || isLoading} setIsDisabled={setIsDisabled} selectedMode={selectedMode} selectedKbMode={selectedKbMode} sendMessage={sendMessage} getCurrentSession={getCurrentSession} attachments={attachments} setAttachments={setAttachments} />
         {showPopup && <Popup message={popupMessage}
           type={popupType}
           onClose={() => setShowPopup(false)}

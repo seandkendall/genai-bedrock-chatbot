@@ -35,62 +35,73 @@ export function sanitizeFileName(name) {
   return `${sanitizedFilename}${extension}`;
 }
 
-const MessageInput = ({ appSessionid, onSend, disabled, setIsDisabled, selectedMode, selectedKbMode, getCurrentSession }) => {
+const MessageInput = ({ appSessionid, onSend, disabled, setIsDisabled, selectedMode, selectedKbMode, getCurrentSession, attachments, setAttachments }) => {
   const [message, setMessage] = useState('');
-  const [attachments, setAttachments] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const handleAttachmentClick = () => {
-    fileInputRef.current.click();
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   const handleFiles = (files) => {
     const newAttachments = [];
-
+  
     for (const file of files) {
       if (attachments.length + newAttachments.length >= MAX_CONTENT_ITEMS) {
         alert(`You can only attach up to ${MAX_CONTENT_ITEMS} items in total.`);
         break;
       }
-
+  
+      // Check if the file name already exists in the attachments array
+      if (attachments.some(attachment => attachment.name === file.name)) {
+        // Check if the file sizes also match
+        if (attachments.some(attachment => attachment.name === file.name && attachment.size === file.size))
+          continue;
+          // Instruct the user to rename the file
+          alert(`Please rename the file "${file.name}" as it already exists in the attachments.`);
+          continue;
+      }
+  
       const fileExtension = file.name.split('.').pop().toLowerCase();
       const isImage = ['png', 'jpeg', 'jpg', 'gif', 'webp'].includes(fileExtension);
       const isDocument = ALLOWED_DOCUMENT_TYPES.includes(fileExtension);
-
+  
       // Block docx files with the specific MIME type
       if (fileExtension === 'docx' && file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         alert(`File type not allowed: ${file.type}`);
         continue;
       }
-
+  
       if (isImage && !selectedMode.allow_input_image) {
         alert('Image uploads are not allowed for this mode.');
         continue;
       }
-
+  
       if (isDocument && !selectedMode.allow_input_document) {
         alert('Document uploads are not allowed for this mode.');
         continue;
       }
-
+  
       if (!isImage && !isDocument) {
         alert(`File type not allowed: ${file.name}`);
         continue;
       }
-
+  
       if (isImage) {
         if (attachments.filter(a => a.type.startsWith('image/')).length + newAttachments.filter(a => a.type.startsWith('image/')).length >= MAX_IMAGES) {
           alert(`You can only attach up to ${MAX_IMAGES} images.`);
           continue;
         }
-
+  
         if (file.size > MAX_IMAGE_SIZE) {
           alert(`Image size must be no more than 3.75 MB: ${file.name}`);
           continue;
         }
-
+  
         const reader = new FileReader();
         reader.onload = () => {
           const img = new Image();
@@ -111,12 +122,12 @@ const MessageInput = ({ appSessionid, onSend, disabled, setIsDisabled, selectedM
           alert(`You can only attach up to ${MAX_DOCUMENTS} documents.`);
           continue;
         }
-
+  
         if (file.size > MAX_DOCUMENT_SIZE) {
           alert(`Document size must be no more than 4.5 MB: ${file.name}`);
           continue;
         }
-
+  
         newAttachments.push(file);
       }
     }
@@ -136,8 +147,7 @@ const MessageInput = ({ appSessionid, onSend, disabled, setIsDisabled, selectedM
     if (message.trim() || attachments.length > 0) {
       setIsDisabled(true);
       const uploadedAttachments = await Promise.all(attachments.map(uploadFileToS3));
-      console.log('SDK attachments should now be uploaded.. does it fail after: ')
-      onSend(message.trim(), uploadedAttachments, false);
+      onSend(message.trim() ? message.trim() : '?', uploadedAttachments, false);
       setMessage('');
       setAttachments([]);
     }
@@ -162,7 +172,6 @@ const MessageInput = ({ appSessionid, onSend, disabled, setIsDisabled, selectedM
       Object.keys(fields).forEach(key => formData.append(key, fields[key]));
       formData.append('file', file);
       await axios.post(url, formData);
-      console.log(`WELL SDK: ${url}${fields.key}`)
       return {
         name: sanitizeFileName(file.name),
         type: file.type,
@@ -185,7 +194,7 @@ const MessageInput = ({ appSessionid, onSend, disabled, setIsDisabled, selectedM
     } else if (e.key === 'Tab') {
       e.preventDefault();
       const { selectionStart, selectionEnd } = e.target;
-      const newMessage = message.substring(0, selectionStart) + '\t' + message.substring(selectionEnd);
+      const newMessage = `${message.substring(0, selectionStart)}\t${message.substring(selectionEnd)}`;
       setMessage(newMessage);
       setTimeout(() => {
         e.target.selectionStart = e.target.selectionEnd = selectionStart + 1;

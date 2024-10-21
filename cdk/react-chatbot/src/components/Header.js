@@ -127,9 +127,6 @@ const Header = ({
 
 
   const onSelectedModeChange = (event) => {
-    console.log('onSelectedModeChange')
-    console.log(event)
-    console.log('onSelectedModeChange DONE')
     if (event && event.target && event.target.value) {
       const [category, modeSelector] = event.target.value.split('%');
       let selectedObject = null;
@@ -155,11 +152,7 @@ const Header = ({
           selectedObject.category = category;
           break;
         case 'RELOAD':
-          console.log('triggering model reload...')
-          console.log(new Date())
           triggerModelScan();
-          console.log(new Date())
-          console.log('triggering model reload... Done')
           selectedObject = null;
           break;
           

@@ -10,15 +10,15 @@ const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages
     if (selectedMode) {
       let sessionId = user.username;
       if (selectedMode.category === 'Bedrock Agents') {
-        sessionId = sessionId + '-agents-' + selectedMode.agentAliasId;
+        sessionId = `${sessionId}-agents-${selectedMode.agentAliasId}`;
       } else if (selectedMode.category === 'Bedrock KnowledgeBases') {
-        sessionId = sessionId + '-kb-' + selectedMode.knowledgeBaseId;
+        sessionId = `${sessionId}-kb-${selectedMode.knowledgeBaseId}`;
       } else if (selectedMode.category === 'Bedrock Prompt Flow') {
-        sessionId = sessionId + '-pflow-' + selectedMode.id;
+        sessionId = `${sessionId}-pflow-${selectedMode.id}`;
       } else if (selectedMode.category === 'Bedrock Models') {
-        sessionId = sessionId + '-model-' + selectedMode.modelId;
+        sessionId = `${sessionId}-model-${selectedMode.modelId}`;
       } else if (selectedMode.category === 'Bedrock Image Models') {
-        sessionId = sessionId + '-image-' + selectedMode.modelId;
+        sessionId = `${sessionId}-image-${selectedMode.modelId}`;
       }
       if (sessionId !== appSessionid)
         setAppSessionId(sessionId);
@@ -30,7 +30,7 @@ const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages
         setMessages(chatHistory ? JSON.parse(chatHistory) : []);
         // Update loadedSessionId with the new sessionId
         loadedSessionId.current = sessionId;
-        console.log(`${Math.floor(100000 + Math.random() * 900000)} triggering a new load from the backend for sessionID: ${sessionId}`)
+        console.log(`triggering a new conversation load from the backend for sessionID: ${sessionId}`)
         loadConversationHistory(sessionId);
       }
     }
