@@ -520,17 +520,21 @@ const App = memo(({ signOut, user }) => {
 
   const updateMessages = (message) => {
     //if message starts with the text "\nBot: " then strip this from the message
-    if (message && message.delta && message.delta.text && message.delta.text.startsWith('\nBot: ')) {
+    if (message?.delta?.text?.startsWith('\nBot: ')) {
+      console.log('SDK stripping bot prefix. maybe not needed anymore?')
       message.delta.text = message.delta.text.substring(6);
     }
-    if (message && ((message.delta && message.delta.text))) {
+    if (message && ((message.delta?.text))) {
       setMessages((prevMessages) => {
 
         const updatedMessages = [...prevMessages ? prevMessages : []];
         const lastIndex = updatedMessages.length - 1;
         const lastMessage = updatedMessages[lastIndex];
+        if (lastMessage && !lastMessage.content) {
+          lastMessage.content = '';
+        }
         if (lastMessage && lastMessage.role === 'assistant') {
-          const newContent =  message.delta && message.delta.text ? lastMessage.content + message.delta.text : (message.error ? message.error : 'no content');
+          const newContent =  message.delta?.text ? lastMessage.content + message.delta.text : (message.error ? message.error : 'no content');
           updatedMessages[lastIndex] = {
             ...lastMessage,
             content: newContent,

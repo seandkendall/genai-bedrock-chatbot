@@ -60,11 +60,13 @@ const Header = ({
       try {
         // Attempt to parse the JSON string from localStorage
         savedOption = JSON.parse(localStorage.getItem('selectedMode'));
+        console.log('SDK: savedOption', savedOption) 
       } catch (error) {
         localStorage.removeItem('selectedMode')
       }
       if (savedOption) {
         onModeChange(savedOption);
+        console.log('SDK: savedOption on mode change', savedOption)
       }
     }
     if (selectedKbMode === null) {
@@ -127,7 +129,7 @@ const Header = ({
 
 
   const onSelectedModeChange = (event) => {
-    if (event && event.target && event.target.value) {
+    if (event?.target?.value) {
       const [category, modeSelector] = event.target.value.split('%');
       let selectedObject = null;
       switch (category) {
