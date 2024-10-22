@@ -13,6 +13,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -d) delete_flag=true; shift;;
         --branch) branch_name="$2"; shift 2;;
+        --allowlist) allowlist_pattern="$2"; shift 2;;
         *) echo "Unknown argument: $1"; shift;;
     esac
 done
@@ -22,17 +23,24 @@ delete_resources() {
     echo "Deleting existing resources..."
 
     # Delete CodeBuild project
+    echo "Deleting CodeBuild Project CodeBuild..."
     aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME
 
     # Delete CodeDeploy application and deployment group
+    echo "Deleting Deployment Group CodeDeploy..."
     aws deploy delete-deployment-group --application-name $CODEDEPLOY_APP_NAME --deployment-group-name $CODEDEPLOY_DEPLOYMENT_GROUP_NAME
+    echo "Deleting Application CodeDeploy..."
     aws deploy delete-application --application-name $CODEDEPLOY_APP_NAME
 
     # Delete associated IAM roles
+    echo "Deleting Role Policy CodeBuild..."
     aws iam delete-role-policy --role-name codebuild-$CODEBUILD_PROJECT_NAME-service-role --policy-name codebuild-base-policy
+    echo "Deleting Role CodeBuild..."
     aws iam delete-role --role-name codebuild-$CODEBUILD_PROJECT_NAME-service-role
-
+    
+    echo "Detaching Role Policy CodeDeploy..."
     aws iam detach-role-policy --role-name codedeploy-$CODEDEPLOY_APP_NAME-service-role --policy-arn arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
+    echo "Deleting Role CodeDeploy..."
     aws iam delete-role --role-name codedeploy-$CODEDEPLOY_APP_NAME-service-role
 
     echo "Existing resources deleted."
@@ -70,7 +78,7 @@ create_or_update_role \
     "codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
     '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codebuild.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
     "codebuild-base-policy" \
-    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
+    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
 
 # CodeDeploy role
 create_or_update_role \

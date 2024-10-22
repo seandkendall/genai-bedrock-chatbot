@@ -42,7 +42,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --headless)
-            run_bootstrap=true
+            run_bootstrap=false #TODO this needs to be true
             shift
             ;;
         *)
