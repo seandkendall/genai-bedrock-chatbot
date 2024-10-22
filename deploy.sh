@@ -26,6 +26,7 @@ fi
 
 
 # Parse command-line arguments
+POSITIONAL_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -a|--app) app_flag="--app $2"; shift 2;;
@@ -36,9 +37,23 @@ while [[ $# -gt 0 ]]; do
         -f|--force) force_flag="--force"; shift;;
         -v|--verbose) verbose_flag="--verbose"; shift;;
         -r|--role-arn) role_arn_flag="--role-arn $2"; shift 2;;
-        *) echo "Unknown argument: $1"; shift;;
+        --allowlist)
+            allowListDomain="$2"
+            shift 2
+            ;;
+        --headless)
+            run_bootstrap=true
+            shift
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
     esac
 done
+
+# Restore the positional arguments
+set -- "${POSITIONAL_ARGS[@]}"
 
 # Check if AWS CDK is installed
 if ! command -v cdk &> /dev/null
@@ -137,68 +152,38 @@ get_certificate_arn() {
 }
 
 
-# Check if cname exists, else prompt user
-cname=""
-certificate_arn=""
-# if [ -f cname.ref ]; then
-#   cname=$(cat cname.ref)
-# else
-#   read -p "Would you like to add a DNS CNAME Record for this website such as ai.example.com? You will still need to update your DNS manually after the deployment is complete (y/n) " add_cname
-#   case "$add_cname" in
-#     [yY][eE][sS]|[yY])
-#       while true; do
-#         read -p "Enter the CNAME here (e.g., api.example.com): " cname
-#         if [[ "$cname" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]+$ ]]; then
-#           echo "$cname" > cname.ref
-#           certificate_arn=$(get_certificate_arn "$cname")
-#           if [ -n "$certificate_arn" ]; then
-#             echo "Found certificate ARN: $certificate_arn"
-#             break
-#           else
-#             echo "No certificate found for $cname or *.$cname One will be created"
-#             certificate_arn=""
-#           fi
-#         else
-#           echo "Error: Invalid CNAME format. Please try again."
-#         fi
-#       done
-#       ;;
-#     *)
-#       echo "" > cname.ref
-#       ;;
-#   esac
-# fi
-
 # Check if allowlistDomain exists, else prompt user
-allowListDomain=""
-if [ -f allowlistdomain.ref ]; then
-  allowListDomain=$(cat allowlistdomain.ref)
-else
-  read -p "Would you like to add one or more email domains to an allowlist for user registration? (y/n) " add_allowlist
-  case "$add_allowlist" in
-    [yY][eE][sS]|[yY])
-      while true; do
-        read -p "Enter the allowlist domains separated by commas (Example: @amazon.com,@example.ca): " allowListDomain
-        valid=true
-        IFS=',' read -ra domains <<< "$allowListDomain"
-        for domain in "${domains[@]}"; do
-          if ! [[ "$domain" =~ ^@?[a-zA-Z0-9.-]+$ ]]; then
-            valid=false
-            break
-          fi
-        done
-        if $valid; then
-          echo "$allowListDomain" > allowlistdomain.ref
-          break
-        else
-          echo "Error: Invalid domain format. Please try again."
-        fi
-      done
-      ;;
-    *)
-      echo "" > allowlistdomain.ref
-      ;;
-  esac
+if [ -z "$allowListDomain" ]; then
+    if [ -n "$run_bootstrap" ]; then
+        # If --headless flag is used, assume add_allowlist is false
+        allowListDomain=""
+    else
+        read -p "Would you like to add one or more email domains to an allowlist for user registration? (y/n) " add_allowlist
+        case "$add_allowlist" in
+            [yY][eE][sS]|[yY])
+                while true; do
+                    read -p "Enter the allowlist domains separated by commas (Example: @amazon.com,@example.ca): " allowListDomain
+                    valid=true
+                    IFS=',' read -ra domains <<< "$allowListDomain"
+                    for domain in "${domains[@]}"; do
+                        if ! [[ "$domain" =~ ^@?[a-zA-Z0-9.-]+$ ]]; then
+                            valid=false
+                            break
+                        fi
+                    done
+                    if $valid; then
+                        echo "$allowListDomain" > allowlistdomain.ref
+                        break
+                    else
+                        echo "Error: Invalid domain format. Please try again."
+                    fi
+                done
+                ;;
+            *)
+                echo "" > allowlistdomain.ref
+                ;;
+        esac
+    fi
 fi
 
 ./recreate-python-lambda-layer.sh
@@ -220,36 +205,39 @@ bootstrap_ref_file="bootstrap.ref"
 if [ -f "$bootstrap_ref_file" ]; then
     echo "Skipping CDK bootstrap process."
 else
-    read -p "Do you want to run cdk Bootstrap now (if you don't know, assume Yes)? (y/n) " run_bootstrap
-    case "$run_bootstrap" in
-        [yY][eE][sS]|[yY])
-            echo "Running CDK bootstrap..."
-            if [ -n "$cname" ] && [ "$cname" != "None" ] && [ "$cname" != "null" ]; then
-                cdk bootstrap --require-approval never --context cname="$cname" --context certificate_arn="$certificate_arn" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain"
-            else
+    if [ -n "$run_bootstrap" ]; then
+        # If --headless flag is used, run cdk bootstrap
+        echo "Running CDK bootstrap..."
+        cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain"
+        if [ $? -eq 0 ]; then
+            echo "CDK bootstrap completed successfully."
+        else
+            echo "Failed to run CDK bootstrap."
+            exit 1
+        fi
+    else
+        read -p "Do you want to run cdk Bootstrap now (if you don't know, assume Yes)? (y/n) " run_bootstrap
+        case "$run_bootstrap" in
+            [yY][eE][sS]|[yY])
+                echo "Running CDK bootstrap..."
                 cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain"
-            fi
-            
-            if [ $? -eq 0 ]; then
-                echo "CDK bootstrap completed successfully."
-            else
-                echo "Failed to run CDK bootstrap."
-                exit 1
-            fi
-            ;;
-        *)
-            echo "Skipping CDK bootstrap process."
-            ;;
-    esac
+                if [ $? -eq 0 ]; then
+                    echo "CDK bootstrap completed successfully."
+                else
+                    echo "Failed to run CDK bootstrap."
+                    exit 1
+                fi
+                ;;
+            *)
+                echo "Skipping CDK bootstrap process."
+                ;;
+        esac
+    fi
 fi
 touch "$bootstrap_ref_file"
 
 # Deploy the CDK app
-if [ -n "$cname" ] && [ "$cname" != "None" ] && [ "$cname" != "null" ]; then
-    cdk deploy --outputs-file outputs.json --context cname="$cname" --context certificate_arn="$certificate_arn" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
-else
-    cdk deploy --outputs-file outputs.json --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
-fi
+cdk deploy --outputs-file outputs.json --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
 if [ $? -ne 0 ]; then
     echo "Error: CDK deployment failed. Exiting script."
     exit 1
@@ -344,11 +332,7 @@ fi
 
 # Go back to the parent directory
 cd ..
-if [ -n "$cname" ] && [ "$cname" != "None" ] && [ "$cname" != "null" ]; then
-    cdk deploy --outputs-file outputs.json --context cname="$cname" --context certificate_arn="$certificate_arn" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
-else
-    cdk deploy --outputs-file outputs.json --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
-fi
+cdk deploy --outputs-file outputs.json --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
 if [ $? -ne 0 ]; then
     echo -e "${RED_COLOR}Error: CDK deployment failed. Exiting script.${DEFAULT_COLOR}"
     exit 1
@@ -359,8 +343,3 @@ cd ..
 echo -e "${GREEN_COLOR}Deployment complete!${DEFAULT_COLOR}"
 # tell user to visit the url: awschatboturl
 echo -e "${GREEN_COLOR}Visit the chatbot here: ${awschatboturl}${DEFAULT_COLOR}"
-#if cname is not null and not empty, then print cname
-if [ -n "$cname" ] && [ "$cname" != "None" ] && [ "$cname" != "null" ]; then
-    echo -e "${GREEN_COLOR}Or you can use your DNS Entry: ${cname}${DEFAULT_COLOR}"
-    echo -e "${DEFAULT_COLOR}The DNS entry will only work if you have configured your DNS correctly${DEFAULT_COLOR}"
-fi
