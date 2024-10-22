@@ -441,7 +441,7 @@ const App = memo(({ signOut, user }) => {
       if (typeof message === 'string' && message.includes('You have not been allow-listed for this application')) {
         handleError(message);
       } else if (message.type === 'message_start') {
-        const model = message?.['message'].model
+        const model = message?.message?.model
         setUsedModel(model)
         updateMessages(message);
       } else if (message.type === 'content_block_delta') {
