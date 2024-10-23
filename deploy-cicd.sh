@@ -84,11 +84,22 @@ start_time=$(date +%s)
 end_time=$((start_time + TIMEOUT))
 
 while [ $(date +%s) -lt $end_time ]; do
-    if aws codebuild list-projects --query "projects[?contains(name, '$CODEBUILD_PROJECT_NAME')] | [0]" --output text &>/dev/null; then
-        echo "Project '$CODEBUILD_PROJECT_NAME' found"
-        echo "Deployment resources created successfully."
-        break
+    echo "Checking for project '$CODEBUILD_PROJECT_NAME'..."
+    project_output=$(aws codebuild list-projects --query "projects[?contains(name, '$CODEBUILD_PROJECT_NAME')] | [0]" --output text)
+    project_exit_code=$?
+
+    if [ $project_exit_code -eq 0 ]; then
+        if [ -n "$project_output" ]; then
+            echo "Project '$CODEBUILD_PROJECT_NAME' found"
+            echo "Deployment resources created successfully."
+            break
+        else
+            echo "Project '$CODEBUILD_PROJECT_NAME' not found in the output."
+        fi
+    else
+        echo "Error listing projects. Exit code: $project_exit_code"
     fi
+
     sleep $INTERVAL
 done
 
