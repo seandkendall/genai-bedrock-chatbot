@@ -45,8 +45,8 @@ create_or_update_role() {
         echo "Waiting for role creation..."
         aws iam wait role-exists --role-name "$role_name"
         aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
-        sleep 1
     fi
+    sleep 1
 }
 
 # Create or update IAM roles
@@ -58,7 +58,6 @@ create_or_update_role \
     '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codebuild.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
     "codebuild-base-policy" \
     '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["ecr:*","ssm:*","apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
-sleep 1
 
 # Create CodeBuild project
 echo "Creating CodeBuild project..."
@@ -74,7 +73,8 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --source "$source_config" \
     --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
     --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/standard:7.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
-    --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
+    --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role" 
+
 sleep 1
 # wait for the project $CODEBUILD_PROJECT_NAME to be created
 TIMEOUT=60
