@@ -34,20 +34,19 @@ create_or_update_role() {
     local policy_name=$3
     local policy_document=$4
 
-    if aws iam get-role --role-name "$role_name" &>/dev/null; then
+    # Check if the role exists
+    if aws iam get-role --role-name "$role_name" 2>/dev/null; then
         echo "Updating existing role: $role_name"
-        aws iam update-assume-role-policy --role-name "$role_name" --policy-document "$assume_role_policy"
-        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document"
+        aws iam update-assume-role-policy --role-name "$role_name" --policy-document "$assume_role_policy" 
+        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     else
         echo "Creating new role: $role_name"
-        aws iam create-role --role-name "$role_name" --assume-role-policy-document "$assume_role_policy"
-        
+        aws iam create-role --role-name "$role_name" --assume-role-policy-document "$assume_role_policy" 
         echo "Waiting for role creation..."
         aws iam wait role-exists --role-name "$role_name"
-        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document"
+        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     fi
 }
-
 
 # Create or update IAM roles
 echo "Creating or updating IAM roles..."
