@@ -47,21 +47,6 @@ create_or_update_role() {
         echo "Waiting for role creation..."
         aws iam wait role-exists --role-name "$role_name"
         aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
-        echo "Getting policy 1"
-        echo "$(aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name")"
-        sleep 1
-        echo "Getting policy 2"
-        echo "$(aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name")"
-        sleep 1
-        echo "Getting policy 3"
-        echo "$(aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name")"
-        sleep 1
-        echo "Getting policy 4"
-        echo "$(aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name")"
-        sleep 1
-        echo "Getting policy 5"
-        echo "$(aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name")"
-        sleep 1
     fi
     sleep 2
 }
@@ -99,7 +84,7 @@ INTERVAL=2
 
 start_time=$(date +%s)
 end_time=$((start_time + TIMEOUT))
-build_success=False 
+build_success=false 
 
 
 while [ $(date +%s) -lt $end_time ]; do
@@ -109,7 +94,7 @@ while [ $(date +%s) -lt $end_time ]; do
     if echo "$raw_output" | grep -q "$CODEBUILD_PROJECT_NAME"; then
         echo "Project '$CODEBUILD_PROJECT_NAME' found"
         echo "Deployment resources created successfully."
-        build_success=True
+        build_success=true
         break
     fi
     sleep $INTERVAL
