@@ -102,19 +102,29 @@ build_success=False
 
 while [ $(date +%s) -lt $end_time ]; do
     echo "Checking for project '$CODEBUILD_PROJECT_NAME'..."
-    project_output=$(aws codebuild list-projects --query "if_else(projects==null, null, projects[?contains(name, '$CODEBUILD_PROJECT_NAME')] | [0].name || 'null')" --output text)
-    project_exit_code=$?
+    raw_output=$(aws codebuild list-projects)
+    raw_exit_code=$?
 
-    if [ $project_exit_code -eq 0 ]; then
-        if [ "$project_output" != "null" ]; then
-            echo "Project '$CODEBUILD_PROJECT_NAME' found"
-            echo "Deployment resources created successfully."
-            break
+    if [ $raw_exit_code -eq 0 ]; then
+        echo "Raw output from 'aws codebuild list-projects':"
+        echo "$raw_output"
+
+        project_output=$(echo "$raw_output" | jq -r '.projects[] | select(.name | contains("'$CODEBUILD_PROJECT_NAME'")) | .name // "null"')
+        project_exit_code=$?
+
+        if [ $project_exit_code -eq 0 ]; then
+            if [ "$project_output" != "null" ]; then
+                echo "Project '$CODEBUILD_PROJECT_NAME' found"
+                echo "Deployment resources created successfully."
+                break
+            else
+                echo "Project '$CODEBUILD_PROJECT_NAME' not found."
+            fi
         else
-            echo "Project '$CODEBUILD_PROJECT_NAME' not found."
+            echo "Error filtering projects. Exit code: $project_exit_code"
         fi
     else
-        echo "Error listing projects. Exit code: $project_exit_code"
+        echo "Error listing projects. Exit code: $raw_exit_code"
     fi
 
     sleep $INTERVAL
