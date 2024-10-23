@@ -82,6 +82,8 @@ INTERVAL=2
 
 start_time=$(date +%s)
 end_time=$((start_time + TIMEOUT))
+build_success=False 
+
 
 while [ $(date +%s) -lt $end_time ]; do
     echo "Checking for project '$CODEBUILD_PROJECT_NAME'..."
@@ -92,6 +94,7 @@ while [ $(date +%s) -lt $end_time ]; do
         if [ -n "$project_output" ]; then
             echo "Project '$CODEBUILD_PROJECT_NAME' found"
             echo "Deployment resources created successfully."
+            build_success=True
             break
         else
             echo "Project '$CODEBUILD_PROJECT_NAME' not found in the output."
@@ -102,9 +105,10 @@ while [ $(date +%s) -lt $end_time ]; do
 
     sleep $INTERVAL
 done
-
-# Start the CodeBuild project build
-echo "Starting CodeBuild project build..."
-aws codebuild start-build --project-name $CODEBUILD_PROJECT_NAME
-echo "Build Started..."
+if [ "$build_success" = true ]; then
+    # Start the CodeBuild project build
+    echo "Starting CodeBuild project build..."
+    aws codebuild start-build --project-name $CODEBUILD_PROJECT_NAME
+    echo "Build Started..."
+fi
 
