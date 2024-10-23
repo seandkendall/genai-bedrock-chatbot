@@ -95,5 +95,9 @@ aws deploy create-deployment-group \
     --deployment-group-name $CODEDEPLOY_DEPLOYMENT_GROUP_NAME \
     --service-role-arn "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codedeploy-$CODEDEPLOY_APP_NAME-service-role" \
     
-
 echo "Deployment resources created successfully."
+# Start the CodeBuild project build
+echo "Starting CodeBuild project build..."
+aws codebuild start-build --project-name $CODEBUILD_PROJECT_NAME
+echo "Build Started..."
+
