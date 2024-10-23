@@ -110,14 +110,15 @@ while [ $(date +%s) -lt $end_time ]; do
         echo "Project '$CODEBUILD_PROJECT_NAME' found"
         echo "Deployment resources created successfully."
         build_success=True
-        if [ "$build_success" = true ]; then
-            # Start the CodeBuild project build
-            echo "Starting CodeBuild project build..."
-            aws codebuild start-build --project-name $CODEBUILD_PROJECT_NAME
-            echo "Build Started..."
-        fi
         break
     fi
     sleep $INTERVAL
 done
+
+if [ "$build_success" = true ]; then
+    # Start the CodeBuild project build
+    echo "Starting CodeBuild project build..."
+    aws codebuild start-build --project-name $CODEBUILD_PROJECT_NAME
+    echo "Build Started..."
+fi
 
