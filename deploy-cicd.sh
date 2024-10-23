@@ -102,7 +102,7 @@ build_success=False
 
 while [ $(date +%s) -lt $end_time ]; do
     echo "Checking for project '$CODEBUILD_PROJECT_NAME'..."
-    project_output=$(aws codebuild list-projects --query "projects[?contains(name, '$CODEBUILD_PROJECT_NAME')] | [0].name || 'null'" --output text)
+    project_output=$(aws codebuild list-projects --query "if_else(projects==null, null, projects[?contains(name, '$CODEBUILD_PROJECT_NAME')] | [0].name || 'null')" --output text)
     project_exit_code=$?
 
     if [ $project_exit_code -eq 0 ]; then
