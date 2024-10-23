@@ -80,17 +80,19 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
 # wait for the project $CODEBUILD_PROJECT_NAME to be created
 TIMEOUT=60
 INTERVAL=2
-time_elapsed=0
-while [ $time_elapsed -lt $TIMEOUT ]; do
-    if aws codebuild list-projects --query "projects[?contains(name, '$CODEBUILD_PROJECT_NAME')] | [0]" --output text; then
+
+start_time=$(date +%s)
+end_time=$((start_time + TIMEOUT))
+
+while [ $(date +%s) -lt $end_time ]; do
+    if aws codebuild list-projects --query "projects[?contains(name, '$CODEBUILD_PROJECT_NAME')] | [0]" --output text &>/dev/null; then
         echo "Project '$CODEBUILD_PROJECT_NAME' found"
+        echo "Deployment resources created successfully."
         break
     fi
     sleep $INTERVAL
-    time_elapsed=$((time_elapsed + INTERVAL))
 done
-    
-echo "Deployment resources created successfully."
+
 # Start the CodeBuild project build
 echo "Starting CodeBuild project build..."
 aws codebuild start-build --project-name $CODEBUILD_PROJECT_NAME
