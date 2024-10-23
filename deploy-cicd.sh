@@ -38,11 +38,11 @@ create_or_update_role() {
     if aws iam get-role --role-name "$role_name" 2>/dev/null; then
         echo "Updating existing role: $role_name"
         aws iam update-assume-role-policy --role-name "$role_name" --policy-document "$assume_role_policy" 
-        # aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
+        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     else
         echo "Creating new role: $role_name"
         aws iam create-role --role-name "$role_name" --assume-role-policy-document "$assume_role_policy" 
-        # aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
+        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     fi
 }
 
