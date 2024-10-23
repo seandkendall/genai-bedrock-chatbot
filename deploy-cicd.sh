@@ -1,5 +1,5 @@
 #!/bin/bash
-
+export AWS_PAGER=""
 # GitHub repository URL
 REPO_URL="https://github.com/seandkendall/genai-bedrock-chatbot"
 
@@ -21,29 +21,9 @@ done
 # Function to delete existing resources
 delete_resources() {
     echo "Deleting existing resources..."
-
-    # Delete CodeBuild project
-    echo "Deleting CodeBuild Project CodeBuild..."
-    aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME
-
-    # Delete CodeDeploy application and deployment group
-    echo "Deleting Deployment Group CodeDeploy..."
-    aws deploy delete-deployment-group --application-name $CODEDEPLOY_APP_NAME --deployment-group-name $CODEDEPLOY_DEPLOYMENT_GROUP_NAME
-    echo "Deleting Application CodeDeploy..."
-    aws deploy delete-application --application-name $CODEDEPLOY_APP_NAME
-
-    # Delete associated IAM roles
-    echo "Deleting Role Policy CodeBuild..."
-    aws iam delete-role-policy --role-name codebuild-$CODEBUILD_PROJECT_NAME-service-role --policy-name codebuild-base-policy
-    echo "Deleting Role CodeBuild..."
-    aws iam delete-role --role-name codebuild-$CODEBUILD_PROJECT_NAME-service-role
-    
-    echo "Detaching Role Policy CodeDeploy..."
-    aws iam detach-role-policy --role-name codedeploy-$CODEDEPLOY_APP_NAME-service-role --policy-arn arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
-    echo "Deleting Role CodeDeploy..."
-    aws iam delete-role --role-name codedeploy-$CODEDEPLOY_APP_NAME-service-role
-
-    echo "Existing resources deleted."
+    aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 
+    aws deploy delete-deployment-group --application-name $CODEDEPLOY_APP_NAME --deployment-group-name $CODEDEPLOY_DEPLOYMENT_GROUP_NAME 
+    aws deploy delete-application --application-name $CODEDEPLOY_APP_NAME 
 }
 
 # Check for delete flag
@@ -61,12 +41,12 @@ create_or_update_role() {
     # Check if the role exists
     if aws iam get-role --role-name "$role_name" 2>/dev/null; then
         echo "Updating existing role: $role_name"
-        aws iam update-assume-role-policy --role-name "$role_name" --policy-document "$assume_role_policy"
-        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document"
+        aws iam update-assume-role-policy --role-name "$role_name" --policy-document "$assume_role_policy" 
+        # aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     else
         echo "Creating new role: $role_name"
-        aws iam create-role --role-name "$role_name" --assume-role-policy-document "$assume_role_policy"
-        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document"
+        aws iam create-role --role-name "$role_name" --assume-role-policy-document "$assume_role_policy" 
+        # aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     fi
 }
 
@@ -101,17 +81,19 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --source "$source_config" \
     --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
     --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/standard:7.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
-    --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role"
+    --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
+    
 
 # Create CodeDeploy application
 echo "Creating CodeDeploy application..."
-aws deploy create-application --application-name $CODEDEPLOY_APP_NAME
+aws deploy create-application --application-name $CODEDEPLOY_APP_NAME 
 
 # Create CodeDeploy deployment group
 echo "Creating CodeDeploy deployment group..."
 aws deploy create-deployment-group \
     --application-name $CODEDEPLOY_APP_NAME \
     --deployment-group-name $CODEDEPLOY_DEPLOYMENT_GROUP_NAME \
-    --service-role-arn "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codedeploy-$CODEDEPLOY_APP_NAME-service-role"
+    --service-role-arn "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codedeploy-$CODEDEPLOY_APP_NAME-service-role" \
+    
 
 echo "Deployment resources created successfully."
