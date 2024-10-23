@@ -46,7 +46,7 @@ create_or_update_role() {
         aws iam wait role-exists --role-name "$role_name"
         aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     fi
-    sleep 1
+    sleep 2
 }
 
 # Create or update IAM roles
@@ -87,17 +87,16 @@ build_success=False
 
 while [ $(date +%s) -lt $end_time ]; do
     echo "Checking for project '$CODEBUILD_PROJECT_NAME'..."
-    project_output=$(aws codebuild list-projects --query "projects[?contains(name, '$CODEBUILD_PROJECT_NAME')] | [0]" --output text)
+    project_output=$(aws codebuild list-projects --query "projects[?contains(name, '$CODEBUILD_PROJECT_NAME')] | [0].name || 'null'" --output text)
     project_exit_code=$?
 
     if [ $project_exit_code -eq 0 ]; then
-        if [ -n "$project_output" ]; then
+        if [ "$project_output" != "null" ]; then
             echo "Project '$CODEBUILD_PROJECT_NAME' found"
             echo "Deployment resources created successfully."
-            build_success=True
             break
         else
-            echo "Project '$CODEBUILD_PROJECT_NAME' not found in the output."
+            echo "Project '$CODEBUILD_PROJECT_NAME' not found."
         fi
     else
         echo "Error listing projects. Exit code: $project_exit_code"
@@ -105,6 +104,7 @@ while [ $(date +%s) -lt $end_time ]; do
 
     sleep $INTERVAL
 done
+
 if [ "$build_success" = true ]; then
     # Start the CodeBuild project build
     echo "Starting CodeBuild project build..."
