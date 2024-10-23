@@ -20,9 +20,9 @@ done
 delete_resources() {
     echo "Deleting existing resources..."
     aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 
-    # aws iam get-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-$CODEBUILD_PROJECT_NAME-policy"
-    aws iam detach-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-arn arn:aws:iam::$(aws sts get-caller-identity --query "Account" --output text):policy/codebuild-$CODEBUILD_PROJECT_NAME-policy
-    aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-$CODEBUILD_PROJECT_NAME-policy"
+    codebuild-genai-bedrock-chatbot-build-service-role
+    codebuild-genai-bedrock-chatbot-build-policy
+    aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-base-policy"
     aws iam delete-role --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role"
 }
 
@@ -113,19 +113,13 @@ while [ $(date +%s) -lt $end_time ]; do
         echo "Raw output from 'aws codebuild list-projects':"
         echo "$raw_output"
 
-        project_output=$(echo "$raw_output" | jq -r '.projects[] | select(. == "'$CODEBUILD_PROJECT_NAME'") | .[]')
-        project_exit_code=$?
-
-        if [ $project_exit_code -eq 0 ]; then
-            if [ -n "$project_output" ]; then
-                echo "Project '$CODEBUILD_PROJECT_NAME' found"
-                echo "Deployment resources created successfully."
-                break
-            else
-                echo "Project '$CODEBUILD_PROJECT_NAME' not found."
-            fi
+        project_output=$(echo "$raw_output" | grep -o '"projects":\[[^]]*\]' | sed 's/^"projects":\[//;s/\]$//')
+        if echo "$project_output" | grep -q "$CODEBUILD_PROJECT_NAME"; then
+            echo "Project '$CODEBUILD_PROJECT_NAME' found"
+            echo "Deployment resources created successfully."
+            break
         else
-            echo "Error filtering projects. Exit code: $project_exit_code"
+            echo "Project '$CODEBUILD_PROJECT_NAME' not found."
         fi
     else
         echo "Error listing projects. Exit code: $raw_exit_code"
