@@ -5,8 +5,6 @@ REPO_URL="https://github.com/seandkendall/genai-bedrock-chatbot"
 
 # Project names
 CODEBUILD_PROJECT_NAME="genai-bedrock-chatbot-build"
-CODEDEPLOY_APP_NAME="genai-bedrock-chatbot-app"
-CODEDEPLOY_DEPLOYMENT_GROUP_NAME="genai-bedrock-chatbot-deployment-group"
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -22,8 +20,6 @@ done
 delete_resources() {
     echo "Deleting existing resources..."
     aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 
-    aws deploy delete-deployment-group --application-name $CODEDEPLOY_APP_NAME --deployment-group-name $CODEDEPLOY_DEPLOYMENT_GROUP_NAME 
-    aws deploy delete-application --application-name $CODEDEPLOY_APP_NAME 
 }
 
 # Check for delete flag
@@ -58,14 +54,8 @@ create_or_update_role \
     "codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
     '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codebuild.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
     "codebuild-base-policy" \
-    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["ssm:*","apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
+    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["ecr:*","ssm:*","apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
 
-# CodeDeploy role
-create_or_update_role \
-    "codedeploy-$CODEDEPLOY_APP_NAME-service-role" \
-    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codedeploy.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
-    "codedeploy-base-policy" \
-    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["s3:*","ec2:*","iam:*","cloudformation:*"]}]}'
 
 # Create CodeBuild project
 echo "Creating CodeBuild project..."
@@ -83,17 +73,6 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/standard:7.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
     --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
     
-
-# Create CodeDeploy application
-echo "Creating CodeDeploy application..."
-aws deploy create-application --application-name $CODEDEPLOY_APP_NAME 
-
-# Create CodeDeploy deployment group
-echo "Creating CodeDeploy deployment group..."
-aws deploy create-deployment-group \
-    --application-name $CODEDEPLOY_APP_NAME \
-    --deployment-group-name $CODEDEPLOY_DEPLOYMENT_GROUP_NAME \
-    --service-role-arn "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codedeploy-$CODEDEPLOY_APP_NAME-service-role" \
     
 echo "Deployment resources created successfully."
 # Start the CodeBuild project build
