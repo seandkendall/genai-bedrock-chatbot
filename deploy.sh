@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+echo -e "SDK: this is the start!"
 # Define colors
 has_colors() {
     local has_colors=false
@@ -42,7 +43,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --headless)
-            skip_bootstrap=true
+            run_bootstrap=true
             shift
             ;;
         *)
@@ -201,8 +202,8 @@ python3 -m pip install -r requirements.txt
 
 # Check if CDK bootstrap has been completed
 bootstrap_ref_file="bootstrap.ref"
-# if skip_bootstrap exists and is true or --headless flag is used, skip bootstrap
-if [ -f "$bootstrap_ref_file" ] || [ "$skip_bootstrap" = true ]; then
+
+if [ -f "$bootstrap_ref_file" ]; then
     echo "Skipping CDK bootstrap process."
 else
     if [ -n "$run_bootstrap" ]; then
