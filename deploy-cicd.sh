@@ -109,11 +109,11 @@ while [ $(date +%s) -lt $end_time ]; do
         echo "Raw output from 'aws codebuild list-projects':"
         echo "$raw_output"
 
-        project_output=$(echo "$raw_output" | jq -r '.projects[] | select(.name | contains("'$CODEBUILD_PROJECT_NAME'")) | .name // "null"')
+        project_output=$(echo "$raw_output" | jq -r '.projects[] | select(. == "'$CODEBUILD_PROJECT_NAME'") | .[]')
         project_exit_code=$?
 
         if [ $project_exit_code -eq 0 ]; then
-            if [ "$project_output" != "null" ]; then
+            if [ -n "$project_output" ]; then
                 echo "Project '$CODEBUILD_PROJECT_NAME' found"
                 echo "Deployment resources created successfully."
                 break
