@@ -3,6 +3,37 @@
 
 ## Tdlr;
 > [!NOTE]
+> For a quick start, use the [CI/CD](https://docs.aws.amazon.com/prescriptive-guidance/latest/strategy-cicd-litmus/understanding-cicd.html) script which will set-up a [CodeBuild](https://aws.amazon.com/codebuild/) project, automating the deployment.
+> 1. Login to [your AWS account](https://console.aws.amazon.com/console/home)
+> 2. Click the [AWS CloudShell](https://aws.amazon.com/cloudshell/) Icon
+>> ![AWS CloudShell Icon](./readme-images/AWSCloudShell-Icon.png)
+>> A Terminal Will open at the bottom of your screen
+>> ![AWS CloudShell Window](./readme-images/AWSCloudShell-Window.png)
+>> This terminal is already configured to execute commands againt your AWS account
+> 3. Clone the git repository and "Change Directory" into the cloned git repository (commands below)
+> ```bash
+> git clone https://github.com/seandkendall/genai-bedrock-chatbot.git --depth 1
+> cd genai-bedrock-chatbot
+> ```
+> 4. Finally run the ./deploy-cicd.sh script which will create a CodeBuild project, and automatically deploy the Chatbot
+>> Option 1: Deploy using a domain allow-list
+>> ```bash
+>> ./deploy-cicd.sh --allowlist @example.com,@example.ca
+>> ```
+>> Option 2: Deploy without an allowlist (anyone can register for the chatbot)
+>> ```bash
+>> ./deploy-cicd.sh
+>> ```
+> 5. Navigate to your CodeBuild console to view the status and the logs
+> [CodeBuild History](https://console.aws.amazon.com/codesuite/codebuild/projects/genai-bedrock-chatbot-build/history)
+> 6. Navigate to your CloudFormations console to view the chatbot URL
+> [CloudFormations Outputs](https://console.aws.amazon.com/cloudformation/home#/stacks/outputs?filteringText=&filteringStatus=active&viewNested=true&stackId=ChatbotWebsiteStack)
+> Your Chatbot URL is the URL value beside 'AWSChatBotURL'
+> ![CloudFormations Stack Outputs](./readme-images/CloudFormationsStackOutputs.png)
+
+
+## Cloud9 Non-CI/CD Deployment (If you still have access)
+> [!NOTE]
 > Use [Cloud9](https://aws.amazon.com/pm/cloud9) for a fast start, using any instance size larger than a 'small' size.
 > 
 > Not all AWS accounts (Speficically new AWS accounts) have access to Cloud9 since the anouncement:
