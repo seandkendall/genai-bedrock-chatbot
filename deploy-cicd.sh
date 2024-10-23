@@ -45,6 +45,21 @@ create_or_update_role() {
         echo "Waiting for role creation..."
         aws iam wait role-exists --role-name "$role_name"
         aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
+        echo "Getting policy 1"
+        echo "$(aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name")"
+        sleep 1
+        echo "Getting policy 2"
+        echo "$(aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name")"
+        sleep 1
+        echo "Getting policy 3"
+        echo "$(aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name")"
+        sleep 1
+        echo "Getting policy 4"
+        echo "$(aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name")"
+        sleep 1
+        echo "Getting policy 5"
+        echo "$(aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name")"
+        sleep 1
     fi
     sleep 2
 }
