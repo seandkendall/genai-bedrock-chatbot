@@ -117,6 +117,7 @@ while [ $(date +%s) -lt $end_time ]; do
             echo "Build Started..."
         fi
         break
+    fi
     sleep $INTERVAL
 done
 
