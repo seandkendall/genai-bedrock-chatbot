@@ -48,7 +48,7 @@ create_or_update_role() {
         aws iam wait role-exists --role-name "$role_name"
         aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     fi
-    sleep 2
+    sleep 5
 }
 
 # Create or update IAM roles
