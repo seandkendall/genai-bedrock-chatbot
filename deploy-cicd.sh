@@ -109,6 +109,7 @@ while [ $(date +%s) -lt $end_time ]; do
     if echo "$raw_output" | grep -q "$CODEBUILD_PROJECT_NAME"; then
         echo "Project '$CODEBUILD_PROJECT_NAME' found"
         echo "Deployment resources created successfully."
+        build_success=True
         break
     sleep $INTERVAL
 done
