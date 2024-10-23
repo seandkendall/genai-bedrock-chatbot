@@ -42,6 +42,10 @@ create_or_update_role() {
     else
         echo "Creating new role: $role_name"
         aws iam create-role --role-name "$role_name" --assume-role-policy-document "$assume_role_policy" 
+        # Wait for the role to be created
+        while [[ $(aws iam get-role --role-name "$role_name" --query 'Role.RoleName' --output text) != "$role_name" ]]; do
+            echo "Waiting for role creation..."
+            sleep 2
         aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     fi
 }
@@ -72,7 +76,19 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
     --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/standard:7.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
     --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
-    
+
+# wait for the project $CODEBUILD_PROJECT_NAME to be created
+TIMEOUT=60
+INTERVAL=2
+time_elapsed=0
+while [ $time_elapsed -lt $TIMEOUT ]; do
+    if aws codebuild list-projects --query "projects[?contains(name, '$CODEBUILD_PROJECT_NAME')] | [0]" --output text; then
+        echo "Project '$CODEBUILD_PROJECT_NAME' found"
+        break
+    fi
+    sleep $INTERVAL
+    time_elapsed=$((time_elapsed + INTERVAL))
+done
     
 echo "Deployment resources created successfully."
 # Start the CodeBuild project build
