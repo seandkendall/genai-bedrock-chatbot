@@ -78,7 +78,7 @@ create_or_update_role \
     "codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
     '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codebuild.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
     "codebuild-base-policy" \
-    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
+    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["ssm:*","apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
 
 # CodeDeploy role
 create_or_update_role \
@@ -91,16 +91,16 @@ create_or_update_role \
 echo "Creating CodeBuild project..."
 source_config="{\"type\": \"GITHUB\", \"location\": \"$REPO_URL\""
 if [ -n "$branch_name" ]; then
-    source_config="$source_config, \"gitCloneDepth\": 1, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: 3.8\n      nodejs: 12\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - yum update -y\n      - yum install -y jq\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - git checkout $branch_name\n      - cd cdk\n      - python3 -m venv .venv\n      - source .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh --headless --allowlist @amazon.com,@amazon.\""
+    source_config="$source_config, \"gitCloneDepth\": 1, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: latest\n      nodejs: latest\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - git checkout $branch_name\n      - cd cdk\n      - cdk --version\n      - python3 -m venv .venv\n      - . .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh --headless --allowlist @amazon.com,@amazon.\""
 else
-    source_config="$source_config, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: 3.8\n      nodejs: 12\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - yum update -y\n      - yum install -y jq\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - cd cdk\n      - python3 -m venv .venv\n      - source .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh --headless --allowlist @amazon.com,@amazon.\""
+    source_config="$source_config, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: latest\n      nodejs: latest\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - cd cdk\n      - cdk --version\n      - python3 -m venv .venv\n      - . .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh --headless --allowlist @amazon.com,@amazon.\""
 fi
 source_config="$source_config}"
 
 aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --source "$source_config" \
     --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
-    --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/amazonlinux2-x86_64-standard:3.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
+    --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/standard:7.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
     --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role"
 
 # Create CodeDeploy application
