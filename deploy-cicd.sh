@@ -20,6 +20,10 @@ done
 delete_resources() {
     echo "Deleting existing resources..."
     aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 
+    # aws iam get-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-$CODEBUILD_PROJECT_NAME-policy"
+    aws iam detach-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-arn arn:aws:iam::$(aws sts get-caller-identity --query "Account" --output text):policy/codebuild-$CODEBUILD_PROJECT_NAME-policy
+    aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-$CODEBUILD_PROJECT_NAME-policy"
+    aws iam delete-role --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role"
 }
 
 # Check for delete flag
