@@ -226,6 +226,7 @@ class ChatbotWebsiteStack(Stack):
         apigwv2.WebSocketStage(self, "mystage",
             web_socket_api=websocket_api,
             stage_name="ws",
+            auto_deploy=True
         )
         
         
