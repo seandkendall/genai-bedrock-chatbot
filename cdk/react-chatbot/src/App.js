@@ -694,6 +694,7 @@ const App = memo(({ signOut, user }) => {
           isRefreshing={isRefreshing}
           user={user}
           allowlist={allowlist}
+          region={region}
         />
         <div className="chat-history" ref={chatHistoryRef}>
           <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />
