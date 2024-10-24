@@ -46,7 +46,8 @@ const Header = ({
   triggerModelScan,
   isRefreshing,
   user,
-  allowlist
+  allowlist,
+  modelsLoaded
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
 
@@ -406,7 +407,7 @@ const Header = ({
         {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
       </AppBar>
       {/* {if models is null or empty} */}
-      {(!models || models.length === 0) && (
+      {(modelsLoaded && (!models || models.length === 0)) && (
         <Box
           sx={{
             width: '100%',

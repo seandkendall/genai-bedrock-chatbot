@@ -73,6 +73,7 @@ const App = memo(({ signOut, user }) => {
   const [imageModels, setImageModels] = useState([]);
   const [kbModels, setKbModels] = useState([]);
   const [promptFlows, setPromptFlows] = useState([]);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
 
   const [appSessionid, setAppSessionId] = useState('');
   const [kbSessionId, setKBSessionId] = useState('');
@@ -496,6 +497,7 @@ const App = memo(({ signOut, user }) => {
         if (message.load_models?.text_models){
           setIsRefreshing(false);
         }
+        setModelsLoaded(true)
       } else if (message.type === 'conversation_history') {
         // Do nothing, UseEffect will handle this 
       } else if (message.type === 'modelscan') {
@@ -694,6 +696,7 @@ const App = memo(({ signOut, user }) => {
           isRefreshing={isRefreshing}
           user={user}
           allowlist={allowlist}
+          modelsLoaded={modelsLoaded}
         />
         <div className="chat-history" ref={chatHistoryRef}>
           <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />
