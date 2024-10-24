@@ -417,7 +417,7 @@ const Header = ({
           </Typography>
           <Typography>
             Already enabled Models? 
-            <Button onClick={triggerModelScan}>Refresh Model List</Button>
+            <IconButton onClick={triggerModelScan}>Refresh Model List</IconButton>
           </Typography>
         </Box>
       )}
