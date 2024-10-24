@@ -102,7 +102,7 @@ def validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
             return True, ''
     else:
         return True, ''
-    return False, f'You have not been allow-listed for this application. You require a domain containing: {allowlist_domain}', None
+    return False, f'You have not been allow-listed for this application. You require a domain containing: {allowlist_domain}'
         
 
 def get_user_attributes(cognito_client, user_cache, access_token):

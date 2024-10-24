@@ -519,11 +519,6 @@ const App = memo(({ signOut, user }) => {
   }, [lastMessage]);
 
   const updateMessages = (message) => {
-    //if message starts with the text "\nBot: " then strip this from the message
-    if (message?.delta?.text?.startsWith('\nBot: ')) {
-      console.log('SDK stripping bot prefix. maybe not needed anymore?')
-      message.delta.text = message.delta.text.substring(6);
-    }
     if (message && ((message.delta?.text))) {
       setMessages((prevMessages) => {
 

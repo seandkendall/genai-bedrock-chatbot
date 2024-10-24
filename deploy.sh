@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-echo -e "SDK: this is the start!"
 # Define colors
 has_colors() {
     local has_colors=false
