@@ -46,17 +46,13 @@ const Header = ({
   triggerModelScan,
   isRefreshing,
   user,
-  allowlist,
-  region
+  allowlist
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
 
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
   const isMobile = useMediaQuery('(max-width:600px)');
-  allowlist = "@amazon.com,@k5l."
-  // model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
-  const model_access_url = `https://${region}.console.aws.amazon.com/bedrock/home?region=${region}#/modelaccess`
   
 
   
@@ -413,7 +409,7 @@ const Header = ({
           }}
         >
           <Typography>
-            No models are currently active. Enable models by visiting: {model_access_url}
+            No models are currently active. Enable models by visiting: https://console.aws.amazon.com/bedrock/home#/modelaccess
           </Typography>
           <Typography>
             Already enabled Models? 
