@@ -45,13 +45,17 @@ const Header = ({
   onSelectedKbMode,
   triggerModelScan,
   isRefreshing,
-  user
+  user,
+  allowlist
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
 
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
   const isMobile = useMediaQuery('(max-width:600px)');
+  allowlist = "@amazon.com,@k5l."
+
+  
   // load selectedMode from local storage
   // biome-ignore lint/correctness/useExhaustiveDependencies: Dependencies not needed
     useEffect(() => {
@@ -94,6 +98,15 @@ const Header = ({
 
   const truncateText = (text, maxLength) => {
     return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
+  };
+
+  const isUserAllowed = () => {
+    if (!allowlist || !user?.signInDetails?.loginId) return true;
+    
+    const userEmail = user.signInDetails.loginId.toLowerCase();
+    const allowedPatterns = allowlist.split(',').map(pattern => pattern.trim().toLowerCase());
+    
+    return allowedPatterns.some(pattern => userEmail.includes(pattern));
   };
   
   const renderSelectOptions = (options, maxLength) => {
@@ -369,7 +382,7 @@ const Header = ({
             <IconButton color="inherit" onClick={() => handleOpenSettingsModal()}>
               <FaCog />
             </IconButton>
-            <IconButton color="inherit" onClick={onClearConversation} disabled={disabled || (!selectedMode) || (selectedMode.category === "Bedrock KnowledgeBases" && !selectedKbMode)}>
+            <IconButton color="inherit" onClick={onClearConversation} disabled={disabled || (allowlist && !isUserAllowed()) || (!selectedMode) || (selectedMode.category === "Bedrock KnowledgeBases" && !selectedKbMode)}>
               <FaBroom />
             </IconButton>
             <IconButton color="inherit" onClick={handleMenuOpen} disabled={disabled}>
@@ -386,6 +399,21 @@ const Header = ({
         </Toolbar>
         {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
       </AppBar>
+      {allowlist && user?.signInDetails?.loginId && !isUserAllowed() && (
+        <Box
+          sx={{
+            width: '100%',
+            backgroundColor: '#f44336',
+            color: 'white',
+            padding: '12px',
+            textAlign: 'center',
+          }}
+        >
+          <Typography>
+            You have not been allow listed for this application. Your email must match one of the allowed values: {allowlist}
+          </Typography>
+        </Box>
+      )}
       {isRefreshing && (
         <Box
           sx={{

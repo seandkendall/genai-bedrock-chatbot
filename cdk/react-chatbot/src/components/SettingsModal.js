@@ -23,7 +23,8 @@ const SettingsModal = ({
     heightWidth,
     setHeightWidth,
     onModeChange,
-    selectedMode
+    selectedMode,
+    setAllowList
 }) => {
     const theme = useTheme();
     const [error, setError] = useState('');
@@ -195,6 +196,7 @@ const SettingsModal = ({
                         updateLocalState('systemSystemPrompt', response.systemPrompt || '');
                         updateSystemPrompt('system', response.systemPrompt ?? localState.systemSystemPrompt);
                         setEventBridgeScheduleEnabled(response.eventbridge_scheduler_enabled || true )
+                        setAllowList(response.allowlist || '')
                     } else if (response.config_type === 'user') {
                         const newStylePreset = response.stylePreset || 'photographic';
                         const newHeightWidth = response.heightWidth || '1024x1024';

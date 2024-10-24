@@ -85,6 +85,8 @@ const App = memo(({ signOut, user }) => {
   const [previousSentMessage, setPreviousSentMessage] = useState({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [attachments, setAttachments] = useState([]);
+  const [allowlist, setAllowList] = useState([]);
+  
   
 
 
@@ -691,6 +693,7 @@ const App = memo(({ signOut, user }) => {
           triggerModelScan={triggerModelScan}
           isRefreshing={isRefreshing}
           user={user}
+          allowlist={allowlist}
         />
         <div className="chat-history" ref={chatHistoryRef}>
           <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />
@@ -722,6 +725,7 @@ const App = memo(({ signOut, user }) => {
             setHeightWidth={setHeightWidth}
             onModeChange={handleModeChange}
             selectedMode={selectedMode}
+            setAllowList={setAllowList}
           />
         </Suspense>
       </div>

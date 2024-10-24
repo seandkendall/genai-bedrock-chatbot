@@ -165,7 +165,9 @@ def load_config(user, config_type):
         config['config_type'] = config_type
         if 'system' in user:
             config['region'] = region
+            config['allowlist'] = allowlist_domain
             config['eventbridge_scheduler_enabled'] = is_eventbridge_schedule_enabled()
+            
         return {
             'statusCode': 200,
             'body': json.dumps(config)
