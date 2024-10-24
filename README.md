@@ -1,8 +1,13 @@
 # AWS Chatbot Application with Bedrock Agents and Claude-3
 <!-- MD formats here: https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax -->
 
+> [!TIP]
+> [Tldr; Click here for the quick deploy guide](#quick-deploy-solution)
+
 <details>
-<summary>**Tdlr; Quick Deploy Solution (With CI/CD)**</summary>
+<summary>Tdlr; Quick Deploy Solution (With CI/CD)</summary>
+
+#Quick Deploy Solution
 
 For a quick start, use the [CI/CD](https://docs.aws.amazon.com/prescriptive-guidance/latest/strategy-cicd-litmus/understanding-cicd.html) script which will set-up a [CodeBuild](https://aws.amazon.com/codebuild/) project, automating the deployment.
 
@@ -33,6 +38,16 @@ cd genai-bedrock-chatbot
 ./deploy-cicd.sh
 ```
 
+**Option 3:** Deploy using a domain allow-list, but delete old CodeBuild resources first
+```bash
+./deploy-cicd.sh -d --allowlist @example.com,@example.ca
+```
+
+**Option 4:** Deploy from a branch using a domain allow-list, but delete old CodeBuild resources first
+```bash
+./deploy-cicd.sh -d --allowlist @example.com,@example.ca --branch feature_branch
+```
+
 5. Navigate to your CodeBuild console to view the status and the logs
 
 [CodeBuild History](https://console.aws.amazon.com/codesuite/codebuild/projects/genai-bedrock-chatbot-build/history)
@@ -47,9 +62,12 @@ Your Chatbot URL is the URL value beside 'AWSChatBotURL'
 
 </details>
 
+> [!WARNING]
+> Cloud9 is only available in older AWS accounts. If you do not have access to Cloud9, try deploying this solution locally or with [CI/CD](#quick-deploy-solution)
+> [Learn More About Cloud9](https://aws.amazon.com/blogs/devops/how-to-migrate-from-aws-cloud9-to-aws-ide-toolkits-or-aws-cloudshell/)
 
 <details>
-<summary> **Cloud9 Non-CI/CD Deployment (If you still have access)** </summary>
+<summary> Cloud9 Non-CI/CD Deployment (If you still have access) </summary>
 Use [Cloud9](https://aws.amazon.com/pm/cloud9) for a fast start, using any instance size larger than a 'small' size.
  
 Not all AWS accounts (Speficically new AWS accounts) have access to Cloud9 since the anouncement:
