@@ -102,10 +102,18 @@ const Header = ({
 
   const isUserAllowed = () => {
     if (!allowlist || !user?.signInDetails?.loginId) return true;
-    const userEmail = user.signInDetails.loginId.toLowerCase();
-    const allowedPatterns = allowlist.split(',').map(pattern => pattern.trim().toLowerCase());
+    
+    const userEmail = user.signInDetails.loginId.toLowerCase();    
+    // Ensure allowlist is a string before calling split
+    console.log('SDK allowlist')
+    console.log(allowlist)
+    const allowedPatterns = (typeof allowlist === 'string')
+      ? allowlist.toLowerCase().split(',').map(pattern => pattern.trim())
+      : [];
+    
     return allowedPatterns.some(pattern => userEmail.includes(pattern));
   };
+  
   
   const renderSelectOptions = (options, maxLength) => {
     return options.flatMap(({ title, data }) =>
