@@ -105,5 +105,6 @@ if [ "$build_success" = true ]; then
     echo "Starting CodeBuild project build..."
     aws codebuild start-build --project-name $CODEBUILD_PROJECT_NAME
     echo "Build Started..."
+    echo "View Build status here: https://console.aws.amazon.com/codesuite/codebuild/projects/genai-bedrock-chatbot-build/history"
 fi
 
