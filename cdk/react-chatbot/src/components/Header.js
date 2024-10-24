@@ -46,7 +46,8 @@ const Header = ({
   triggerModelScan,
   isRefreshing,
   user,
-  allowlist
+  allowlist,
+  region
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
 
@@ -54,6 +55,9 @@ const Header = ({
   const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
   const isMobile = useMediaQuery('(max-width:600px)');
   allowlist = "@amazon.com,@k5l."
+  // model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
+  const model_access_url = `https://${region}.console.aws.amazon.com/bedrock/home?region=${region}#/modelaccess`
+  
 
   
   // load selectedMode from local storage
@@ -134,8 +138,6 @@ const Header = ({
       ] : []
     );
   };
-
-
 
   const onSelectedModeChange = (event) => {
     if (event?.target?.value) {
@@ -218,10 +220,12 @@ const Header = ({
   const handleInfoTooltipClose = () => {
     setShowInfoTooltip(false);
   };
+
   const calculateDailyCost = () => {
     const dailyCost = (totalOutputTokens * (pricePer1000OutputTokens / 1000)) + (totalInputTokens * (pricePer1000InputTokens / 1000));
     return dailyCost.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   }
+
   const calculateMonthlyCost = () => {
     const dailyCost = (monthlyOutputTokens * (pricePer1000OutputTokens / 1000)) + (monthlyInputTokens * (pricePer1000InputTokens / 1000));
     return dailyCost.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -397,6 +401,27 @@ const Header = ({
         </Toolbar>
         {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
       </AppBar>
+      {/* {if models is null or empty} */}
+      {(!models || models.length === 0) && (
+        <Box
+          sx={{
+            width: '100%',
+            backgroundColor: '#f44336',
+            color: 'white',
+            padding: '12px',
+            textAlign: 'center',
+          }}
+        >
+          <Typography>
+            No models are currently active. Enable models by visiting: {model_access_url}
+          </Typography>
+          <Typography>
+            Already enabled Models? 
+            <Button onClick={triggerModelScan}>Refresh Model List</Button>
+          </Typography>
+        </Box>
+      )}
+
       {allowlist && user?.signInDetails?.loginId && !isUserAllowed() && (
         <Box
           sx={{
