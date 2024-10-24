@@ -101,11 +101,18 @@ const Header = ({
   };
 
   const isUserAllowed = () => {
+    console.log('SDK isUserAllowed DEBUG 1')
     if (!allowlist || !user?.signInDetails?.loginId) return true;
-    
+    console.log('SDK isUserAllowed DEBUG 2')
     const userEmail = user.signInDetails.loginId.toLowerCase();
+    console.log('SDK isUserAllowed DEBUG 3')
+    console.log(userEmail)
     const allowedPatterns = allowlist.split(',').map(pattern => pattern.trim().toLowerCase());
-    
+    console.log('SDK isUserAllowed DEBUG 4')
+    console.log(allowedPatterns)
+    console.log('SDK isUserAllowed DEBUG 5')
+    console.log(allowedPatterns.some(pattern => userEmail.includes(pattern)))
+    console.log('SDK isUserAllowed DEBUG 6')
     return allowedPatterns.some(pattern => userEmail.includes(pattern));
   };
   
@@ -424,6 +431,18 @@ const Header = ({
         >
           <Typography>
             You have not been allow listed for this application. Your email must match one of the allowed values: {allowlist}
+          </Typography>
+          <Typography>
+            allowlist: {allowlist}
+          </Typography>
+          <Typography>
+            user: {user}
+          </Typography>
+          <Typography>
+            loginID: {user?.signInDetails?.loginId}
+          </Typography>
+          <Typography>
+            isUserAllowed: {isUserAllowed()}
           </Typography>
         </Box>
       )}
