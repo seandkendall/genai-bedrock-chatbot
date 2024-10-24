@@ -406,19 +406,6 @@ const Header = ({
         </Toolbar>
         {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
       </AppBar>
-      <Box
-        sx={{
-          width: '100%',
-          backgroundColor: '#f44336',
-          color: 'white',
-          padding: '12px',
-          textAlign: 'center',
-        }}
-      >
-        <Typography>
-          Allowlist test {allowlist}
-        </Typography>
-      </Box>
       {allowlist && user?.signInDetails?.loginId && !isUserAllowed() && (
         <Box
           sx={{
@@ -431,18 +418,6 @@ const Header = ({
         >
           <Typography>
             You have not been allow listed for this application. Your email must match one of the allowed values: {allowlist}
-          </Typography>
-          <Typography>
-            allowlist: {allowlist}
-          </Typography>
-          <Typography>
-            user: {user}
-          </Typography>
-          <Typography>
-            loginID: {user?.signInDetails?.loginId}
-          </Typography>
-          <Typography>
-            isUserAllowed: {isUserAllowed()}
           </Typography>
         </Box>
       )}
