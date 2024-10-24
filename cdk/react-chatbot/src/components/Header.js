@@ -406,6 +406,19 @@ const Header = ({
         </Toolbar>
         {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
       </AppBar>
+      <Box
+          sx={{
+            width: '100%',
+            backgroundColor: '#f44336',
+            color: 'white',
+            padding: '12px',
+            textAlign: 'center',
+          }}
+        >
+          <Typography>
+            {models}
+          </Typography>
+        </Box>
       {/* {if models is null or empty} */}
       {(modelsLoaded && (!models || models.length === 0)) && (
         <Box

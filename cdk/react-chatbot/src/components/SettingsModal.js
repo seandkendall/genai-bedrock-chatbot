@@ -195,7 +195,13 @@ const SettingsModal = ({
                         updateLocalState('pricePer1000OutputTokens', response.pricePer1000OutputTokens || pricePer1000OutputTokens);
                         updateLocalState('systemSystemPrompt', response.systemPrompt || '');
                         updateSystemPrompt('system', response.systemPrompt ?? localState.systemSystemPrompt);
-                        setEventBridgeScheduleEnabled(response.eventbridge_scheduler_enabled || true )
+                        console.log('SDK SYSTEM RESP')
+                        console.log(response)
+                        if (response.eventbridge_scheduler_enabled === true) {
+                            setEventBridgeScheduleEnabled(true)
+                        } else {
+                            setEventBridgeScheduleEnabled(false)
+                        }
                         setAllowList(response.allowlist || '')
                     } else if (response.config_type === 'user') {
                         const newStylePreset = response.stylePreset || 'photographic';
