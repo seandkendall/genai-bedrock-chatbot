@@ -52,9 +52,6 @@ const Header = ({
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
   const isMobile = useMediaQuery('(max-width:600px)');
-  console.log('USER:')
-  console.log(user)
-  console.log('USER END ')
   // load selectedMode from local storage
   // biome-ignore lint/correctness/useExhaustiveDependencies: Dependencies not needed
     useEffect(() => {
@@ -290,13 +287,14 @@ const Header = ({
               title={
                 <Box>
                   <Typography>Solution Designed and Built by Sean Kendall</Typography>
+                  {user?.signInDetails?.loginId && <Typography>You are Logged in as: {user?.signInDetails?.loginId}</Typography>}
                   <Typography>Active Model/Mode: {getHeaderLabel()}</Typography>
                   <Typography>App Session ID: {appSessionid}</Typography>
                   {kbSessionId && <Typography>KnowledgeBase Session ID: {kbSessionId}</Typography>}
                   <Typography>Total Input/Output Tokens (Bedrock only): {totalInputTokens}/{totalOutputTokens}</Typography>
                   <Typography>Bedrock Cost (Today): {calculateDailyCost()} USD</Typography>
                   {monthlyInputTokens > 0 && <Typography>Bedrock Cost (Current Month): {calculateMonthlyCost()} USD</Typography>}
-                  <Typography></Typography>
+                  <Typography> </Typography>
                 </Box>
               }
               open={showInfoTooltip}
