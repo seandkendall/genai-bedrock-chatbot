@@ -690,6 +690,7 @@ const App = memo(({ signOut, user }) => {
           onSelectedKbMode={onSelectedKbMode}
           triggerModelScan={triggerModelScan}
           isRefreshing={isRefreshing}
+          user={user}
         />
         <div className="chat-history" ref={chatHistoryRef}>
           <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />

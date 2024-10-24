@@ -45,13 +45,16 @@ const Header = ({
   onSelectedKbMode,
   triggerModelScan,
   isRefreshing,
+  user
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
 
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
   const isMobile = useMediaQuery('(max-width:600px)');
-
+  console.log('USER:')
+  console.log(user)
+  console.log('USER END ')
   // load selectedMode from local storage
   // biome-ignore lint/correctness/useExhaustiveDependencies: Dependencies not needed
     useEffect(() => {
