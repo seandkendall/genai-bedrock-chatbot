@@ -399,6 +399,19 @@ const Header = ({
         </Toolbar>
         {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
       </AppBar>
+      <Box
+        sx={{
+          width: '100%',
+          backgroundColor: '#f44336',
+          color: 'white',
+          padding: '12px',
+          textAlign: 'center',
+        }}
+      >
+        <Typography>
+          Allowlist test {allowlist}
+        </Typography>
+      </Box>
       {allowlist && user?.signInDetails?.loginId && !isUserAllowed() && (
         <Box
           sx={{
