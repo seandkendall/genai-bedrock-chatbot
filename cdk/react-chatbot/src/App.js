@@ -86,7 +86,7 @@ const App = memo(({ signOut, user }) => {
   const [previousSentMessage, setPreviousSentMessage] = useState({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [attachments, setAttachments] = useState([]);
-  const [allowlist, setAllowList] = useState([]);
+  const [allowlist, setAllowList] = useState(null);
   
   
 
@@ -488,11 +488,11 @@ const App = memo(({ signOut, user }) => {
           setImageModels(message.load_models.image_models)
         if (message.load_models.kb_models)
           setKbModels(message.load_models.kb_models)
-        if (message.load_knowledge_bases && message.load_knowledge_bases.knowledge_bases)
+        if (message.load_knowledge_bases?.knowledge_bases)
           setBedrockKnowledgeBases(message.load_knowledge_bases.knowledge_bases)
-        if (message.load_agents && message.load_agents.agents)
+        if (message.load_agents?.agents)
           setBedrockAgents(message.load_agents.agents)
-        if (message.load_prompt_flows && message.load_prompt_flows.prompt_flows)
+        if (message.load_prompt_flows?.prompt_flows)
           setPromptFlows(message.load_prompt_flows.prompt_flows)
         if (message.load_models?.text_models){
           setIsRefreshing(false);
