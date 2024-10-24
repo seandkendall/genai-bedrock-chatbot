@@ -427,7 +427,7 @@ const Header = ({
         </Box>
       )}
 
-      {allowlist && user?.signInDetails?.loginId && !isUserAllowed() && (
+      {user && allowlist && user?.signInDetails?.loginId && !isUserAllowed() && (
         <Box
           sx={{
             width: '100%',
