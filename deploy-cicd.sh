@@ -74,7 +74,7 @@ source_config="$source_config}"
 aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --source "$source_config" \
     --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
-    --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/standard:7.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
+    --environment "{\"type\": \"ARM_CONTAINER\", \"image\": \"aws/codebuild/standard:7.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
     --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role" 
 
 sleep 1
