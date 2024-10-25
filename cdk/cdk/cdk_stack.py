@@ -185,7 +185,7 @@ class ChatbotWebsiteStack(Stack):
         # add cors to attachment_bucket
         attachment_bucket.add_cors_rule(
             allowed_methods=[s3.HttpMethods.GET, s3.HttpMethods.POST, s3.HttpMethods.PUT],
-            allowed_origins=[f"https://{cloudfront_distribution_domain_name}"],
+            allowed_origins=["*"],
             allowed_headers=["*"],
             exposed_headers=['ETag'],
             max_age=3600
