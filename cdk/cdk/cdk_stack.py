@@ -2,6 +2,7 @@ from aws_cdk import ( # type: ignore
     Stack, Duration, CfnOutput,
     aws_s3 as s3,
     aws_lambda as _lambda,
+    aws_lambda_python_alpha as lambda_python,
     aws_s3_deployment as s3deploy,
     aws_cloudfront as cloudfront,
     aws_dynamodb as dynamodb,
@@ -52,9 +53,9 @@ class ChatbotWebsiteStack(Stack):
             has_certificate_arn_condition = True
 
         # Create a Lambda layer for the Boto3 library
-        boto3_layer = _lambda.LayerVersion(
+        boto3_layer = lambda_python.PythonLayerVersion(
             self, "Boto3Layer",
-            code=_lambda.Code.from_asset("lambda_functions/python_layer"),
+            entry="lambda_functions/python_layer2",
             compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
             compatible_architectures=[_lambda.Architecture.ARM_64],
             description="Boto3 library with  PyJWT django pytz requests used for arm64/3.12"

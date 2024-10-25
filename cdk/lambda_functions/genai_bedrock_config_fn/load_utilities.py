@@ -188,6 +188,7 @@ def load_models(bedrock_client, table):
 
         # Process to keep only the latest version of each model
         available_text_models = keep_latest_versions(text_models)
+        print('SDK NOW IMAGE')
         available_image_models = keep_latest_versions(image_models)
 
         # Update the models with DynamoDB config
@@ -208,6 +209,8 @@ def load_models(bedrock_client, table):
         return []
 
 def keep_latest_versions(models):
+    print('SDK NEXT CHANGE MODELS')
+    print(models)
     latest_models = {}
     for model in models:
         model_key = (model['providerName'], model['modelName'])

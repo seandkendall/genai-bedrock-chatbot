@@ -406,31 +406,46 @@ const Header = ({
       </AppBar>
       {(modelsLoaded && (!models || models.filter(item => item.is_active === true || !('is_active' in item).length === 0))) && (
         <Box
-          sx={{
-            width: '100%',
-            backgroundColor: '#f44336',
-            color: 'white',
-            padding: '12px',
-            textAlign: 'center',
-          }}
-        >
-          <Typography>
-            No models are currently active. Enable models by visiting the{' '}
-            <Link
-              href="https://console.aws.amazon.com/bedrock/home#/modelaccess"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Amazon Bedrock Model Access page
-            </Link>
-            .
-          </Typography>
-
-          <Typography>
-            Already enabled Models? 
-            <Button onClick={triggerModelScan}>Refresh Model List</Button>
-          </Typography>
-        </Box>
+        sx={{
+          width: '100%',
+          backgroundColor: '#f44336',
+          color: 'white',
+          padding: '12px',
+          textAlign: 'center',
+        }}
+      >
+        <Typography>
+          No models are currently active. Enable models by visiting the{' '}
+          <Link
+            href="https://console.aws.amazon.com/bedrock/home#/modelaccess"
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ color: 'white', textDecoration: 'underline' }}
+          >
+            Amazon Bedrock Model Access page
+          </Link>
+          
+        </Typography>
+        
+        <Typography>
+          Already enabled Models?{' '}
+          <Button
+            onClick={triggerModelScan}
+            variant="contained"
+            color="primary"
+            sx={{
+              backgroundColor: 'white',
+              color: '#f44336',
+              '&:hover': {
+                backgroundColor: '#e0e0e0',
+              },
+            }}
+          >
+            Refresh Model List
+          </Button>
+        </Typography>
+      </Box>
+      
       )}
 
       {user && allowlist && user?.signInDetails?.loginId && !isUserAllowed() && (
