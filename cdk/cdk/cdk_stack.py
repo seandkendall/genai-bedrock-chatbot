@@ -600,6 +600,7 @@ class ChatbotWebsiteStack(Stack):
 
         # Export CloudFormation outputs
         CfnOutput(self, "AWSChatBotURL", value='https://'+cloudfront_distribution_domain_name)
+        CfnOutput(self, "s3bucket", value=website_content_bucket.bucket_name)
         CfnOutput(self, "region", value=self.region)
         CfnOutput(self, "user_pool_id", value=user_pool.user_pool_id)
         CfnOutput(self, "user_pool_client_id", value=user_pool_client.user_pool_client_id)

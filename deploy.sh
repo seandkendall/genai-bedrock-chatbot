@@ -253,9 +253,12 @@ fi
 # Extract values from outputs.json
 websocketapiendpoint=$(jq -r '.ChatbotWebsiteStack.websocketapiendpoint' ./outputs.json)
 region=$(jq -r '.ChatbotWebsiteStack.region' ./outputs.json)
+s3bucket=$(jq -r '.ChatbotWebsiteStack.s3bucket' ./outputs.json)
 userpoolid=$(jq -r '.ChatbotWebsiteStack.userpoolid' ./outputs.json)
 userpoolclientid=$(jq -r '.ChatbotWebsiteStack.userpoolclientid' ./outputs.json)
 awschatboturl=$(jq -r '.ChatbotWebsiteStack.AWSChatBotURL' ./outputs.json)
+# print s3bucket value
+echo "SDK s3bucket: $s3bucket"
 
 # Generate ./react-chatbot/src/variables.js
 mkdir -p ./react-chatbot/src/
