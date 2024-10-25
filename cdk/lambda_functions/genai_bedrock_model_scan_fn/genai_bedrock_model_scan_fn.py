@@ -168,8 +168,7 @@ def scan_for_active_models():
                     logger.exception(e)
                     logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
         if 'IMAGE' in output_modalities:
-            results[model_id]['TEXT'] = True
-            test_image_model(model_id)
+            results[model_id]['TEXT'] = test_image_model(model_id)
             
     # iterate through results. 
     for model_id, model_info in results.items():
@@ -194,17 +193,20 @@ def load_pdf():
     with open('./25.pdf', 'rb') as f:
         return f.read()
 def test_image_model(model_id):
-    print(model_id)
+    """ tests image model for access"""
     if 'titan' in model_id:
         image_base64 = commons.generate_image_titan(logger,bedrock_runtime,model_id, 'dog', None, None,5)
-        print('SDK test_image_model 1:')
-        print(image_base64)
+        if image_base64 is None:
+            return False
+        return True
     elif 'stability' in model_id:
         image_base64 = commons.generate_image_stable_diffusion(logger,bedrock_runtime,model_id, 'dog', None, None,None,5,10)
-        print('SDK test_image_model 2:')
-        print(image_base64)
+        if image_base64 is None:
+            return False
+        return True
     else:
         raise ValueError(f"Unsupported model: {model_id}")
+    return False
 def update_dynamodb(results):
     """ updates config in dynamodb """
     try:
