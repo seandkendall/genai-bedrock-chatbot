@@ -68,9 +68,7 @@ def scan_for_active_models():
     """ Scans for active models in Bedrock """
     try:
         
-        list_foundation_models_response = bedrock.list_foundation_models(
-            byInferenceType='ON_DEMAND'
-        )
+        list_foundation_models_response = bedrock.list_foundation_models(byInferenceType='ON_DEMAND')
         print('SDK DEBUG MODEL SCAN 1')
         print(list_foundation_models_response)
         print('SDK DEBUG MODEL SCAN 1 END')

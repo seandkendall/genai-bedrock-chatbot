@@ -132,7 +132,7 @@ def load_prompt_flows(bedrock_agent_client, table):
 
 def load_models(bedrock_client, table):
     try:
-        response = bedrock_client.list_foundation_models()
+        response = bedrock_client.list_foundation_models(byInferenceType='ON_DEMAND')
         print('SDK DEBUG 1:')
         print(response)
         print('SDK DEBUG 1 END')
