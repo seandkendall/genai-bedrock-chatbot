@@ -65,10 +65,13 @@ create_or_update_role \
 echo "Creating CodeBuild project..."
 source_config="{\"type\": \"GITHUB\", \"location\": \"$REPO_URL\""
 if [ -n "$branch_name" ]; then
-    source_config="$source_config, \"gitCloneDepth\": 1, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: latest\n      nodejs: latest\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - git checkout $branch_name\n      - cd cdk\n      - cdk --version\n      - python3 -m venv .venv\n      - . .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh --headless --allowlist @amazon.com,@amazon.\""
+    allowlist_option=$([ -n "$allowlist_pattern" ] && echo "--allowlist $allowlist_pattern" || echo "")
+    source_config="$source_config, \"gitCloneDepth\": 1, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: latest\n      nodejs: latest\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - git checkout $branch_name\n      - cd cdk\n      - cdk --version\n      - python3 -m venv .venv\n      - . .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh --headless $allowlist_option\""
 else
-    source_config="$source_config, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: latest\n      nodejs: latest\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - cd cdk\n      - cdk --version\n      - python3 -m venv .venv\n      - . .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh --headless --allowlist @amazon.com,@amazon.\""
+    allowlist_option=$([ -n "$allowlist_pattern" ] && echo "--allowlist $allowlist_pattern" || echo "")
+    source_config="$source_config, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: latest\n      nodejs: latest\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - cd cdk\n      - cdk --version\n      - python3 -m venv .venv\n      - . .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh --headless $allowlist_option\""
 fi
+
 source_config="$source_config}"
 
 aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \

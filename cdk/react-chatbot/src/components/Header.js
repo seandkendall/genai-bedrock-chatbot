@@ -444,6 +444,10 @@ const Header = ({
             Refresh Model List
           </Button>
         </Typography>
+        <Typography>
+          After Refresh, it may take up to 15 minutes for the cache to clear, before you start to see models in the dropdown. 
+          Now would be a perfect time for a coffee ☕️. 
+        </Typography>
       </Box>
       
       )}
