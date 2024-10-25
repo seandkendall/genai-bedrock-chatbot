@@ -497,11 +497,9 @@ const App = memo(({ signOut, user }) => {
           setBedrockAgents(message.load_agents.agents)
         if (message.load_prompt_flows?.prompt_flows)
           setPromptFlows(message.load_prompt_flows.prompt_flows)
-        
-        if (message.load_models?.text_models){
-          // this actually needs to check for modelscan
+        if (message.modelscan === true) 
           setIsRefreshing(false);
-        }
+
         setModelsLoaded(true)
       } else if (message.type === 'conversation_history') {
         // Do nothing, UseEffect will handle this 
