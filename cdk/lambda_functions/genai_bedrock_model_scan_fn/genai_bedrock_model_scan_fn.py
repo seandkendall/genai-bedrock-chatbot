@@ -69,13 +69,7 @@ def scan_for_active_models():
     try:
         
         list_foundation_models_response = bedrock.list_foundation_models(byInferenceType='ON_DEMAND')
-        print('SDK DEBUG MODEL SCAN 1')
-        print(list_foundation_models_response)
-        print('SDK DEBUG MODEL SCAN 1 END')
         all_models = list_foundation_models_response.get('modelSummaries', [])
-        print('SDK DEBUG MODEL SCAN 2')
-        print(all_models)
-        print('SDK DEBUG MODEL SCAN 2 END')
     except ClientError as e:
         logger.exception(e)
         logger.error("Error listing foundation models: %s",str(e))
@@ -90,9 +84,6 @@ def scan_for_active_models():
     
     total_input_tokens = 0
     total_output_tokens = 0
-    print('SDK active_models')
-    print(active_models)
-    print('SDK active_models DONE')
     for model in active_models:
         model_id = model['modelId']
         input_modalities = model['inputModalities']
@@ -174,9 +165,6 @@ def scan_for_active_models():
                     logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
-            # print results[model_id]
-            print(f'SDK: upadted json object for model: {model_id}')
-            print(results[model_id]['TEXT'])
             
             
     for model_id, model_info in results.items():

@@ -133,9 +133,6 @@ def load_prompt_flows(bedrock_agent_client, table):
 def load_models(bedrock_client, table):
     try:
         response = bedrock_client.list_foundation_models(byInferenceType='ON_DEMAND')
-        print('SDK DEBUG 1:')
-        print(response)
-        print('SDK DEBUG 1 END')
         # Filter and process text models
         text_models = [
             {
@@ -164,19 +161,11 @@ def load_models(bedrock_client, table):
             if ('Stability' in model['providerName'] or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'IMAGE' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE'
             
         ]
-        print('SDK DEBUG 2:')
-        print(image_models)
-        print('SDK DEBUG 2 END')
 
         # Process to keep only the latest version of each model
         available_text_models = keep_latest_versions(text_models)
         available_image_models = keep_latest_versions(image_models)
-        
-        print('SDK DEBUG 3:')
-        print(available_image_models)
-        print('SDK DEBUG 3 END')
-        
-        
+
         available_text_models_return = []
         available_image_models_return = []
         # Update the models with DynamoDB config
@@ -188,14 +177,7 @@ def load_models(bedrock_client, table):
                 model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
                 available_text_models_return.append(model)
                 
-        print('SDK ddb_config:')
-        print(ddb_config)
-        print('SDK ddb_config END')
         for model in available_image_models:
-            print(f"SDK MODEL: {model['modelId']}")
-            print(model)
-            print(ddb_config.get(model['modelId'], {}))
-            print('-----')
             if ddb_config.get(model['modelId'], {}).get('access_granted', True):
                 model['is_active'] = True
                 model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)

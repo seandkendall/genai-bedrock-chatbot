@@ -481,9 +481,6 @@ const App = memo(({ signOut, user }) => {
           return updatedMessages;
         });
       } else if (message.type === 'load_response') {
-        console.log('SDK **1')
-        console.log(message)
-        console.log('SDK **2')
         if (message.load_models)
           if (message.load_models.text_models)
             setModels(filter_active_models(message.load_models.text_models))
