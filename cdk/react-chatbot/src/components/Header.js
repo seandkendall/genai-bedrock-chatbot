@@ -404,7 +404,7 @@ const Header = ({
         </Toolbar>
         {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
       </AppBar>
-      {(modelsLoaded && (!models || models.filter(item => item.is_active === true || !('is_active' in item).length === 0))) && (
+      {(modelsLoaded && (!models || models.length === 0) && (!imageModels || imageModels.length === 0)) && (
         <Box
         sx={{
           width: '100%',
