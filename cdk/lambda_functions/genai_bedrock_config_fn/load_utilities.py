@@ -176,8 +176,13 @@ def load_models(bedrock_client, table):
                 model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
                 available_text_models_return.append(model)
                 
-        
+        print('SDK ddb_config:')
+        print(ddb_config)
+        print('SDK ddb_config END')
         for model in available_image_models:
+            print(f"SDK MODEL: {model['modelId']}")
+            print(ddb_config.get(model['modelId'], {}))
+            print('-----')
             if ddb_config.get(model['modelId'], {}).get('access_granted', True):
                 model['is_active'] = True
                 model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
