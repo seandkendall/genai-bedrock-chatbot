@@ -71,7 +71,13 @@ def scan_for_active_models():
         list_foundation_models_response = bedrock.list_foundation_models(
             byInferenceType='ON_DEMAND'
         )
+        print('SDK DEBUG MODEL SCAN 1')
+        print(list_foundation_models_response)
+        print('SDK DEBUG MODEL SCAN 1 END')
         all_models = list_foundation_models_response.get('modelSummaries', [])
+        print('SDK DEBUG MODEL SCAN 2')
+        print(all_models)
+        print('SDK DEBUG MODEL SCAN 2 END')
     except ClientError as e:
         logger.exception(e)
         logger.error("Error listing foundation models: %s",str(e))
