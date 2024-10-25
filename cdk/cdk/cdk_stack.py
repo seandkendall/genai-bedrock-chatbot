@@ -185,8 +185,7 @@ class ChatbotWebsiteStack(Stack):
         # add cors to attachment_bucket
         attachment_bucket.add_cors_rule(
             allowed_methods=[s3.HttpMethods.GET, s3.HttpMethods.POST, s3.HttpMethods.PUT],
-            # allowed_origins=['https://'+cloudfront_distribution_domain_name],
-            allowed_origins=["https://d3cw46ito8uyaa.cloudfront.net"],
+            allowed_origins=[f"https://{cloudfront_distribution_domain_name}"],
             allowed_headers=["*"],
             exposed_headers=['ETag'],
             max_age=3600
@@ -606,7 +605,7 @@ class ChatbotWebsiteStack(Stack):
         
 
         # Export CloudFormation outputs
-        CfnOutput(self, "AWSChatBotURL", value='https://'+cloudfront_distribution_domain_name)
+        CfnOutput(self, "AWSChatBotURL", value=f"https://{cloudfront_distribution_domain_name}")
         CfnOutput(self, "s3bucket", value=website_content_bucket.bucket_name)
         CfnOutput(self, "region", value=region)
         CfnOutput(self, "user_pool_id", value=user_pool.user_pool_id)
