@@ -9,7 +9,7 @@ metrics = Metrics()
 tracer = Tracer()
 
 
-bedrock = boto3.client(service_name="bedrock-runtime")
+bedrock_runtime = boto3.client(service_name="bedrock-runtime")
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 s3_client = boto3.client('s3')
 S3_BUCKET_NAME = os.environ['S3_IMAGE_BUCKET_NAME']
@@ -35,9 +35,9 @@ def lambda_handler(event, context):
         message_received_timestamp_utc = request_body.get('timestamp', datetime.now(timezone.utc).isoformat())
         #if model_id contains titan then 
         if 'titan' in model_id:
-            image_base64 = commons.generate_image_titan(logger,bedrock,model_id, prompt, width, height,None)
+            image_base64 = commons.generate_image_titan(logger,bedrock_runtime,model_id, prompt, width, height,None)
         elif 'stability' in model_id:
-            image_base64 = commons.generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, height, style_preset,None,None)
+            image_base64 = commons.generate_image_stable_diffusion(logger,bedrock_runtime,model_id, prompt, width, height, style_preset,None,None)
         else:
             raise ValueError(f"Unsupported model: {model_id}")
 

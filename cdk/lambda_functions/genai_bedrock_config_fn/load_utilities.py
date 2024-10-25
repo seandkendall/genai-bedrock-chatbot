@@ -164,28 +164,13 @@ def load_models(bedrock_client, table):
 
         # Process to keep only the latest version of each model
         available_text_models = keep_latest_versions(text_models)
-        print('SDK NOW IMAGE')
         available_image_models = keep_latest_versions(image_models)
-
-        print('*************1*************')
-        print('SDK TEXT 1:')
-        print(available_text_models)
-        print('SDK IMAGE 1:')
-        print(available_image_models)
-        print('*************END 1*************')
         # Update the models with DynamoDB config
         ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
         for model in available_text_models + available_image_models:
             model['is_active'] = ddb_config.get(model['modelId'], {}).get('access_granted', True)
             model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
             model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
-            
-        print('*************2*************')
-        print('SDK TEXT 2:')
-        print(available_text_models)
-        print('SDK IMAGE 2:')
-        print(available_image_models)
-        print('*************END 2*************')
         
         # Load the kb_models from the JSON file    
         with open('./bedrock_supported_kb_models.json', 'r') as f:

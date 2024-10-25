@@ -90,9 +90,6 @@ def lambda_handler(event, context):
                     else:
                         # Call the mapped function and store the response in the corresponding global variable
                         response = action_map[action]()
-                        print('SDK EXECUTE LOAD Response:')
-                        print(response)
-                        print('SDK EXECUTE LOAD Response DONE')
                         globals()[response_var] = response
                         return_obj[action] = response
 

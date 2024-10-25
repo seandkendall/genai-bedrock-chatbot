@@ -503,7 +503,6 @@ const App = memo(({ signOut, user }) => {
           setIsRefreshing(false);
         }
         setModelsLoaded(true)
-        console.log('MODELS LOADED!')
       } else if (message.type === 'conversation_history') {
         // Do nothing, UseEffect will handle this 
       } else if (message.type === 'modelscan') {

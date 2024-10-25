@@ -67,15 +67,14 @@ def lambda_handler(event, context):
 def scan_for_active_models():
     """ Scans for active models in Bedrock """
     try:
-        response_text = bedrock.list_foundation_models(
-            byInferenceType='ON_DEMAND',
-            byOutputModality='TEXT'
-        )
         
+        response_text = bedrock.list_foundation_models(
+            byInferenceType='ON_DEMAND'
+        )
         all_models = response_text.get('modelSummaries', [])
     except ClientError as e:
         logger.exception(e)
-        logger.error(f"Error listing foundation models: {str(e)}")
+        logger.error("Error listing foundation models: %s",str(e))
         return {
             'statusCode': 500,
             'body': json.dumps(f"Error listing foundation models: {str(e)}")
@@ -90,6 +89,7 @@ def scan_for_active_models():
     
     for model in active_models:
         model_id = model['modelId']
+        print('checking model:'+model_id)
         input_modalities = model['inputModalities']
         output_modalities = model['outputModalities']
         
@@ -196,12 +196,13 @@ def load_pdf():
     with open('./25.pdf', 'rb') as f:
         return f.read()
 def test_image_model(model_id):
+    print(model_id)
     if 'titan' in model_id:
-        image_base64 = commons.generate_image_titan(logger,bedrock,model_id, 'dog', None, None,5)
+        image_base64 = commons.generate_image_titan(logger,bedrock_runtime,model_id, 'dog', None, None,5)
         print('SDK test_image_model 1:')
         print(image_base64)
     elif 'stability' in model_id:
-        image_base64 = commons.generate_image_stable_diffusion(logger,bedrock,model_id, 'dog', None, None,None,5,10)
+        image_base64 = commons.generate_image_stable_diffusion(logger,bedrock_runtime,model_id, 'dog', None, None,None,5,10)
         print('SDK test_image_model 2:')
         print(image_base64)
     else:
