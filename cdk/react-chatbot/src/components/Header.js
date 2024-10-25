@@ -106,8 +106,6 @@ const Header = ({
     
     const userEmail = user.signInDetails.loginId.toLowerCase();    
     // Ensure allowlist is a string before calling split
-    console.log('SDK allowlist')
-    console.log(allowlist)
     const allowedPatterns = (typeof allowlist === 'string')
       ? allowlist.toLowerCase().split(',').map(pattern => pattern.trim())
       : [];
@@ -406,29 +404,7 @@ const Header = ({
         </Toolbar>
         {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
       </AppBar>
-      <Box
-          sx={{
-            width: '100%',
-            backgroundColor: '#f44336',
-            color: 'white',
-            padding: '12px',
-            textAlign: 'center',
-          }}
-        >
-          <Typography>
-            Active Models:
-            {/* { print active models} */}
-            {modelsLoaded && models && models.map((model, index) => (
-              <span key={index}>
-                {model.modelId}
-                {index < models.length - 1 && ', '}
-              </span>
-            ))}
-            ***Done***
-          </Typography>
-        </Box>
-      {/* {if models is null or empty} */}
-      {(modelsLoaded && (!models || models.length === 0)) && (
+      {(modelsLoaded && (!models || models.filter(item => item.is_active === true || !('is_active' in item).length === 0)) && (
         <Box
           sx={{
             width: '100%',
