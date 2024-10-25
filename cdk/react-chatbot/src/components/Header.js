@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import useTimer from '../useTimer'
-import { AppBar, Toolbar, CircularProgress, Typography, Box, IconButton, Menu, MenuItem, Select, Tooltip, InputLabel, FormControl } from '@mui/material';
+import { AppBar, Toolbar, CircularProgress, Typography, Box, Button, IconButton, Menu, MenuItem, Select, Tooltip, InputLabel, FormControl } from '@mui/material';
 import { tooltipClasses } from '@mui/material/Tooltip';
 import { styled } from '@mui/material/styles';
 import { FaSignOutAlt, FaInfoCircle, FaCog, FaBroom } from 'react-icons/fa';
@@ -415,11 +415,20 @@ const Header = ({
           }}
         >
           <Typography>
-            No models are currently active. Enable models by visiting: https://console.aws.amazon.com/bedrock/home#/modelaccess
+            No models are currently active. Enable models by visiting the{' '}
+            <Link
+              href="https://console.aws.amazon.com/bedrock/home#/modelaccess"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Amazon Bedrock Model Access page
+            </Link>
+            .
           </Typography>
+
           <Typography>
             Already enabled Models? 
-            <IconButton onClick={triggerModelScan}>Refresh Model List</IconButton>
+            <Button onClick={triggerModelScan}>Refresh Model List</Button>
           </Typography>
         </Box>
       )}
