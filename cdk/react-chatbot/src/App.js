@@ -751,7 +751,7 @@ function convertRuleToHuman(jsonArray) {
   });
 }
 function filter_active_models(models) {
-  return models.filter(model => model.status === 'active');
+  return models.filter(model => model.is_active === 'active');
 }
 
 const AuthenticatedApp = withAuthenticator(App);
