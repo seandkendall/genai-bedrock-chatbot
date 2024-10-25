@@ -168,6 +168,10 @@ def scan_for_active_models():
                     logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
+            # print results[model_id]
+            print(f'SDK: upadted json object for model: {model_id}')
+            print(results[model_id]['TEXT'])
+            
             
     for model_id, model_info in results.items():
         # if TEXT = True or DOCUMENT = True or IMAGE = true then access_granted = True
