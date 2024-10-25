@@ -416,7 +416,15 @@ const Header = ({
           }}
         >
           <Typography>
-            {models}
+            Active Models:
+            {/* { print active models} */}
+            {modelsLoaded && models && models.map((model, index) => (
+              <span key={index}>
+                {model.modelId}
+                {index < models.length - 1 && ', '}
+              </span>
+            ))}
+            ***Done***
           </Typography>
         </Box>
       {/* {if models is null or empty} */}
