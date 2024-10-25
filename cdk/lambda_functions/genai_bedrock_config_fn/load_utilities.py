@@ -165,18 +165,32 @@ def load_models(bedrock_client, table):
         # Process to keep only the latest version of each model
         available_text_models = keep_latest_versions(text_models)
         available_image_models = keep_latest_versions(image_models)
+        available_text_models_return = []
+        available_image_models_return = []
         # Update the models with DynamoDB config
         ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
-        for model in available_text_models + available_image_models:
-            model['is_active'] = ddb_config.get(model['modelId'], {}).get('access_granted', True)
-            model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
-            model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
+        for model in available_text_models:
+            if ddb_config.get(model['modelId'], {}).get('access_granted', True):
+                model['is_active'] = True
+                model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
+                model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
+                available_text_models_return.append(model)
+                
+        
+        for model in available_image_models:
+            if ddb_config.get(model['modelId'], {}).get('access_granted', True):
+                model['is_active'] = True
+                model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
+                model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
+                available_image_models_return.append(model)
+            
+            
         
         # Load the kb_models from the JSON file    
         with open('./bedrock_supported_kb_models.json', 'r') as f:
             kb_models = json.load(f)
         
-        return {'type': 'load_models', 'text_models': available_text_models, 'image_models': available_image_models, 'kb_models': kb_models}
+        return {'type': 'load_models', 'text_models': available_text_models_return, 'image_models': available_image_models_return, 'kb_models': kb_models}
     except Exception as e:
         logger.exception(e)
         logger.error(f"Error loading models: {str(e)}")

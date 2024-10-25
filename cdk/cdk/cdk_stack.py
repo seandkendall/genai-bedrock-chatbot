@@ -413,7 +413,7 @@ class ChatbotWebsiteStack(Stack):
             layers=[boto3_layer, commons_layer, lambda_insights_layer],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={
-                "DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
+                "CONFIG_DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
                 "USER_POOL_ID": user_pool.user_pool_id,
                 "REGION": region,
                 "ALLOWLIST_DOMAIN": allowlist_domain_string,

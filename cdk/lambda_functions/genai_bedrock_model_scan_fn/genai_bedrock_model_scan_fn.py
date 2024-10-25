@@ -16,14 +16,14 @@ metrics = Metrics()
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
 user_pool_id = os.environ['USER_POOL_ID']
-table_name = os.environ.get('DYNAMODB_TABLE')
+config_table_name = os.environ.get('CONFIG_DYNAMODB_TABLE')
 dynamodb = boto3.resource('dynamodb')
 bedrock = boto3.client('bedrock')
 bedrock_runtime = boto3.client('bedrock-runtime')
 cognito_client = boto3.client('cognito-idp')
 apigateway_management_api = boto3.client('apigatewaymanagementapi', 
                                          endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
-table = dynamodb.Table(table_name)
+config_table = dynamodb.Table(config_table_name)
 user_cache = {}
 
 @metrics.log_metrics
@@ -173,9 +173,6 @@ def scan_for_active_models():
         # if TEXT = True or DOCUMENT = True or IMAGE = true then access_granted = True
         if model_info['TEXT'] or model_info['DOCUMENT'] or model_info['IMAGE']:
             model_info['access_granted'] = True
-        else:
-            # remove model_id from results
-            del results[model_id]
             
         
     # Update DynamoDB with the results
@@ -213,7 +210,7 @@ def update_dynamodb(results):
     """ updates config in dynamodb """
     try:
         # Get the current item if it exists
-        response = table.get_item(
+        response = config_table.get_item(
             Key={
                 'user': 'models',
                 'config_type': 'models'
@@ -238,7 +235,7 @@ def update_dynamodb(results):
             }
         
         # Update the item in DynamoDB
-        table.update_item(
+        config_table.update_item(
             Key={
                 'user': 'models',
                 'config_type': 'models'
