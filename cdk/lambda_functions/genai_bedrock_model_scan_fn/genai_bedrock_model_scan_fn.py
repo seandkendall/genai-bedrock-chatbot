@@ -86,7 +86,9 @@ def scan_for_active_models():
     
     total_input_tokens = 0
     total_output_tokens = 0
-    
+    print('SDK active_models')
+    print(active_models)
+    print('SDK active_models DONE')
     for model in active_models:
         model_id = model['modelId']
         input_modalities = model['inputModalities']
