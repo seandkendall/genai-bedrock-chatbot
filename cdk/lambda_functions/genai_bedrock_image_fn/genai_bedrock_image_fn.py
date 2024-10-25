@@ -23,17 +23,18 @@ def lambda_handler(event, context):
     try:
         request_body = json.loads(event['body'])
         prompt = request_body.get('prompt', '')
+        selected_mode = request_body.get('selectedMode', '')
+        model_id = selected_mode.get('modelId','')
         # if prompt length is < 3 then prepend text 'image of '
         if len(prompt) < 3:
             prompt = 'image of ' + prompt
         connection_id = event['requestContext']['connectionId']
-        model_id = request_body.get('imageModel', 'amazon.titan-image-generator-v2:0')
         style_preset = request_body.get('stylePreset', 'photographic')
         height_width = request_body.get('heightWidth', '1024x1024')
         height, width = map(int, height_width.split('x'))
         message_id = request_body.get('message_id', None)
         message_received_timestamp_utc = request_body.get('timestamp', datetime.now(timezone.utc).isoformat())
-        #if model_id contains titan then 
+        #if model_id contains titan then
         if 'titan' in model_id:
             image_base64 = commons.generate_image_titan(logger,bedrock_runtime,model_id, prompt, width, height,None)
         elif 'stability' in model_id:

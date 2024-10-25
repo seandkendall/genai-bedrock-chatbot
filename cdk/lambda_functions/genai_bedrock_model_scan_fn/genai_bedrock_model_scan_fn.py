@@ -89,7 +89,6 @@ def scan_for_active_models():
     
     for model in active_models:
         model_id = model['modelId']
-        print('checking model:'+model_id)
         input_modalities = model['inputModalities']
         output_modalities = model['outputModalities']
         if model_id not in results:
