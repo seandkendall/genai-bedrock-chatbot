@@ -588,15 +588,8 @@ class ChatbotWebsiteStack(Stack):
             effect=iam.Effect.ALLOW,
             actions=["scheduler:GetSchedule","scheduler:UpdateSchedule","iam:PassRole"],
             resources=["*"],
-            # resources=[module_scan_schedule.schedule_arn],
         ))
         
-        # Deploy the website files and variables.js to the S3 bucket
-        s3deploy.BucketDeployment(self, "s3FilesDeployment",
-                            sources=[s3deploy.Source.asset("./static-website-source")],
-                            destination_bucket=website_content_bucket,
-                            prune=True)
-
 
         # Export CloudFormation outputs
         CfnOutput(self, "AWSChatBotURL", value='https://'+cloudfront_distribution_domain_name)
