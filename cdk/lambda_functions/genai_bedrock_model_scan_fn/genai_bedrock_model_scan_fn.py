@@ -169,11 +169,14 @@ def scan_for_active_models():
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
             
-    # iterate through results. 
     for model_id, model_info in results.items():
         # if TEXT = True or DOCUMENT = True or IMAGE = true then access_granted = True
         if model_info['TEXT'] or model_info['DOCUMENT'] or model_info['IMAGE']:
             model_info['access_granted'] = True
+        else:
+            # remove model_id from results
+            del results[model_id]
+            
         
     # Update DynamoDB with the results
     update_dynamodb(results)
