@@ -186,7 +186,6 @@ if [ -z "$allowListDomain" ]; then
     fi
 fi
 
-./recreate-python-lambda-layer.sh
 #change to cdk Directory
 cd cdk
 if [ ! -d "./static-website-source" ]; then

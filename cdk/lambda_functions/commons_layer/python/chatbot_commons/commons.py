@@ -1,4 +1,6 @@
 import json
+import random
+from datetime import datetime, timezone, timedelta
         
 def send_websocket_message(logger, apigateway_management_api, connection_id, message):
     """
@@ -136,58 +138,6 @@ def get_user_attributes(cognito_client, user_cache, access_token):
     user_cache[access_token] = user_attributes
     return user_attributes
 
-def load_models(logger,bedrock_client, table):
-    try:
-        response = bedrock_client.list_foundation_models()
-        # Filter and process text models
-        text_models = [
-            {
-                'providerName': model['providerName'],
-                'modelName': model['modelName'],
-                'modelId': model['modelId'],
-                'modelArn': model['modelArn'],
-                'mode_selector': model['modelArn'],
-                'mode_selector_name': model['modelName'],
-            }
-            for model in response['modelSummaries']
-            if 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
-        ]
-
-        # Filter and process image models
-        image_models = [
-            {
-                'providerName': model['providerName'],
-                'modelName': model['modelName'],
-                'modelId': model['modelId'],
-                'modelArn': model['modelArn'],
-                'mode_selector': model['modelArn'],
-                'mode_selector_name': model['modelName'],
-            }
-            for model in response['modelSummaries']
-            if ('Stability' in model['providerName'] or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'IMAGE' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
-            
-        ]
-
-        # Process to keep only the latest version of each model
-        available_text_models = keep_latest_versions(text_models)
-        available_image_models = keep_latest_versions(image_models)
-
-        # Update the models with DynamoDB config
-        ddb_config = get_ddb_config(table)
-        for model in available_text_models + available_image_models:
-            model['is_active'] = ddb_config.get(model['modelId'], {}).get('access_granted', True)
-            model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
-            model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
-        # Load the kb_models from the JSON file    
-        with open('./bedrock_supported_kb_models.json', 'r') as f:
-            kb_models = json.load(f)
-        
-        retObj = {'type': 'load_models', 'text_models': available_text_models, 'image_models': available_image_models, 'kb_models': kb_models}
-        return retObj
-    except Exception as e:
-        logger.exception(e)
-        logger.error(f"Error loading models: {str(e)}")
-        return []
     
 def keep_latest_versions(models):
     latest_models = {}
@@ -217,3 +167,112 @@ def compare_versions(version1, version2):
 
     # If one has a version number and the other doesn't, the one with a version number is newer
     return 1 if len(v1_parts) > len(v2_parts) else (-1 if len(v2_parts) > len(v1_parts) else 0)    
+
+def get_ddb_config(table,ddb_cache,ddb_cache_timestamp,cache_duration,logger):
+
+    # Check if the cache is valid
+    if ddb_cache and ddb_cache_timestamp and (datetime.now(timezone.utc) - ddb_cache_timestamp) < timedelta(seconds=cache_duration):
+        return ddb_cache
+
+    # If the cache is not valid, fetch the data from DynamoDB
+    try:
+        response = table.get_item(
+            Key={
+                'user': 'models',
+                'config_type': 'models'
+            }
+        )
+
+        if 'Item' in response:
+            ddb_cache = response['Item']['config']
+            ddb_cache_timestamp = datetime.now(timezone.utc)
+            return ddb_cache
+        else:
+            return {}
+    except Exception as e:
+        logger.exception(e)
+        logger.error(f"Error getting DynamoDB config: {str(e)}")
+        return {}
+    
+def generate_image_titan(logger,bedrock,model_id, prompt, width, height, seed):
+    """ Generates an image using titan """
+    logger.info("Generating image using Titan Image Generator")
+    # if not seed then set seed random
+    if not seed:
+        seed = random.randint(0, 2147483646)
+    image_gen_config = {
+                "numberOfImages": 1,
+                "seed": seed,
+                "cfgScale": 8.0
+            }
+    if width:
+        image_gen_config['width'] = width
+    if height:
+        image_gen_config['height'] = height
+    response = bedrock.invoke_model(
+        modelId=model_id,
+        contentType="application/json",
+        accept="application/json",
+        body=json.dumps({
+            "taskType": "TEXT_IMAGE",
+            "textToImageParams": {
+                "text": prompt,
+                "negativeText": "low quality, blurry",
+            },
+            "imageGenerationConfig": image_gen_config
+        })
+    )
+    print('SDK generate_image_titan TEST')
+    print(response)
+    response_body = json.loads(response['body'].read())
+    print(response_body)
+    return response_body['images'][0]
+
+def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, height, style_preset,seed,steps):
+    """Generates an image using StableDiffusion"""
+    # write log printing model_id
+    logger.info(f"Generating image using Model ID: {model_id}")
+    if not seed:
+        seed = random.randint(0, 2147483646)
+    if not steps:
+        steps = 30
+    # if model_id contains sd3-large
+    if 'stable-diffusion-xl-v1' not in model_id:
+        response = bedrock.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps({
+                "prompt": prompt,
+                "mode": "text-to-image",
+                "seed": seed,
+            })
+        )
+        print('SDK generate_image_stable_diffusion TEST 1')
+        print(response)
+        model_response = json.loads(response["body"].read())
+        base64_image_data = model_response["images"][0]
+        return base64_image_data
+    else:
+        body_attributes = {
+                "text_prompts": [{"text": prompt}],
+                "cfg_scale": 7,
+                "seed": seed,
+                "steps": steps
+            }
+        if width:
+            body_attributes['width'] = width
+        if height:
+            body_attributes['height'] = height
+        if style_preset:
+            body_attributes['style_preset'] = style_preset
+        response = bedrock.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(body_attributes)
+        )
+        print('SDK generate_image_stable_diffusion TEST 2')
+        print(response)
+        response_body = json.loads(response['body'].read())
+        return response_body['artifacts'][0]['base64']

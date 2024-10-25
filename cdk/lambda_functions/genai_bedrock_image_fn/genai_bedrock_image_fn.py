@@ -14,10 +14,12 @@ WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 s3_client = boto3.client('s3')
 S3_BUCKET_NAME = os.environ['S3_IMAGE_BUCKET_NAME']
 
-apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
+apigateway_management_api = boto3.client('apigatewaymanagementapi', 
+                                         endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
+    """Lambda Handler Function"""
     try:
         request_body = json.loads(event['body'])
         prompt = request_body.get('prompt', '')
@@ -25,19 +27,19 @@ def lambda_handler(event, context):
         if len(prompt) < 3:
             prompt = 'image of ' + prompt
         connection_id = event['requestContext']['connectionId']
-        modelId = request_body.get('imageModel', 'amazon.titan-image-generator-v2:0')
-        stylePreset = request_body.get('stylePreset', 'photographic')
-        heightWidth = request_body.get('heightWidth', '1024x1024')
-        height, width = map(int, heightWidth.split('x'))
+        model_id = request_body.get('imageModel', 'amazon.titan-image-generator-v2:0')
+        style_preset = request_body.get('stylePreset', 'photographic')
+        height_width = request_body.get('heightWidth', '1024x1024')
+        height, width = map(int, height_width.split('x'))
         message_id = request_body.get('message_id', None)
         message_received_timestamp_utc = request_body.get('timestamp', datetime.now(timezone.utc).isoformat())
-        #if modelId contains titan then 
-        if 'titan' in modelId:
-            image_base64 = generate_image_titan(modelId, prompt, width, height)
-        elif 'stability' in modelId:
-            image_base64 = generate_image_stable_diffusion(modelId, prompt, width, height, stylePreset)
+        #if model_id contains titan then 
+        if 'titan' in model_id:
+            image_base64 = commons.generate_image_titan(logger,bedrock,model_id, prompt, width, height,None)
+        elif 'stability' in model_id:
+            image_base64 = commons.generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, height, style_preset,None,None)
         else:
-            raise ValueError(f"Unsupported model: {modelId}")
+            raise ValueError(f"Unsupported model: {model_id}")
 
         # Save image to S3 and generate pre-signed URL
         image_url = save_image_to_s3_and_get_url(image_base64)
@@ -46,7 +48,7 @@ def lambda_handler(event, context):
             'type': 'image_generated',
             'image_url': image_url,
             'prompt': prompt,
-            'modelId': modelId,
+            'modelId': model_id,
             'message_id': message_id,
             'timestamp': message_received_timestamp_utc,
         })
@@ -54,7 +56,7 @@ def lambda_handler(event, context):
         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'message_stop',
             'timestamp': datetime.now(timezone.utc).isoformat(),
-            'modelId': modelId,
+            'modelId': model_id,
             'backend_type': 'image_generated',
             'message_id': message_id,
         })
@@ -70,70 +72,6 @@ def lambda_handler(event, context):
             'error': str(e)
         })
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
-
-def generate_image_titan(modelId, prompt, width, height):
-    logger.info("Generating image using Titan Image Generator")
-    # generate an integer between 0 and 2,147,483,646
-    seed = random.randint(0, 2147483646)
-    response = bedrock.invoke_model(
-        modelId=modelId,
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps({
-            "taskType": "TEXT_IMAGE",
-            "textToImageParams": {
-                "text": prompt,
-                "negativeText": "low quality, blurry",
-            },
-            "imageGenerationConfig": {
-                "numberOfImages": 1,
-                "width": width,
-                "height": height,
-                "seed": seed,
-                "cfgScale": 8.0
-            }
-        })
-    )
-    response_body = json.loads(response['body'].read())
-    return response_body['images'][0]
-
-def generate_image_stable_diffusion(modelId, prompt, width, height, style_preset):
-    # write log printing modelId
-    logger.info(f"Generating image using Model ID: {modelId}")
-    seed = random.randint(0, 2147483646)
-    # if modelId contains sd3-large
-    if 'stable-diffusion-xl-v1' not in modelId:
-        response = bedrock.invoke_model(
-            modelId=modelId,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps({
-                "prompt": prompt,
-                "mode": "text-to-image",
-                "seed": seed,
-            })
-        )
-        model_response = json.loads(response["body"].read())
-        base64_image_data = model_response["images"][0]
-        return base64_image_data
-    else:
-        seed = random.randint(0, 2147483646)
-        response = bedrock.invoke_model(
-            modelId=modelId,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps({
-                "text_prompts": [{"text": prompt}],
-                "cfg_scale": 10,
-                "seed": seed,
-                "steps": 30,
-                "width": width,
-                "height": height,
-                "style_preset": style_preset
-            })
-        )
-        response_body = json.loads(response['body'].read())
-        return response_body['artifacts'][0]['base64']
 
 def save_image_to_s3_and_get_url(image_base64):
     # Decode base64 image

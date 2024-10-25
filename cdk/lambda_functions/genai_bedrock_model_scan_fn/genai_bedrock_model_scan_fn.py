@@ -13,19 +13,17 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 tracer = Tracer()
 metrics = Metrics()
-
+WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
+allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
+user_pool_id = os.environ['USER_POOL_ID']
+table_name = os.environ.get('DYNAMODB_TABLE')
 dynamodb = boto3.resource('dynamodb')
 bedrock = boto3.client('bedrock')
 bedrock_runtime = boto3.client('bedrock-runtime')
-user_pool_id = os.environ['USER_POOL_ID']
 cognito_client = boto3.client('cognito-idp')
-allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
-WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
-
-table_name = os.environ.get('DYNAMODB_TABLE')
+apigateway_management_api = boto3.client('apigatewaymanagementapi', 
+                                         endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
 table = dynamodb.Table(table_name)
-apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
-
 user_cache = {}
 
 @metrics.log_metrics
@@ -59,6 +57,15 @@ def lambda_handler(event, context):
                 'statusCode': 403,
                 'body': json.dumps({'error': not_allowed_message})
             }
+    
+    active_models = scan_for_active_models()
+    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {'type':'modelscan','results':active_models,'timestamp': datetime.now(timezone.utc).isoformat(),})
+    return {
+        'statusCode': 200,
+        'body': json.dumps(active_models, indent=2)
+    }
+def scan_for_active_models():
+    """ Scans for active models in Bedrock """
     try:
         response_text = bedrock.list_foundation_models(
             byInferenceType='ON_DEMAND',
@@ -104,6 +111,7 @@ def lambda_handler(event, context):
         
         # Set IMAGE to True if it exists in outputModalities
         if 'IMAGE' in output_modalities:
+            test_image_model(model_id)
             results[model_id]['IMAGE'] = True
         
         prompts = []
@@ -178,11 +186,6 @@ def lambda_handler(event, context):
     metrics.add_metric(name="TotalInputTokens", unit=MetricUnit.Count, value=total_input_tokens)
     metrics.add_metric(name="TotalOutputTokens", unit=MetricUnit.Count, value=total_output_tokens)
     
-    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {'type':'modelscan','results':results,'timestamp': datetime.now(timezone.utc).isoformat(),})
-    return {
-        'statusCode': 200,
-        'body': json.dumps(results, indent=2)
-    }
 def load_1px_image():
     """Loads red_pixel.png image"""
     with open('./red_pixel.png', 'rb') as f:
@@ -192,7 +195,17 @@ def load_pdf():
     """Loads a PDF with the number 25"""
     with open('./25.pdf', 'rb') as f:
         return f.read()
-
+def test_image_model(model_id):
+    if 'titan' in model_id:
+        image_base64 = commons.generate_image_titan(logger,bedrock,model_id, 'dog', None, None,5)
+        print('SDK test_image_model 1:')
+        print(image_base64)
+    elif 'stability' in model_id:
+        image_base64 = commons.generate_image_stable_diffusion(logger,bedrock,model_id, 'dog', None, None,None,5,10)
+        print('SDK test_image_model 2:')
+        print(image_base64)
+    else:
+        raise ValueError(f"Unsupported model: {model_id}")
 def update_dynamodb(results):
     """ updates config in dynamodb """
     try:

@@ -24,7 +24,11 @@ from datetime import datetime, timezone
 from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3 # type: ignore
 from .constructs.user_pool_user import UserPoolUser
 import json
+import os
 from aws_cdk.aws_route53 import PublicHostedZone
+from .cdk_constants import lambda_insights_layers
+
+
 
 
 
@@ -32,7 +36,8 @@ from aws_cdk.aws_route53 import PublicHostedZone
 class ChatbotWebsiteStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
-        super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, construct_id, **kwargs)    
+        region = os.environ.get('CDK_DEFAULT_REGION')
         scheduler_group_name = "ChatbotSchedulerGroup"
         cognito_domain_string = self.node.try_get_context("cognitoDomain")
         if cognito_domain_string is None:
@@ -67,7 +72,15 @@ class ChatbotWebsiteStack(Stack):
             compatible_architectures=[_lambda.Architecture.ARM_64],
             description="KendallChat Commons: Making all the code more simple and reusable"
         )
-        lambda_insights_layer = _lambda.LayerVersion.from_layer_version_arn(self, "LambdaInsightsLayer",f"arn:aws:lambda:{self.region}:580247275435:layer:LambdaInsightsExtension-Arm64:20") 
+        
+        # ARN Lookup: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versionsARM.html
+        lambda_insights_layer = _lambda.LayerVersion.from_layer_version_arn(
+            self,
+            "LambdaInsightsLayer",
+            lambda_insights_layers[region]
+        )
+
+
 
         # Create the S3 bucket for website content
         website_content_bucket = s3.Bucket(self, "GenAiChatbotS3BucketContent",
@@ -266,9 +279,9 @@ class ChatbotWebsiteStack(Stack):
             layers=[boto3_layer, commons_layer, lambda_insights_layer],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={
-                "DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
+                "DYNAMODB_CONFIG_TABLE": dynamodb_configurations_table.table_name,
                 "ALLOWLIST_DOMAIN": allowlist_domain_string,
-                "REGION": self.region,
+                "REGION": region,
                 "POWERTOOLS_SERVICE_NAME":"CONFIG_SERVICE",
             }
         )
@@ -334,7 +347,7 @@ class ChatbotWebsiteStack(Stack):
         agents_function.add_permission(
             "AllowBedrock",
             principal=iam.ServicePrincipal("bedrock.amazonaws.com"),
-            source_arn=f"arn:aws:bedrock:{self.region}:{self.account}:agent/*"
+            source_arn=f"arn:aws:bedrock:{region}:{self.account}:agent/*"
         )
 
         # Create the "genai_bedrock_fn_async" Lambda function
@@ -354,7 +367,7 @@ class ChatbotWebsiteStack(Stack):
                                           "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                                           "DYNAMODB_TABLE_CONFIG": dynamodb_configurations_table.table_name,
                                           "DYNAMODB_TABLE_USAGE": dynamodb_bedrock_usage_table.table_name,
-                                          "REGION": self.region,
+                                          "REGION": region,
                                           "POWERTOOLS_SERVICE_NAME":"BEDROCK_ASYNC_SERVICE",
                                           "ATTACHMENT_BUCKET": attachment_bucket.bucket_name,
                                           "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
@@ -402,7 +415,7 @@ class ChatbotWebsiteStack(Stack):
             environment={
                 "DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
                 "USER_POOL_ID": user_pool.user_pool_id,
-                "REGION": self.region,
+                "REGION": region,
                 "ALLOWLIST_DOMAIN": allowlist_domain_string,
                 "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                 "POWERTOOLS_SERVICE_NAME":"MODEL_SCAN_SERVICE",
@@ -433,7 +446,7 @@ class ChatbotWebsiteStack(Stack):
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "USER_POOL_ID": user_pool.user_pool_id,
-                                          "REGION": self.region,
+                                          "REGION": region,
                                           "AGENTS_FUNCTION_NAME": agents_client_function.function_name,
                                           "BEDROCK_FUNCTION_NAME": lambda_fn_async.function_name,
                                           "ALLOWLIST_DOMAIN": allowlist_domain_string,
@@ -595,7 +608,7 @@ class ChatbotWebsiteStack(Stack):
         # Export CloudFormation outputs
         CfnOutput(self, "AWSChatBotURL", value='https://'+cloudfront_distribution_domain_name)
         CfnOutput(self, "s3bucket", value=website_content_bucket.bucket_name)
-        CfnOutput(self, "region", value=self.region)
+        CfnOutput(self, "region", value=region)
         CfnOutput(self, "user_pool_id", value=user_pool.user_pool_id)
         CfnOutput(self, "user_pool_client_id", value=user_pool_client.user_pool_client_id)
         CfnOutput(self, "websocket_api_endpoint", value=websocket_api_endpoint+'/ws')

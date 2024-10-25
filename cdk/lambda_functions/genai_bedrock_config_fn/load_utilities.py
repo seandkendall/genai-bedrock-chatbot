@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timezone, timedelta
 from aws_lambda_powertools import Logger
+from chatbot_commons import commons
 
 logger = Logger(service="BedrockConfigLoadUtilities")
 
@@ -14,32 +15,7 @@ def datetime_to_iso(obj):
         return obj.isoformat()
     raise TypeError("Type not serializable")
 
-def get_ddb_config(table):
-    global ddb_cache, ddb_cache_timestamp
 
-    # Check if the cache is valid
-    if ddb_cache and ddb_cache_timestamp and (datetime.now(timezone.utc) - ddb_cache_timestamp) < timedelta(seconds=CACHE_DURATION):
-        return ddb_cache
-
-    # If the cache is not valid, fetch the data from DynamoDB
-    try:
-        response = table.get_item(
-            Key={
-                'user': 'models',
-                'config_type': 'models'
-            }
-        )
-
-        if 'Item' in response:
-            ddb_cache = response['Item']['config']
-            ddb_cache_timestamp = datetime.now(timezone.utc)
-            return ddb_cache
-        else:
-            return {}
-    except Exception as e:
-        logger.exception(e)
-        logger.error(f"Error getting DynamoDB config: {str(e)}")
-        return {}
 
 def load_knowledge_bases(bedrock_agent_client, table):
     try:
@@ -53,7 +29,7 @@ def load_knowledge_bases(bedrock_agent_client, table):
             kb['mode_selector'] = kb_id
             kb['mode_selector_name'] = kb_id
             if kb['status'] == 'ACTIVE':
-                ddb_config = get_ddb_config(table)
+                ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
                 kb['is_active'] = ddb_config.get(kb_id, {}).get('access_granted', True)
                 kb['allow_input_image'] = ddb_config.get(kb_id, {}).get('IMAGE', False)
                 kb['allow_input_document'] = ddb_config.get(kb_id, {}).get('DOCUMENT', False)
@@ -95,7 +71,7 @@ def load_agents(bedrock_agent_client, table):
                 alias['mode_selector'] = alias['agentAliasId']
                 alias['mode_selector_name'] = alias['agentAliasName']
                 alias['agent_name'] = agent_name
-                ddb_config = get_ddb_config(table)
+                ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
                 alias['is_active'] = ddb_config.get(alias['agentAliasId'], {}).get('access_granted', True)
                 alias['allow_input_image'] = ddb_config.get(alias['agentAliasId'], {}).get('IMAGE', False)
                 alias['allow_input_document'] = ddb_config.get(alias['agentAliasId'], {}).get('DOCUMENT', False)
@@ -133,7 +109,7 @@ def load_prompt_flows(bedrock_agent_client, table):
             for alias in flow_aliases:
                 alias['mode_selector'] = alias['arn']
                 alias['mode_selector_name'] = alias['name']
-                ddb_config = get_ddb_config(table)
+                ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
                 alias['is_active'] = ddb_config.get(alias['arn'], {}).get('access_granted', True)
                 alias['allow_input_image'] = ddb_config.get(alias['arn'], {}).get('IMAGE', False)
                 alias['allow_input_document'] = ddb_config.get(alias['arn'], {}).get('DOCUMENT', False)
@@ -182,7 +158,7 @@ def load_models(bedrock_client, table):
                 'mode_selector_name': model['modelName'],
             }
             for model in response['modelSummaries']
-            if ('Stability' in model['providerName'] or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'IMAGE' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
+            if ('Stability' in model['providerName'] or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'IMAGE' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE'
             
         ]
 
@@ -191,26 +167,37 @@ def load_models(bedrock_client, table):
         print('SDK NOW IMAGE')
         available_image_models = keep_latest_versions(image_models)
 
+        print('*************1*************')
+        print('SDK TEXT 1:')
+        print(available_text_models)
+        print('SDK IMAGE 1:')
+        print(available_image_models)
+        print('*************END 1*************')
         # Update the models with DynamoDB config
-        ddb_config = get_ddb_config(table)
+        ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
         for model in available_text_models + available_image_models:
             model['is_active'] = ddb_config.get(model['modelId'], {}).get('access_granted', True)
             model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
             model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
+            
+        print('*************2*************')
+        print('SDK TEXT 2:')
+        print(available_text_models)
+        print('SDK IMAGE 2:')
+        print(available_image_models)
+        print('*************END 2*************')
+        
         # Load the kb_models from the JSON file    
         with open('./bedrock_supported_kb_models.json', 'r') as f:
             kb_models = json.load(f)
         
-        retObj = {'type': 'load_models', 'text_models': available_text_models, 'image_models': available_image_models, 'kb_models': kb_models}
-        return retObj
+        return {'type': 'load_models', 'text_models': available_text_models, 'image_models': available_image_models, 'kb_models': kb_models}
     except Exception as e:
         logger.exception(e)
         logger.error(f"Error loading models: {str(e)}")
         return []
 
 def keep_latest_versions(models):
-    print('SDK NEXT CHANGE MODELS')
-    print(models)
     latest_models = {}
     for model in models:
         model_key = (model['providerName'], model['modelName'])

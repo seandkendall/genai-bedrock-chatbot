@@ -18,7 +18,7 @@ tracer = Tracer()
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
+ddb_config_table = dynamodb.Table(os.environ['DYNAMODB_CONFIG_TABLE'])
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
 schedule_name = os.environ['SCHEDULE_NAME']
 schedule_group_name = os.environ['SCHEDULE_GROUP_NAME']
@@ -68,10 +68,10 @@ def lambda_handler(event, context):
         elif action.startswith('load_'):
             # Use a dictionary to map actions to functions
             action_map = {
-                'load_prompt_flows': lambda: load_prompt_flows(bedrock_agent_client,table),
-                'load_knowledge_bases': lambda: load_knowledge_bases(bedrock_agent_client,table),
-                'load_agents': lambda: load_agents(bedrock_agent_client,table),
-                'load_models': lambda: load_models(bedrock_client,table)
+                'load_prompt_flows': lambda: load_prompt_flows(bedrock_agent_client,ddb_config_table),
+                'load_knowledge_bases': lambda: load_knowledge_bases(bedrock_agent_client,ddb_config_table),
+                'load_agents': lambda: load_agents(bedrock_agent_client,ddb_config_table),
+                'load_models': lambda: load_models(bedrock_client,ddb_config_table)
             }
             # if actions contains ,modelscan then set modelscan = true, then remove ',modelscan' from action
             modelscan = False
@@ -90,6 +90,9 @@ def lambda_handler(event, context):
                     else:
                         # Call the mapped function and store the response in the corresponding global variable
                         response = action_map[action]()
+                        print('SDK EXECUTE LOAD Response:')
+                        print(response)
+                        print('SDK EXECUTE LOAD Response DONE')
                         globals()[response_var] = response
                         return_obj[action] = response
 
@@ -103,7 +106,7 @@ def lambda_handler(event, context):
         else:
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': 'Invalid action. Must be "load_prompt_flows", "load_knowledge_bases", "load_agents", "load_models", "load", "save".'})
+                'body': json.dumps({'error': 'Invalid action. Must be "load_prompt_flows", "load_knowledge_bases", "load_agents", "load_models", "load", "save", "enable_schedule", "disable_schedule".'})
             }
 
     except Exception as e:
@@ -153,7 +156,7 @@ def load_config(user, config_type):
     """
     config = {}
     try:
-        response = table.get_item(
+        response = ddb_config_table.get_item(
             Key={
                 'user': user,
                 'config_type': config_type
@@ -220,7 +223,7 @@ def save_config(user, config_type, config):
     """
     try:
         now = datetime.now(timezone.utc).isoformat()
-        existing_config = table.get_item(
+        existing_config = ddb_config_table.get_item(
             Key={
                 'user': user,
                 'config_type': config_type
@@ -230,7 +233,7 @@ def save_config(user, config_type, config):
 
         if 'Item' in existing_config:
             previous_config = existing_config['Item']['config']
-            table.put_item(
+            ddb_config_table.put_item(
                 Item={
                     'user': user,
                     'config_type': config_type,
@@ -240,7 +243,7 @@ def save_config(user, config_type, config):
                 }
             )
         else:
-            table.put_item(
+            ddb_config_table.put_item(
                 Item={
                     'user': user,
                     'config_type': config_type,

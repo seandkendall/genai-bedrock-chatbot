@@ -163,11 +163,11 @@ const App = memo(({ signOut, user }) => {
 
 
   useEffect(() => {
-    const kbSessionId = localStorage.getItem(`kbSessionId`);
+    const kbSessionId = localStorage.getItem("kbSessionId");
     setKBSessionId(kbSessionId)
-    const storedPricePer1000InputTokens = localStorage.getItem(`pricePer1000InputTokens`);
+    const storedPricePer1000InputTokens = localStorage.getItem("pricePer1000InputTokens");
     setPricePer1000InputTokens(storedPricePer1000InputTokens);
-    const storedPricePer1000OutputTokens = localStorage.getItem(`pricePer1000OutputTokens`);
+    const storedPricePer1000OutputTokens = localStorage.getItem("pricePer1000OutputTokens");
     setPricePer1000OutputTokens(storedPricePer1000OutputTokens);
 
     const currentDate = new Date().toDateString();
@@ -481,20 +481,25 @@ const App = memo(({ signOut, user }) => {
           return updatedMessages;
         });
       } else if (message.type === 'load_response') {
+        console.log('SDK **1')
+        console.log(message)
+        console.log('SDK **2')
         if (message.load_models)
           if (message.load_models.text_models)
-            setModels(message.load_models.text_models)
-        if (message.load_models.image_models)
-          setImageModels(message.load_models.image_models)
-        if (message.load_models.kb_models)
-          setKbModels(message.load_models.kb_models)
+            setModels(filter_active_models(message.load_models.text_models))
+          if (message.load_models.image_models)
+            setImageModels(filter_active_models(message.load_models.image_models))
+          if (message.load_models.kb_models)
+            setKbModels(filter_active_models(message.load_models.kb_models))
         if (message.load_knowledge_bases?.knowledge_bases)
           setBedrockKnowledgeBases(message.load_knowledge_bases.knowledge_bases)
         if (message.load_agents?.agents)
           setBedrockAgents(message.load_agents.agents)
         if (message.load_prompt_flows?.prompt_flows)
           setPromptFlows(message.load_prompt_flows.prompt_flows)
+        
         if (message.load_models?.text_models){
+          // this actually needs to check for modelscan
           setIsRefreshing(false);
         }
         setModelsLoaded(true)
@@ -741,11 +746,15 @@ function convertRuleToHuman(jsonArray) {
   return jsonArray.map(item => {
     if (item.rule === 'user') {
       return { ...item, rule: 'Human' };
-    } else if (item.rule === 'assistant') {
+    }
+    if (item.rule === 'assistant') {
       return { ...item, rule: 'Assistant' };
     }
     return item;
   });
+}
+function filter_active_models(models) {
+  return models.filter(model => model.status === 'active');
 }
 
 const AuthenticatedApp = withAuthenticator(App);
