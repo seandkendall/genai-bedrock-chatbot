@@ -68,10 +68,10 @@ def scan_for_active_models():
     """ Scans for active models in Bedrock """
     try:
         
-        response_text = bedrock.list_foundation_models(
+        list_foundation_models_response = bedrock.list_foundation_models(
             byInferenceType='ON_DEMAND'
         )
-        all_models = response_text.get('modelSummaries', [])
+        all_models = list_foundation_models_response.get('modelSummaries', [])
     except ClientError as e:
         logger.exception(e)
         logger.error("Error listing foundation models: %s",str(e))
@@ -92,7 +92,6 @@ def scan_for_active_models():
         print('checking model:'+model_id)
         input_modalities = model['inputModalities']
         output_modalities = model['outputModalities']
-        
         if model_id not in results:
             results[model_id] = {
                 'modelArn': model['modelArn'],
@@ -104,81 +103,80 @@ def scan_for_active_models():
                 'TEXT': False,
                 'IMAGE': False,
                 'DOCUMENT': False,
-                'access_granted': True,  # Default to True
+                'access_granted': False,
                 'mode_selector': model['modelArn'],
                 'mode_selector_name': model['modelName']
             }
-        
-        # Set IMAGE to True if it exists in outputModalities
-        if 'IMAGE' in output_modalities:
-            test_image_model(model_id)
-            results[model_id]['IMAGE'] = True
-        
-        prompts = []
-        prompts.append(('TEXT', "reply with '1'"))
-        prompts.append(('IMAGE', "what color is this?"))
-        prompts.append(('DOCUMENT', "what number is in the document?"))
-        
-        for prompt_type, prompt_text in prompts:
-            try:
-                content = [{"text": prompt_text}]
-                if prompt_type == 'IMAGE':
-                    image_bytes  = load_1px_image()
-                    content.append({
-                        "image": {
-                            "format": "png",
-                            "source": {
-                                "bytes": image_bytes
+        if 'TEXT' in output_modalities:
+            prompts = []
+            prompts.append(('TEXT', "reply with '1'"))
+            prompts.append(('IMAGE', "what color is this?"))
+            prompts.append(('DOCUMENT', "what number is in the document?"))
+            
+            for prompt_type, prompt_text in prompts:
+                try:
+                    content = [{"text": prompt_text}]
+                    if prompt_type == 'IMAGE':
+                        image_bytes  = load_1px_image()
+                        content.append({
+                            "image": {
+                                "format": "png",
+                                "source": {
+                                    "bytes": image_bytes
+                                }
                             }
-                        }
-                    })
-                elif prompt_type == 'DOCUMENT':
-                    doc_bytes = load_pdf()
-                    content.append({
-                        "document": {
-                            "format": "pdf",
-                            "name": "samplepdf",
-                            "source": {
-                                "bytes": doc_bytes
+                        })
+                    elif prompt_type == 'DOCUMENT':
+                        doc_bytes = load_pdf()
+                        content.append({
+                            "document": {
+                                "format": "pdf",
+                                "name": "samplepdf",
+                                "source": {
+                                    "bytes": doc_bytes
+                                }
                             }
-                        }
-                    })
-                
-                response = bedrock_runtime.converse(
-                    modelId=model_id,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": content
-                        }
-                    ]
-                )
-                
-                total_input_tokens += response['usage']['inputTokens']
-                total_output_tokens += response['usage']['outputTokens']
-                
-                results[model_id][prompt_type] = True
-            except ClientError as e:
-                error_code = e.response['Error']['Code']
-                if error_code == 'ThrottlingException':
+                        })
+                    
+                    response = bedrock_runtime.converse(
+                        modelId=model_id,
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": content
+                            }
+                        ]
+                    )
+                    
+                    total_input_tokens += response['usage']['inputTokens']
+                    total_output_tokens += response['usage']['outputTokens']
+                    
                     results[model_id][prompt_type] = True
-                    logger.warning(f"ThrottlingException for model {model_id}, prompt type {prompt_type}: {str(e)}")
-                elif error_code == 'ValidationException':
-                    results[model_id][prompt_type] = False
-                    # log warning
-                    logger.warning(f"ValidationException for model {model_id}, prompt type {prompt_type}: {str(e)}")
-                elif error_code == 'AccessDeniedException':
-                    results[model_id][prompt_type] = False
-                    results[model_id]['access_granted'] = False
-                    logger.warning(f"AccessDeniedException for model {model_id}, prompt type {prompt_type}: {str(e)}")
-                else:
-                    results[model_id][prompt_type] = False
-                    logger.warning(f"ClientError for model {model_id}, prompt type {prompt_type}: {str(e)}")
-            except Exception as e:
-                logger.exception(e)
-                results[model_id][prompt_type] = False
-                logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
-    
+                except ClientError as e:
+                    error_code = e.response['Error']['Code']
+                    if error_code == 'ThrottlingException':
+                        results[model_id][prompt_type] = True
+                        logger.warning(f"ThrottlingException for model {model_id}, prompt type {prompt_type}: {str(e)}")
+                    elif error_code == 'ValidationException':
+                        # log warning
+                        logger.warning(f"ValidationException for model {model_id}, prompt type {prompt_type}: {str(e)}")
+                    elif error_code == 'AccessDeniedException':
+                        logger.warning(f"AccessDeniedException for model {model_id}, prompt type {prompt_type}: {str(e)}")
+                    else:
+                        logger.warning(f"ClientError for model {model_id}, prompt type {prompt_type}: {str(e)}")
+                except Exception as e:
+                    logger.exception(e)
+                    logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
+        if 'IMAGE' in output_modalities:
+            results[model_id]['TEXT'] = True
+            test_image_model(model_id)
+            
+    # iterate through results. 
+    for model_id, model_info in results.items():
+        # if TEXT = True or DOCUMENT = True or IMAGE = true then access_granted = True
+        if model_info['TEXT'] or model_info['DOCUMENT'] or model_info['IMAGE']:
+            model_info['access_granted'] = True
+        
     # Update DynamoDB with the results
     update_dynamodb(results)
     

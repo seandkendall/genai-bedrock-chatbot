@@ -1,7 +1,8 @@
 import json
 import random
 from datetime import datetime, timezone, timedelta
-        
+from botocore.exceptions import ClientError
+
 def send_websocket_message(logger, apigateway_management_api, connection_id, message):
     """
     Send a message to a client through a WebSocket connection.
@@ -209,23 +210,30 @@ def generate_image_titan(logger,bedrock,model_id, prompt, width, height, seed):
         image_gen_config['width'] = width
     if height:
         image_gen_config['height'] = height
-    response = bedrock.invoke_model(
-        modelId=model_id,
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps({
-            "taskType": "TEXT_IMAGE",
-            "textToImageParams": {
-                "text": prompt,
-                "negativeText": "low quality, blurry",
-            },
-            "imageGenerationConfig": image_gen_config
-        })
-    )
-    print('SDK generate_image_titan TEST')
-    print(response)
+    try:
+        response = bedrock.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps({
+                "taskType": "TEXT_IMAGE",
+                "textToImageParams": {
+                    "text": prompt,
+                    "negativeText": "low quality, blurry",
+                },
+                "imageGenerationConfig": image_gen_config
+            })
+        )
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'AccessDeniedException':
+            logger.warn("No Model Access to: %s",model_id)
+        else:
+            logger.exception(e)
+        return None
+    except Exception as e:
+        logger.exception(e)
+        return None
     response_body = json.loads(response['body'].read())
-    print(response_body)
     return response_body['images'][0]
 
 def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, height, style_preset,seed,steps):
@@ -238,18 +246,26 @@ def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, heig
         steps = 30
     # if model_id contains sd3-large
     if 'stable-diffusion-xl-v1' not in model_id:
-        response = bedrock.invoke_model(
-            modelId=model_id,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps({
-                "prompt": prompt,
-                "mode": "text-to-image",
-                "seed": seed,
-            })
-        )
-        print('SDK generate_image_stable_diffusion TEST 1')
-        print(response)
+        try:
+            response = bedrock.invoke_model(
+                modelId=model_id,
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps({
+                    "prompt": prompt,
+                    "mode": "text-to-image",
+                    "seed": seed,
+                })
+            )
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'AccessDeniedException':
+                logger.warn("No Model Access to: %s",model_id)
+            else:
+                logger.exception(e)
+            return None
+        except Exception as e:
+            logger.exception(e)
+            return None
         model_response = json.loads(response["body"].read())
         base64_image_data = model_response["images"][0]
         return base64_image_data
@@ -266,13 +282,22 @@ def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, heig
             body_attributes['height'] = height
         if style_preset:
             body_attributes['style_preset'] = style_preset
-        response = bedrock.invoke_model(
-            modelId=model_id,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(body_attributes)
-        )
-        print('SDK generate_image_stable_diffusion TEST 2')
-        print(response)
+        try:
+            response = bedrock.invoke_model(
+                modelId=model_id,
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps(body_attributes)
+            )
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'AccessDeniedException':
+                logger.warn("No Model Access to: %s",model_id)
+            else:
+                logger.exception(e)
+            return None
+        except Exception as e:
+            logger.exception(e)
+            return None
+        
         response_body = json.loads(response['body'].read())
         return response_body['artifacts'][0]['base64']
