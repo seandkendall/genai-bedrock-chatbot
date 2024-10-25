@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import useTimer from '../useTimer'
-import { AppBar, Toolbar, Typography, Box, IconButton, Menu, MenuItem, Select, Tooltip, InputLabel, FormControl } from '@mui/material';
+import { AppBar, Toolbar, CircularProgress, Typography, Box, Link, Button, IconButton, Menu, MenuItem, Select, Tooltip, InputLabel, FormControl } from '@mui/material';
 import { tooltipClasses } from '@mui/material/Tooltip';
 import { styled } from '@mui/material/styles';
 import { FaSignOutAlt, FaInfoCircle, FaCog, FaBroom } from 'react-icons/fa';
@@ -38,19 +38,28 @@ const Header = ({
   bedrockAgents,
   bedrockKnowledgeBases,
   models,
+  kbModels,
   imageModels,
   promptFlows,
   selectedKbMode,
-  onSelectedKbMode
+  onSelectedKbMode,
+  triggerModelScan,
+  isRefreshing,
+  user,
+  allowlist,
+  modelsLoaded
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
 
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
   const isMobile = useMediaQuery('(max-width:600px)');
+  
 
+  
   // load selectedMode from local storage
-  useEffect(() => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Dependencies not needed
+    useEffect(() => {
     if (selectedMode === null) {
       let savedOption;
       try {
@@ -78,6 +87,7 @@ const Header = ({
   }, []);
 
   //start and stop header timer
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Dependencies not needed
   useEffect(() => {
     if (disabled) {
       startTimer();
@@ -88,8 +98,22 @@ const Header = ({
   }, [disabled]);
 
   const truncateText = (text, maxLength) => {
-    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
   };
+
+  const isUserAllowed = () => {
+    if (!allowlist || !user?.signInDetails?.loginId) return true;
+    
+    const userEmail = user.signInDetails.loginId.toLowerCase();    
+    // Ensure allowlist is a string before calling split
+    const allowedPatterns = (typeof allowlist === 'string')
+      ? allowlist.toLowerCase().split(',').map(pattern => pattern.trim())
+      : [];
+    
+    return allowedPatterns.some(pattern => userEmail.includes(pattern));
+  };
+  
+  
   const renderSelectOptions = (options, maxLength) => {
     return options.flatMap(({ title, data }) =>
       data.length > 0 ? [
@@ -118,10 +142,8 @@ const Header = ({
     );
   };
 
-
-
   const onSelectedModeChange = (event) => {
-    if (event && event.target && event.target.value) {
+    if (event?.target?.value) {
       const [category, modeSelector] = event.target.value.split('%');
       let selectedObject = null;
       switch (category) {
@@ -145,6 +167,11 @@ const Header = ({
           selectedObject = promptFlows.find((item) => item.mode_selector === modeSelector);
           selectedObject.category = category;
           break;
+        case 'RELOAD':
+          triggerModelScan();
+          selectedObject = null;
+          break;
+          
         default:
           break;
       }
@@ -196,10 +223,12 @@ const Header = ({
   const handleInfoTooltipClose = () => {
     setShowInfoTooltip(false);
   };
+
   const calculateDailyCost = () => {
     const dailyCost = (totalOutputTokens * (pricePer1000OutputTokens / 1000)) + (totalInputTokens * (pricePer1000InputTokens / 1000));
     return dailyCost.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   }
+
   const calculateMonthlyCost = () => {
     const dailyCost = (monthlyOutputTokens * (pricePer1000OutputTokens / 1000)) + (monthlyInputTokens * (pricePer1000InputTokens / 1000));
     return dailyCost.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -226,80 +255,87 @@ const Header = ({
   };
 
   const selectOptions = useMemo(() => [
-    { title: 'Bedrock Models', data: models },
-    { title: 'Bedrock Image Models', data: imageModels },
-    { title: 'Bedrock KnowledgeBases', data: bedrockKnowledgeBases },
-    { title: 'Bedrock Agents', data: bedrockAgents },
-    { title: 'Bedrock Prompt Flows', data: promptFlows }
+    {
+      title: 'Bedrock Models',
+      data: (models ? models : JSON.parse(localStorage.getItem('local-models')))
+        .filter(item => item.is_active === true || !('is_active' in item))
+    },
+    {
+      title: 'Bedrock Image Models',
+      data: (imageModels ? imageModels : JSON.parse(localStorage.getItem('local-image-models')))
+        .filter(item => item.is_active === true || !('is_active' in item))
+    },
+    {
+      title: 'Bedrock KnowledgeBases',
+      data: (bedrockKnowledgeBases ? bedrockKnowledgeBases : JSON.parse(localStorage.getItem('local-bedrock-knowledge-bases')))
+        .filter(item => item.is_active === true || !('is_active' in item))
+    },
+    {
+      title: 'Bedrock Agents',
+      data: (bedrockAgents ? bedrockAgents : JSON.parse(localStorage.getItem('local-bedrock-agents')))
+        .filter(item => item.is_active === true || !('is_active' in item))
+    },
+    {
+      title: 'Bedrock Prompt Flows',
+      data: (promptFlows ? promptFlows : JSON.parse(localStorage.getItem('local-prompt-flows')))
+        .filter(item => item.is_active === true || !('is_active' in item))
+    }
   ], [models, imageModels, bedrockKnowledgeBases, bedrockAgents, promptFlows]);
+
   const kbModelOptions = useMemo(() => [
-    { title: 'Bedrock Models', data: models },
-  ], [models]);
+    {
+      title: 'Bedrock Models',
+      data: (models ? models : JSON.parse(localStorage.getItem('local-models')))
+        .filter(item =>
+          kbModels.some(model => model.modelId === item.modelId) &&
+          (item.is_active === true || !('is_active' in item))
+        )
+    },
+  ], [models, kbModels]);
+
+
 
   return (
-    <AppBar position="sticky">
-      <Toolbar>
-        <Typography variant={isMobile ? 'body1' : 'h6'} component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
-          {isMobile ? 'AWS' : 'AWS Bedrock Chat'}
-          <NoMaxWidthTooltip
-            title={
-              <Box>
-                <Typography>Solution Designed and Built by Sean Kendall</Typography>
-                <Typography>Active Model/Mode: {getHeaderLabel()}</Typography>
-                <Typography>App Session ID: {appSessionid}</Typography>
-                {kbSessionId && <Typography>KnowledgeBase Session ID: {kbSessionId}</Typography>}
-                <Typography>Total Input/Output Tokens (Bedrock only): {totalInputTokens}/{totalOutputTokens}</Typography>
-                <Typography>Bedrock Cost (Today): {calculateDailyCost()} USD</Typography>
-                {monthlyInputTokens > 0 && <Typography>Bedrock Cost (Current Month): {calculateMonthlyCost()} USD</Typography>}
-                <Typography></Typography>
-              </Box>
-            }
-            open={showInfoTooltip}
-            onOpen={handleInfoTooltipOpen}
-            onClose={handleInfoTooltipClose}
-            arrow
-          >
-            <IconButton color="inherit" sx={{ ml: 1 }}>
-              <FaInfoCircle />
-            </IconButton>
-          </NoMaxWidthTooltip>
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          {!isMobile && disabled && <Typography variant="body2" mr={2}>{formatTimer(elapsedTime)}</Typography>}
-          <>
-            <FormControl sx={{ m: 1, minWidth: 120 }}>
-              <InputLabel id="mode-select-label" sx={{ color: 'white' }}>{isMobile ? 'Model' : 'Bedrock Chatbot Model'}</InputLabel>
-              <Select
-                id="mode-select"
-                labelId="mode-select-label"
-                value={selectedMode ? selectedMode.category + '%' + selectedMode.mode_selector : 'DEFAULT'}
-                onChange={onSelectedModeChange}
-                label={isMobile ? 'Model' : 'Bedrock Chatbot Model'}
-                sx={{
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'white',
-                  },
-                  '& .MuiSvgIcon-root': {
-                    color: 'white',
-                  },
-                  color: 'white',
-                }}
-              >
-                <MenuItem value="DEFAULT" >
-                  <em>{isMobile ? 'Model' : 'Select a Model'}</em>
-                </MenuItem>
-                {renderSelectOptions(selectOptions, isMobile ? 20 : 50)}
-              </Select>
-            </FormControl>
-            {selectedMode && selectedMode.knowledgeBaseId && (
+    <>
+      <AppBar position="sticky">
+        <Toolbar>
+          <Typography variant={isMobile ? 'body1' : 'h6'} component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+            {isMobile ? 'AWS' : 'AWS Bedrock KendallChat'}
+            <NoMaxWidthTooltip
+              title={
+                <Box>
+                  <Typography>Solution Designed and Built by Sean Kendall</Typography>
+                  {user?.signInDetails?.loginId && <Typography>You are Logged in as: {user?.signInDetails?.loginId}</Typography>}
+                  <Typography>Active Model/Mode: {getHeaderLabel()}</Typography>
+                  <Typography>App Session ID: {appSessionid}</Typography>
+                  {kbSessionId && <Typography>KnowledgeBase Session ID: {kbSessionId}</Typography>}
+                  <Typography>Total Input/Output Tokens (Bedrock only): {totalInputTokens}/{totalOutputTokens}</Typography>
+                  <Typography>Bedrock Cost (Today): {calculateDailyCost()} USD</Typography>
+                  {monthlyInputTokens > 0 && <Typography>Bedrock Cost (Current Month): {calculateMonthlyCost()} USD</Typography>}
+                  <Typography> </Typography>
+                </Box>
+              }
+              open={showInfoTooltip}
+              onOpen={handleInfoTooltipOpen}
+              onClose={handleInfoTooltipClose}
+              arrow
+            >
+              <IconButton color="inherit" sx={{ ml: 1 }}>
+                <FaInfoCircle />
+              </IconButton>
+            </NoMaxWidthTooltip>
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {!isMobile && disabled && <Typography variant="body2" mr={2}>{formatTimer(elapsedTime)}</Typography>}
+            <>
               <FormControl sx={{ m: 1, minWidth: 120 }}>
-                <InputLabel id="kbmode-select-label" sx={{ color: 'white' }}>{isMobile ? 'KBModel' : 'KnowledgeBase Model'}</InputLabel>
+                <InputLabel id="mode-select-label" sx={{ color: 'white' }}>{isMobile ? 'Model' : 'Bedrock Chatbot Model'}</InputLabel>
                 <Select
-                  id="kbmode-select"
-                  labelId="kbmode-select-label"
-                  value={selectedKbMode ? selectedKbMode.category + '%' + selectedKbMode.mode_selector : 'DEFAULT'}
-                  onChange={onSelectedKbModeChange}
-                  label={isMobile ? 'KBModel' : 'KnowledgeBase Model'}
+                  id="mode-select"
+                  labelId="mode-select-label"
+                  value={selectedMode ? selectedMode.category + '%' + selectedMode.mode_selector : 'DEFAULT'}
+                  onChange={onSelectedModeChange}
+                  label={isMobile ? 'Model' : 'Bedrock Chatbot Model'}
                   sx={{
                     '& .MuiOutlinedInput-notchedOutline': {
                       borderColor: 'white',
@@ -313,33 +349,147 @@ const Header = ({
                   <MenuItem value="DEFAULT" >
                     <em>{isMobile ? 'Model' : 'Select a Model'}</em>
                   </MenuItem>
-                  {renderSelectOptions(kbModelOptions, isMobile ? 20 : 50)}
+                  {renderSelectOptions(selectOptions, isMobile ? 20 : 50)}
+                  <MenuItem value="RELOAD" >
+                    <em>{isMobile ? 'Reload' : 'Reload Models (~60 seconds)'}</em>
+                  </MenuItem>
                 </Select>
               </FormControl>
-            )}
+              {selectedMode && selectedMode.knowledgeBaseId && (
+                <FormControl sx={{ m: 1, minWidth: 120 }}>
+                  <InputLabel id="kbmode-select-label" sx={{ color: 'white' }}>{isMobile ? 'KBModel' : 'KnowledgeBase Model'}</InputLabel>
+                  <Select
+                    id="kbmode-select"
+                    labelId="kbmode-select-label"
+                    value={selectedKbMode ? selectedKbMode.category + '%' + selectedKbMode.mode_selector : 'DEFAULT'}
+                    onChange={onSelectedKbModeChange}
+                    label={isMobile ? 'KBModel' : 'KnowledgeBase Model'}
+                    sx={{
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'white',
+                      },
+                      '& .MuiSvgIcon-root': {
+                        color: 'white',
+                      },
+                      color: 'white',
+                    }}
+                  >
+                    <MenuItem value="DEFAULT" >
+                      <em>{isMobile ? 'Model' : 'Select a Model'}</em>
+                    </MenuItem>
+                    {renderSelectOptions(kbModelOptions, isMobile ? 20 : 50)}
+                  </Select>
+                </FormControl>
+              )}
 
-          </>
+            </>
 
-          <IconButton color="inherit" onClick={() => handleOpenSettingsModal()}>
-            <FaCog />
-          </IconButton>
-          <IconButton color="inherit" onClick={onClearConversation} disabled={disabled || (!selectedMode) || (selectedMode.category === "Bedrock KnowledgeBases" && !selectedKbMode)}>
-            <FaBroom />
-          </IconButton>
-          <IconButton color="inherit" onClick={handleMenuOpen} disabled={disabled}>
-            <FaSignOutAlt />
-          </IconButton>
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleMenuClose}
+            <IconButton color="inherit" onClick={() => handleOpenSettingsModal()}>
+              <FaCog />
+            </IconButton>
+            <IconButton color="inherit" onClick={onClearConversation} disabled={disabled || (allowlist && !isUserAllowed()) || (!selectedMode) || (selectedMode.category === "Bedrock KnowledgeBases" && !selectedKbMode)}>
+              <FaBroom />
+            </IconButton>
+            <IconButton color="inherit" onClick={handleMenuOpen} disabled={disabled}>
+              <FaSignOutAlt />
+            </IconButton>
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleMenuClose}
+            >
+              <MenuItem onClick={signOut}>Sign Out</MenuItem>
+            </Menu>
+          </Box>
+        </Toolbar>
+        {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
+      </AppBar>
+      {(modelsLoaded && (!models || models.length === 0) && (!imageModels || imageModels.length === 0)) && (
+        <Box
+        sx={{
+          width: '100%',
+          backgroundColor: '#f44336',
+          color: 'white',
+          padding: '12px',
+          textAlign: 'center',
+        }}
+      >
+        <Typography>
+          No models are currently active. Enable models by visiting the{' '}
+          <Link
+            href="https://console.aws.amazon.com/bedrock/home#/modelaccess"
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ color: 'white', textDecoration: 'underline' }}
           >
-            <MenuItem onClick={signOut}>Sign Out</MenuItem>
-          </Menu>
+            Amazon Bedrock Model Access page
+          </Link>
+          
+        </Typography>
+        
+        <Typography>
+          Already enabled Models?{' '}
+          <Button
+            onClick={triggerModelScan}
+            variant="contained"
+            color="primary"
+            sx={{
+              backgroundColor: 'white',
+              color: '#f44336',
+              '&:hover': {
+                backgroundColor: '#e0e0e0',
+              },
+            }}
+          >
+            Refresh Model List
+          </Button>
+        </Typography>
+      </Box>
+      
+      )}
+
+      {user && allowlist && user?.signInDetails?.loginId && !isUserAllowed() && (
+        <Box
+          sx={{
+            width: '100%',
+            backgroundColor: '#f44336',
+            color: 'white',
+            padding: '12px',
+            textAlign: 'center',
+          }}
+        >
+          <Typography>
+            You have not been allow-listed for this application. Your email must match one of the allowed values: {allowlist}
+          </Typography>
         </Box>
-      </Toolbar>
+      )}
+      {isRefreshing && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+          }}
+        >
+          <CircularProgress size={60} thickness={4} sx={{ color: 'white' }} />
+          <Typography variant="h6" sx={{ color: 'white', mt: 2 }}>
+            Loading Models
+          </Typography>
+          <Typography variant="body1" sx={{ color: 'white', mt: 1 }}>
+            Please wait, this could take a minute...
+          </Typography>
+        </Box>
+      )}
       {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
-    </AppBar>
+    </>
   );
 };
 

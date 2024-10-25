@@ -2,44 +2,57 @@ import React, { useEffect, useRef, forwardRef, memo } from 'react';
 import ChatMessage from './ChatMessage';
 import { Box } from '@mui/material';
 
-const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages, appSessionid, setAppSessionId,loadConversationHistory }, ref) => {
+const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages, appSessionid, setAppSessionId, loadConversationHistory, onSend }, ref) => {
   const lastMessageRef = useRef(null);
+  const loadedSessionId = useRef(null);
 
   useEffect(() => {
     if (selectedMode) {
       let sessionId = user.username;
       if (selectedMode.category === 'Bedrock Agents') {
-        sessionId = sessionId + '-agents-'+selectedMode.agentAliasId;
+        sessionId = `${sessionId}-agents-${selectedMode.agentAliasId}`;
       } else if (selectedMode.category === 'Bedrock KnowledgeBases') {
-        sessionId = sessionId + '-kb-'+selectedMode.knowledgeBaseId;
+        sessionId = `${sessionId}-kb-${selectedMode.knowledgeBaseId}`;
       } else if (selectedMode.category === 'Bedrock Prompt Flow') {
-        sessionId = sessionId + '-pflow-'+selectedMode.id;
+        sessionId = `${sessionId}-pflow-${selectedMode.id}`;
       } else if (selectedMode.category === 'Bedrock Models') {
-        sessionId = sessionId + '-model-'+selectedMode.modelId;
+        sessionId = `${sessionId}-model-${selectedMode.modelId}`;
       } else if (selectedMode.category === 'Bedrock Image Models') {
-        sessionId = sessionId + '-image-'+selectedMode.modelId;
+        sessionId = `${sessionId}-image-${selectedMode.modelId}`;
       }
-      setAppSessionId(sessionId)
-      const chatHistory = localStorage.getItem(`chatHistory-${sessionId}`);
-      setMessages(JSON.parse(chatHistory));
-      loadConversationHistory(`${sessionId}`);
+      if (sessionId !== appSessionid)
+        setAppSessionId(sessionId);
+
+      // Check if sessionId is different from loadedSessionId
+      if (sessionId !== loadedSessionId.current) {
+        console.log(`Loading chat history for session: ${sessionId}`);
+        const chatHistory = localStorage.getItem(`chatHistory-${sessionId}`);
+        setMessages(chatHistory ? JSON.parse(chatHistory) : []);
+        // Update loadedSessionId with the new sessionId
+        loadedSessionId.current = sessionId;
+        console.log(`triggering a new conversation load from the backend for sessionID: ${sessionId}`)
+        loadConversationHistory(sessionId);
+      }
     }
-  }, [selectedMode,user,appSessionid]);
+  }, [selectedMode, user, appSessionid]);
 
   return (
     <Box sx={{ flex: 1, p: 2, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {messages && Array.isArray(messages) && messages.map((message, index) => (
-        <div key={index} ref={lastMessageRef}>
+      {messages?.map((message, index) => (
+        <div key={message.id || index} ref={lastMessageRef}>
           <ChatMessage
             {...message}
             imageAlt={message.imageAlt || ''}
             isImage={message.isImage || false}
             prompt={message.prompt || ''}
+            onSend={onSend}
+            isLastMessage={index === messages.length - 1}
           />
         </div>
       ))}
     </Box>
   );
+
 }));
 
 export default ChatHistory;

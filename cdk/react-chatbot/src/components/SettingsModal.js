@@ -23,12 +23,14 @@ const SettingsModal = ({
     heightWidth,
     setHeightWidth,
     onModeChange,
-    selectedMode
+    selectedMode,
+    setAllowList
 }) => {
     const theme = useTheme();
     const [error, setError] = useState('');
     const [showInfoTooltip, setShowInfoTooltip] = useState(false);
     const [configLoaded, setConfigLoaded] = useState(false);
+    const [eventBridgeScheduleEnabled, setEventBridgeScheduleEnabled ] = useState(false);
 
     const [localState, setLocalState] = useState({
         pricePer1000InputTokens,
@@ -127,8 +129,8 @@ const SettingsModal = ({
                 subaction: 'load',
                 config_type: configType,
                 user: configType === 'user' ? user.username : 'system',
-                idToken: idToken + '',
-                accessToken: accessToken + '',
+                idToken: `${idToken}`,
+                accessToken: `${accessToken}`,
             };
             sendMessage(JSON.stringify(data));
         } catch (error) {
@@ -193,6 +195,8 @@ const SettingsModal = ({
                         updateLocalState('pricePer1000OutputTokens', response.pricePer1000OutputTokens || pricePer1000OutputTokens);
                         updateLocalState('systemSystemPrompt', response.systemPrompt || '');
                         updateSystemPrompt('system', response.systemPrompt ?? localState.systemSystemPrompt);
+                        setEventBridgeScheduleEnabled(response.eventbridge_scheduler_enabled === true)
+                        setAllowList(response.allowlist || '')
                     } else if (response.config_type === 'user') {
                         const newStylePreset = response.stylePreset || 'photographic';
                         const newHeightWidth = response.heightWidth || '1024x1024';
@@ -213,6 +217,8 @@ const SettingsModal = ({
 
                     } else if (response.message === 'Config saved successfully') {
                         console.log('Configuration saved successfully');
+                    } else if (response.message === 'Config not found') {
+                        console.log('No Custom config yet saved');
                     } else {
                         console.log('Other settings response:', response);
                     }
@@ -242,8 +248,8 @@ const SettingsModal = ({
                 subaction: 'save',
                 config_type: configType,
                 user: configType === 'user' ? user.username : undefined,
-                idToken: idToken + '',
-                accessToken: accessToken + '',
+                idToken: `${idToken}`,
+                accessToken: `${accessToken}`,
                 config: {
                     ...config,
                     systemPrompt: configType === 'system' ? localState.systemSystemPrompt : localState.userSystemPrompt
@@ -256,7 +262,27 @@ const SettingsModal = ({
         }
     }, [getCurrentSession, sendMessage, user.username, localState.systemSystemPrompt, localState.userSystemPrompt]);
 
-
+    const toggleEventBridgeSchedule = useCallback(async (enable) => {
+        console.log(`${enable ? 'Enabling' : 'Disabling'} Model Scan Schedule`);
+        setEventBridgeScheduleEnabled(enable)
+        try {
+            const { accessToken, idToken } = await getCurrentSession();
+            const data = {
+                action: 'config',
+                subaction: enable ? 'enable_schedule' : 'disable_schedule',
+                idToken: `${idToken}`,
+                accessToken: `${accessToken}`,
+            };
+            await sendMessage(JSON.stringify(data));
+        } catch (error) {
+            console.error('Error saving configuration:', error);
+            setError('Failed to save configuration. Please try again.');
+        }
+    }, [getCurrentSession, sendMessage]);
+    
+    const disableEventBridgeSchedule = useCallback(() => toggleEventBridgeSchedule(false), [toggleEventBridgeSchedule]);
+    const enableEventBridgeSchedule = useCallback(() => toggleEventBridgeSchedule(true), [toggleEventBridgeSchedule]);
+    
     const handleSave = useCallback(() => {
         setError('');
         setPricePer1000InputTokens(localState.pricePer1000InputTokens);
@@ -320,7 +346,13 @@ const SettingsModal = ({
                 <Typography variant="h6" component="h2">
                     Settings
                 </Typography>
-
+                <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', marginTop: theme.spacing(2) }}>
+                        <Tooltip title="Model Scan Schedule is a lambda function that runs daily to check for model access and capabilities. Turn this off to stop paying for this daily job. You may also manually refresh the model access from the model select dropdown in the header of the application" arrow>
+                            {eventBridgeScheduleEnabled ? <Button onClick={disableEventBridgeSchedule} variant="contained" color="primary">Disable Model Scan Schedule</Button> : <Button onClick={enableEventBridgeSchedule} variant="contained" color="primary">Enable Model Scan Schedule</Button>}
+                        </Tooltip>
+                    </Box>
+                </Typography>
                 <Tooltip title="Enter the price per 1000 input tokens" arrow>
                     <TextField
                         label="Price per 1000 Input Tokens"
@@ -358,8 +390,8 @@ const SettingsModal = ({
                             </Typography>
                             <Tooltip
                                 title="Add a Backend Prompt to direct the chatbot to give you better answers such as:
-                        'You are a developer and system architect helping design well architected code 
-                        for a modern event-driven application'"
+                                    'You are a developer and system architect helping design well architected code 
+                                    for a modern event-driven application'"
                                 placement="right"
                                 open={showInfoTooltip}
                                 onOpen={handleInfoTooltipOpen}

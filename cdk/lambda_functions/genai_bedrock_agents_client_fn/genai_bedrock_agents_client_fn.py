@@ -1,6 +1,7 @@
 import json, boto3, os
 from datetime import datetime, timezone
 from aws_lambda_powertools import Logger, Metrics, Tracer
+from chatbot_commons import commons
 
 
 # Initialize Bedrock client
@@ -33,13 +34,14 @@ def lambda_handler(event, context):
             return {'statusCode': 200}
 
         except Exception as e:
-            logger.error("Error 7460: " + str(e))
             logger.exception(e)
+            logger.error("Error 7460: " + str(e))
             if 'Session with Id' in str(e) and 'is not valid. Please check and try again' in str(e):
                 logger.error("Removing Session ID and trying again")
                 force_null_kb_session_id = True
             else:
-                send_websocket_message(event['requestContext']['connectionId'], {
+                connection_id = event['requestContext']['connectionId']
+                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'error',
                     'code':'7460',
                     'error': str(e)
@@ -132,7 +134,7 @@ def process_websocket_message(event, force_null_kb_session_id):
 @tracer.capture_method        
 def process_bedrock_knowledgebase_response(response, connection_id, backend_type):
     counter = 0
-    send_websocket_message(connection_id, {
+    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                         'type': 'message_start',
                         'message': 'Agent response started'
                     })
@@ -142,7 +144,7 @@ def process_bedrock_knowledgebase_response(response, connection_id, backend_type
     citations = response['citations']
     kb_session_id = response['sessionId']
     
-    send_websocket_message(connection_id, {
+    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'content_block_delta',
                     'delta': {'text': content},
                     'message_id': counter,
@@ -152,14 +154,14 @@ def process_bedrock_knowledgebase_response(response, connection_id, backend_type
     #if citations is not None, then for each citations send to websocket
     if citations is not None:
         for citation in citations:
-            send_websocket_message(connection_id, {
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'citation_data',
                     'delta': citation,
                     'kb_session_id':kb_session_id,
                     'backend_type': backend_type
                 })
     
-    send_websocket_message(connection_id, {
+    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'message_stop',
                 'timestamp': datetime.now(timezone.utc).isoformat(),
                 'kb_session_id':kb_session_id,
@@ -186,7 +188,7 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
                     message_type = 'message_start';
 
                 # Send the content_block_delta event to the WebSocket client
-                send_websocket_message(connection_id, {
+                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': message_type,
                     'message': {"model": selected_model_id},
                     'delta': {'text': content_chunk},
@@ -204,7 +206,7 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
                 if counter == 0:
                     message_type = 'message_start';
                     
-                send_websocket_message(connection_id, {
+                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': message_type,
                     'message': {"model": selected_model_id},
                     'delta': {'text': content},
@@ -219,7 +221,7 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
                 if flow_completion_event['completionReason'] == 'SUCCESS':
                     if counter > 0:
                         # Send the message_stop event to the WebSocket client
-                        send_websocket_message(connection_id, {
+                        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                             'type': 'message_stop',
                             'timestamp': datetime.now(timezone.utc).isoformat(),
                             'backend_type': backend_type
@@ -227,7 +229,7 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
                         message_stop_sent = True
                 else:
                     # Send an error message to the WebSocket client
-                    send_websocket_message(connection_id, {
+                    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                         'type': 'error',
                         'code': '9200',
                         'error': 'Flow completion event with non-success reason'
@@ -235,7 +237,7 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
 
         if counter > 0 and not message_stop_sent:
             # Send the message_stop event to the WebSocket client
-            send_websocket_message(connection_id, {
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'message_stop',
                 'timestamp': datetime.now(timezone.utc).isoformat(),
                 'backend_type': backend_type
@@ -243,36 +245,16 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
         message_stop_sent = True
 
     except Exception as e:
-        logger.error(f"Error processing Bedrock response: {str(e)}")
         logger.exception(e)
+        logger.error(f"Error processing Bedrock response: {str(e)}")
         # Send an error message to the WebSocket client
-        send_websocket_message(connection_id, {
+        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'error',
             'code': '9200',
             'error': str(e)
         })
         if counter > 0:
             logger.error('Sending message stop now...(error)')
-            send_websocket_message(connection_id, {'type': 'message_stop'})
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {'type': 'message_stop'})
 
     return result_text
-
-@tracer.capture_method
-def send_websocket_message(connection_id, message):
-    try:
-        # Check if the WebSocket connection is open
-        connection = apigateway_management_api.get_connection(ConnectionId=connection_id)
-        connection_state = connection.get('ConnectionStatus', 'OPEN')
-        if connection_state != 'OPEN':
-            logger.error(f"WebSocket connection is not open (state: {connection_state})")
-            return
-
-        apigateway_management_api.post_to_connection(
-            ConnectionId=connection_id,
-            Data=json.dumps(message).encode()
-        )
-    except apigateway_management_api.exceptions.GoneException:
-        logger.error(f"WebSocket connection is closed (connectionId: {connection_id})")
-    except Exception as e:
-        logger.error(f"Error sending WebSocket message (672): {str(e)}")
-        logger.exception(e)
