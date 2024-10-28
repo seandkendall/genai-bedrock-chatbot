@@ -60,7 +60,7 @@ class ChatbotWebsiteStack(Stack):
         # Create a Lambda layer for the Boto3 library
         boto3_layer = lambda_python.PythonLayerVersion(
             self, "Boto3Layer",
-            entry="lambda_functions/python_layer2",
+            entry="lambda_functions/python_layer",
             compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
             compatible_architectures=[_lambda.Architecture.ARM_64],
             description="Boto3 library with  PyJWT django pytz requests used for arm64/3.12"
