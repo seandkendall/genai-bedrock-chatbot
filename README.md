@@ -4,11 +4,12 @@
 > [!TIP]
 > [Tldr; Click here for the quick deploy guide](#quick-deploy-solution-link)
 
-<details>
+<details open>
 <summary>Tdlr; Quick Deploy Solution (With CI/CD)</summary>
-
-# Quick Deploy Solution
 <a name="quick-deploy-solution-link"></a>
+
+# Quick Deploy Guide
+
 
 For a quick start, use the [CI/CD](https://docs.aws.amazon.com/prescriptive-guidance/latest/strategy-cicd-litmus/understanding-cicd.html) script which will set-up a [CodeBuild](https://aws.amazon.com/codebuild/) project, automating the deployment.
 ![Quick Video Demo of CI/CD Setup using cloudshell](./readme-images/chatbot_web.gif)
