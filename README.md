@@ -2,14 +2,16 @@
 <!-- MD formats here: https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax -->
 
 > [!TIP]
-> [Tldr; Click here for the quick deploy guide](#quick-deploy-solution)
+> [Tldr; Click here for the quick deploy guide](#quick-deploy-solution-link)
 
 <details>
 <summary>Tdlr; Quick Deploy Solution (With CI/CD)</summary>
 
-#Quick Deploy Solution
+# Quick Deploy Solution
+<a name="quick-deploy-solution-link"></a>
 
 For a quick start, use the [CI/CD](https://docs.aws.amazon.com/prescriptive-guidance/latest/strategy-cicd-litmus/understanding-cicd.html) script which will set-up a [CodeBuild](https://aws.amazon.com/codebuild/) project, automating the deployment.
+![Quick Video Demo of CI/CD Setup using cloudshell](./readme-images/chatbot_web.gif)
 
 1. Login to [your AWS account](https://console.aws.amazon.com/console/home)
 
