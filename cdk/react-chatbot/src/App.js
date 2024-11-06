@@ -1,4 +1,3 @@
-import { marked } from 'marked';
 import { websocketUrl } from './variables.js';
 import React, { useState, useEffect, useRef, memo, lazy, Suspense } from 'react';
 import DOMPurify from 'dompurify';
@@ -37,14 +36,6 @@ const theme = createTheme({
 });
 
 Amplify.configure(amplifyConfig);
-marked.setOptions({
-  breaks: true,
-  gfm: true,
-  sanitize: true,
-  smartLists: true,
-  smartypants: false,
-  xhtml: false,
-});
 
 const App = memo(({ signOut, user }) => {
   const [messages, setMessages] = useState([]);
@@ -256,17 +247,32 @@ const App = memo(({ signOut, user }) => {
     }
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only fire this when lastMessage changes
   useEffect(() => {
-    if (lastMessage !== null) {
+    if (!lastMessage) return;
+  
+    try {
       const message = JSON.parse(lastMessage.data);
-      if (message.type === 'conversation_history') {
-        const messageChunk = convertRuleToHuman(JSON.parse(message.chunk));
-        if (JSON.stringify(messageChunk) !== JSON.stringify(messages)){
-          setMessages(messageChunk);
-        }
+      if (message.type !== 'conversation_history') return;
+      
+      const current_chunk = message.current_chunk || 1;
+      const messageChunk = convertRuleToHuman(JSON.parse(message.chunk));
+      
+      // Memoize the comparison result
+      const isMessageDifferent = JSON.stringify(messageChunk) !== JSON.stringify(messages);
+      
+      if (isMessageDifferent) {
+        setMessages(prevMessages => 
+          current_chunk === 1 
+            ? messageChunk 
+            : [...prevMessages, ...messageChunk]
+        );
       }
+    } catch (error) {
+      console.error('Error processing message:', error);
     }
-  }, [lastMessage, sendMessage]);
+  // Remove messages from dependency array since it causes infinite loop
+  }, [lastMessage]);   
 
   const handleError = (message) => {
     const errormessage = typeof message === 'string' ? message : message.error || message.message;

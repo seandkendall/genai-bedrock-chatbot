@@ -3,6 +3,8 @@ import string
 import json
 import os
 import boto3
+from time import time
+from collections import deque
 from chatbot_commons import commons
 from datetime import datetime, timezone
 from aws_lambda_powertools import Logger
@@ -56,7 +58,10 @@ def split_message(message, max_chunk_size=30 * 1024):  # 30 KB chunk size
 
     return chunks
 
-def process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers):
+from time import time
+from collections import deque
+
+def process_bedrock_converse_response(apigateway_management_api, response, selected_model_id, connection_id, converse_content_with_s3_pointers):
     """Function to process a bedrock response and send the messages back to the websocket for converse API"""
     result_text = ""
     current_input_tokens = 0
@@ -64,31 +69,64 @@ def process_bedrock_converse_response(apigateway_management_api,response,selecte
     counter = 0
     message_end_timestamp_utc = ''
     stream = response.get('stream')
+    
     if stream:
+        start_time = time()
+        buffer = deque()
+        last_send_time = start_time
+        
         for event in stream:
             if 'contentBlockDelta' in event:
+                current_time = time()
                 msg_text = event['contentBlockDelta']['delta']['text']
+                
                 if counter == 0:
+                    # Always send the first message immediately
                     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                    'type': 'message_start',
-                    'message': {"model": selected_model_id},
-                    'delta': {'text': msg_text},
-                    'message_id': counter
-                    })
-                else:
-                    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                        'type': 'content_block_delta',
+                        'type': 'message_start',
+                        'message': {"model": selected_model_id},
                         'delta': {'text': msg_text},
                         'message_id': counter
                     })
+                else:
+                    if current_time - start_time <= 5:  # First 5 seconds
+                        # Send messages immediately
+                        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                            'type': 'content_block_delta',
+                            'delta': {'text': msg_text},
+                            'message_id': counter
+                        })
+                    else:  # After 5 seconds
+                        buffer.append(msg_text)
+                        # Send combined messages once per second
+                        if current_time - last_send_time >= 1 and buffer:
+                            combined_text = ''.join(buffer)
+                            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                                'type': 'content_block_delta',
+                                'delta': {'text': combined_text},
+                                'message_id': counter
+                            })
+                            buffer.clear()
+                            last_send_time = current_time
+                
                 result_text += msg_text
                 counter += 1
+                
             if 'metadata' in event:
                 metadata = event['metadata']
                 if 'usage' in metadata:
                     current_input_tokens = metadata['usage']['inputTokens']
                     current_output_tokens = metadata['usage']['outputTokens']
-                    
+        
+        # Send any remaining buffered messages
+        if buffer:
+            combined_text = ''.join(buffer)
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                'type': 'content_block_delta',
+                'delta': {'text': combined_text},
+                'message_id': counter
+            })
+        
         logger.info(f"TokenCounts (Converse): {str(current_input_tokens)}/{str(current_output_tokens)}")
         # Send the message_stop event to the WebSocket client
         message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
@@ -96,9 +134,11 @@ def process_bedrock_converse_response(apigateway_management_api,response,selecte
             'type': 'message_stop',
             'message_id': counter,
             'timestamp': message_end_timestamp_utc,
-            'converse_content_with_s3_pointers':converse_content_with_s3_pointers,
-            'amazon-bedrock-invocationMetrics': {'inputTokenCount':current_input_tokens,
-                                                 'outputTokenCount':current_output_tokens},
+            'converse_content_with_s3_pointers': converse_content_with_s3_pointers,
+            'amazon-bedrock-invocationMetrics': {
+                'inputTokenCount': current_input_tokens,
+                'outputTokenCount': current_output_tokens
+            },
         })
+        
         return result_text, current_input_tokens, current_output_tokens, message_end_timestamp_utc
-            
