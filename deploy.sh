@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # Define colors
 has_colors() {
     local has_colors=false
@@ -11,6 +12,157 @@ has_colors() {
     fi
     echo $has_colors
 }
+validate_domain() {
+    local domain="$1"
+    [[ "$domain" =~ ^@?[a-zA-Z0-9.-]+$ ]]
+    return $?
+}
+
+get_allowlist_domains() {
+    local domains
+    while true; do
+        read -p "Enter the allowlist domains separated by commas (Example: @amazon.com,@example.ca): " domains
+        local valid=true
+        IFS=',' read -ra domain_array <<< "$domains"
+        for domain in "${domain_array[@]}"; do
+            if ! validate_domain "$domain"; then
+                valid=false
+                echo "Error: Invalid domain format for: $domain"
+                break
+            fi
+        done
+        if $valid; then
+            echo "$domains"
+            return 0
+        fi
+    done
+}
+
+# Function to check if Docker is installed
+check_docker_installed() {
+    if ! command -v docker &> /dev/null; then
+        return 1
+    fi
+    return 0
+}
+
+# Function to check if Docker is running
+check_docker_running() {
+    if ! docker info &> /dev/null; then
+        return 1
+    fi
+    return 0
+}
+
+# Function to install Docker on Linux (supports apt-get and yum)
+install_docker_linux() {
+    if command -v apt-get &> /dev/null; then
+        echo "Installing Docker using apt-get..."
+        sudo apt-get update
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    elif command -v yum &> /dev/null; then
+        echo "Installing Docker using yum..."
+        sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+        sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+        sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    else
+        echo "Unsupported package manager. Please install Docker manually."
+        exit 1
+    fi
+}
+
+# Function to install Docker on macOS using Homebrew
+install_docker_macos() {
+    if ! command -v brew &> /dev/null; then
+        echo "Homebrew not found. Please install Homebrew first."
+        exit 1
+    fi
+
+    echo "Installing Docker using Homebrew..."
+    brew install --cask docker
+    
+    # Start Docker Desktop after installation (if not already running)
+    open /Applications/Docker.app || echo "Failed to start Docker Desktop. Please start it manually."
+}
+
+# Function to start Docker service on Linux
+start_docker_linux() {
+    echo "Attempting to start Docker..."
+    sudo systemctl start docker
+
+    # Check if the service started successfully
+    if ! check_docker_running; then
+        echo "Failed to start Docker. Please check the service logs."
+        exit 1
+    fi
+
+    # Enable Docker to start on boot (optional)
+    sudo systemctl enable docker
+}
+
+# Function to check and start Docker Desktop on macOS
+start_docker_macos() {
+    # Check if Docker Desktop is running by looking for its process (Docker Desktop app uses com.docker.docker)
+    if ! pgrep -f 'Docker.app' &> /dev/null; then
+        echo "Starting Docker Desktop..."
+        open /Applications/Docker.app
+        
+        # Wait for a few seconds to allow the app to start up properly before checking again.
+        sleep 10
+        
+        # Check again if it's running now.
+        if ! pgrep -f 'Docker.app' &> /dev/null; then
+            echo "Failed to start Docker Desktop. Please start it manually."
+            exit 1
+        fi
+        
+        # Wait for the daemon to be fully ready.
+        echo "Waiting for Docker daemon to be ready..."
+        while ! check_docker_running; do 
+            sleep 5 
+            echo "Still waiting for Docker daemon..."
+        done
+        
+        echo "Docker Desktop started successfully."
+    else 
+        echo "Docker Desktop is already running."
+    fi
+}
+
+# Main logic to check, install, and start Docker as needed
+
+if ! check_docker_installed; then
+    echo "Docker is not installed."
+
+    case "$(uname -s)" in 
+        Linux*)
+            echo "Installing Docker on Linux..."
+            install_docker_linux ;;
+        Darwin*)
+            echo "Installing Docker on macOS..."
+            install_docker_macos ;;
+        *)
+            echo "Unsupported operating system."
+            exit 1 ;;
+    esac
+
+elif ! check_docker_running; then
+    echo "Docker is installed but not running."
+
+    case "$(uname -s)" in 
+        Linux*)
+            start_docker_linux ;;
+        Darwin*)
+            start_docker_macos ;;
+        *)
+            echo "Unsupported operating system."
+            exit 1 ;;
+    esac
+
+else 
+    echo "Docker is already installed and running."
+fi
+
 
 if $(has_colors); then
     # Use color codes
@@ -41,7 +193,12 @@ while [[ $# -gt 0 ]]; do
             allowListDomain="$2"
             shift 2
             ;;
+        --deploy-agents-example)
+            deployExample='y'
+            shift
+            ;;
         --headless)
+            is_headless=true
             run_bootstrap=true
             shift
             ;;
@@ -54,6 +211,7 @@ done
 
 # Restore the positional arguments
 set -- "${POSITIONAL_ARGS[@]}"
+deployExample=${deployExample:-'n'}
 
 # Check if AWS CDK is installed
 if ! command -v cdk &> /dev/null
@@ -152,38 +310,24 @@ get_certificate_arn() {
 }
 
 
-# Check if allowlistDomain exists, else prompt user
-if [ -z "$allowListDomain" ]; then
-    if [ -n "$run_bootstrap" ]; then
-        # If --headless flag is used, assume add_allowlist is false
-        allowListDomain=""
-    else
-        read -p "Would you like to add one or more email domains to an allowlist for user registration? (y/n) " add_allowlist
-        case "$add_allowlist" in
-            [yY][eE][sS]|[yY])
-                while true; do
-                    read -p "Enter the allowlist domains separated by commas (Example: @amazon.com,@example.ca): " allowListDomain
-                    valid=true
-                    IFS=',' read -ra domains <<< "$allowListDomain"
-                    for domain in "${domains[@]}"; do
-                        if ! [[ "$domain" =~ ^@?[a-zA-Z0-9.-]+$ ]]; then
-                            valid=false
-                            break
-                        fi
-                    done
-                    if $valid; then
-                        echo "$allowListDomain" > allowlistdomain.ref
-                        break
-                    else
-                        echo "Error: Invalid domain format. Please try again."
-                    fi
-                done
-                ;;
-            *)
-                echo "" > allowlistdomain.ref
-                ;;
-        esac
-    fi
+if [[ -n "$allowListDomain" ]]; then
+    echo "$allowListDomain" > allowlistdomain.ref
+elif [[ -f allowlistdomain.ref ]]; then
+    allowListDomain=$(cat allowlistdomain.ref)
+elif [[ -z "$is_headless" ]] || [[ "$is_headless" != "true" ]]; then
+    read -p "Would you like to add one or more email domains to an allowlist for user registration? (y/n) " add_allowlist
+    case "${add_allowlist,,}" in
+        y|yes)
+            allowListDomain=$(get_allowlist_domains)
+            echo "$allowListDomain" > allowlistdomain.ref
+            ;;
+        *)
+            : > allowlistdomain.ref  # Create empty file
+            allowListDomain=""
+            ;;
+    esac
+else
+    allowListDomain=""
 fi
 
 #change to cdk Directory
@@ -207,7 +351,7 @@ else
     if [ -n "$run_bootstrap" ]; then
         # If --headless flag is used, run cdk bootstrap
         echo "Running CDK bootstrap..."
-        cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain"
+        cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context allowlistDomain="$allowListDomain"
         if [ $? -eq 0 ]; then
             echo "CDK bootstrap completed successfully."
         else
@@ -219,7 +363,7 @@ else
         case "$run_bootstrap" in
             [yY][eE][sS]|[yY])
                 echo "Running CDK bootstrap..."
-                cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain"
+                cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context allowlistDomain="$allowListDomain"
                 if [ $? -eq 0 ]; then
                     echo "CDK bootstrap completed successfully."
                 else
@@ -236,7 +380,7 @@ fi
 touch "$bootstrap_ref_file"
 
 # Deploy the CDK app
-cdk deploy --outputs-file outputs.json --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+cdk deploy --outputs-file outputs.json --context deployExample="$deployExample" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
 if [ $? -ne 0 ]; then
     echo "Error: CDK deployment failed. Exiting script."
     exit 1

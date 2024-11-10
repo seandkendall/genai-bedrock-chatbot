@@ -80,9 +80,9 @@ def validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
     Example:
         >>> is_valid, error_message, _ = validate_jwt_token(cognito_client, user_cache, "example.com,test.com", "user_access_token")
         >>> if is_valid:
-        ...     print("User validated successfully")
+        ...     logger.info("User validated successfully")
         ... else:
-        ...     print(error_message)
+        ...     logger.info(error_message)
     """
     user_attributes = get_user_attributes(cognito_client, user_cache,access_token)
     email_verified = False

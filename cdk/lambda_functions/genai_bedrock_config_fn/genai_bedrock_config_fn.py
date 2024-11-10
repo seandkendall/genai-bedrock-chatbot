@@ -85,7 +85,7 @@ def lambda_handler(event, context):
                 if action in action_map:
                     global load_prompt_flow_response, load_knowledgebase_response, load_agents_response, load_models_response
                     response_var = f"load_{action.split('_', 1)[1]}_response"
-                    if response_var in globals() and globals()[response_var] is not None:
+                    if modelscan is False and response_var in globals() and globals()[response_var] is not None:
                         return_obj[action] = globals()[response_var]
                     else:
                         # Call the mapped function and store the response in the corresponding global variable

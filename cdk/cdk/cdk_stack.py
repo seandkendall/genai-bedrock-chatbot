@@ -28,17 +28,17 @@ import os
 from aws_cdk.aws_route53 import PublicHostedZone
 from .cdk_constants import lambda_insights_layers
 
-
-
-
-
-
 class ChatbotWebsiteStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
-        super().__init__(scope, construct_id, **kwargs)    
+        super().__init__(scope, construct_id, **kwargs)
         region = os.environ.get('CDK_DEFAULT_REGION')
         scheduler_group_name = "ChatbotSchedulerGroup"
+        deploy_example_incidents_agent_input = self.node.try_get_context("deployExample")
+        deploy_example_incidents_agent = False
+        if deploy_example_incidents_agent_input is not None and deploy_example_incidents_agent_input != "":
+            if "y" in deploy_example_incidents_agent_input.lower() or "true" in deploy_example_incidents_agent_input.lower():
+                deploy_example_incidents_agent = True
         cognito_domain_string = self.node.try_get_context("cognitoDomain")
         if cognito_domain_string is None:
             cognito_domain_string = ""
@@ -214,11 +214,13 @@ class ChatbotWebsiteStack(Stack):
                                                       partition_key=dynamodb.Attribute(name="session_id", type=dynamodb.AttributeType.STRING),
                                                       billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
                                                       removal_policy=RemovalPolicy.DESTROY,)
-        
-        dynamodb_incidents_table = dynamodb.Table(self, "incidents_table", 
-                                                  partition_key=dynamodb.Attribute(name="incident_id", type=dynamodb.AttributeType.STRING),
-                                                  billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-                                                  removal_policy=RemovalPolicy.DESTROY,)
+        dynamodb_incidents_table_name = 'NONE'
+        if deploy_example_incidents_agent:
+            dynamodb_incidents_table = dynamodb.Table(self, "incidents_table", 
+                                                    partition_key=dynamodb.Attribute(name="incident_id", type=dynamodb.AttributeType.STRING),
+                                                    billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+                                                    removal_policy=RemovalPolicy.DESTROY,)
+            dynamodb_incidents_table_name = dynamodb_incidents_table.table_name
 
         dynamodb_configurations_table = dynamodb.Table(
             self, "configurations_table",
@@ -325,29 +327,30 @@ class ChatbotWebsiteStack(Stack):
         dynamodb_configurations_table.grant_read_data(agents_client_function)
         
 
-        # Create the "genai_bedrock_agents_fn" Lambda function
-        agents_function = _lambda.Function(self, "genai_bedrock_agents_fn",
-                                     runtime=_lambda.Runtime.PYTHON_3_12,
-                                     handler="genai_bedrock_agents_fn.lambda_handler",
-                                     code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_agents_fn/"),
-                                     timeout=Duration.seconds(120),
-                                     architecture=_lambda.Architecture.ARM_64,
-                                     tracing=_lambda.Tracing.ACTIVE,
-                                     memory_size=1024,
-                                     layers=[boto3_layer, commons_layer, lambda_insights_layer],
-                                     log_retention=logs.RetentionDays.FIVE_DAYS,
-                                     environment={
-                                          "DYNAMODB_TABLE": dynamodb_incidents_table.table_name,
-                                          "POWERTOOLS_SERVICE_NAME":"AGENTS_SERVICE",
-                                     }
-                                     )
-        agents_function.apply_removal_policy(RemovalPolicy.DESTROY)
-        dynamodb_incidents_table.grant_full_access(agents_function)
-        agents_function.add_permission(
-            "AllowBedrock",
-            principal=iam.ServicePrincipal("bedrock.amazonaws.com"),
-            source_arn=f"arn:aws:bedrock:{region}:{self.account}:agent/*"
-        )
+        # Create the "genai_bedrock_incidents_agents_fn" Lambda function
+        if deploy_example_incidents_agent:
+            incidents_agents_function = _lambda.Function(self, "genai_bedrock_incidents_agents_fn",
+                                        runtime=_lambda.Runtime.PYTHON_3_12,
+                                        handler="genai_bedrock_incidents_agents_fn.lambda_handler",
+                                        code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_incidents_agents_fn/"),
+                                        timeout=Duration.seconds(120),
+                                        architecture=_lambda.Architecture.ARM_64,
+                                        tracing=_lambda.Tracing.ACTIVE,
+                                        memory_size=1024,
+                                        layers=[boto3_layer, commons_layer, lambda_insights_layer],
+                                        log_retention=logs.RetentionDays.FIVE_DAYS,
+                                        environment={
+                                            "INCIDENTS_DYNAMODB_TABLE": dynamodb_incidents_table_name,
+                                            "POWERTOOLS_SERVICE_NAME":"AGENTS_SERVICE",
+                                        }
+                                        )
+            incidents_agents_function.apply_removal_policy(RemovalPolicy.DESTROY)
+            dynamodb_incidents_table.grant_full_access(incidents_agents_function)
+            incidents_agents_function.add_permission(
+                "AllowBedrock",
+                principal=iam.ServicePrincipal("bedrock.amazonaws.com"),
+                source_arn=f"arn:aws:bedrock:{region}:{self.account}:agent/*"
+            )
 
         # Create the "genai_bedrock_fn_async" Lambda function
         lambda_fn_async = _lambda.Function(self, "genai_bedrock_fn_async",
@@ -361,7 +364,7 @@ class ChatbotWebsiteStack(Stack):
                                      layers=[boto3_layer, commons_layer, lambda_insights_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
-                                          "DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
+                                          "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
                                           "CONVERSATION_HISTORY_BUCKET": conversation_history_bucket.bucket_name,
                                           "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                                           "DYNAMODB_TABLE_CONFIG": dynamodb_configurations_table.table_name,
@@ -458,7 +461,8 @@ class ChatbotWebsiteStack(Stack):
         lambda_fn_async.grant_invoke(lambda_router_fn)
         agents_client_function.grant_invoke(lambda_router_fn)
         image_generation_function.grant_invoke(lambda_router_fn)
-        dynamodb_incidents_table.grant_full_access(agents_client_function)
+        if deploy_example_incidents_agent:
+            dynamodb_incidents_table.grant_full_access(agents_client_function)
         
         presigned_url_function = _lambda.Function(self, "PreSignedUrlFunction",
                                     runtime=_lambda.Runtime.PYTHON_3_12,

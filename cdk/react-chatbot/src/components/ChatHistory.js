@@ -30,7 +30,6 @@ const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages
         setMessages(chatHistory ? JSON.parse(chatHistory) : []);
         // Update loadedSessionId with the new sessionId
         loadedSessionId.current = sessionId;
-        console.log(`triggering a new conversation load from the backend for sessionID: ${sessionId}`)
         loadConversationHistory(sessionId);
       }
     }

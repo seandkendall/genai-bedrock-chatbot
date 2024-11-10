@@ -3,4 +3,4 @@ PyJWT
 django
 pytz
 requests
-aws-lambda-powertools[all]==2.11.0
+aws-lambda-powertools[all]

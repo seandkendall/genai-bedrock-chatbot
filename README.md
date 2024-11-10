@@ -254,6 +254,29 @@ Additionally, here are some other helpful resources for learning Git:
 - [Git Handbook](https://guides.github.com/introduction/git-handbook/)
 - [Git Tutorial for Beginners](https://www.vogella.com/tutorials/GitTutorial/article.html)
 
+## Updating npm packages with npm-check -u
+To make sure the project is always using patched and latest versions of packages, periodically run `npm-check -u`
+
+You may need to install this on your machine first, this can be done by running this npm command:
+
+```
+npm install -g npm-check
+```
+
+**Usage:**
+### upgrade project npm packages
+```
+cd ./cdk/react-chatbot
+npm-check -u
+```
+
+### upgrade global (system level) npm packages
+```
+npm-check -u -g
+```
+
+[Learn more about npm-check](https://www.npmjs.com/package/npm-check)
+
 ## Useful Links
  - Bedrock Converse API Capabilities per model: [https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)
  - Bedrock Runtime Documentation: (https://docs.aws.amazon.com/bedrock/latest/userguide/service_code_examples_bedrock-runtime.html)[https://docs.aws.amazon.com/bedrock/latest/userguide/service_code_examples_bedrock-runtime.html]

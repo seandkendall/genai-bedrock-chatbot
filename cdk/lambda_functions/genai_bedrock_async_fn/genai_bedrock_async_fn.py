@@ -31,7 +31,7 @@ conversation_history_bucket = os.environ['CONVERSATION_HISTORY_BUCKET']
 attachment_bucket = os.environ['ATTACHMENT_BUCKET']
 image_bucket = os.environ['S3_IMAGE_BUCKET_NAME']
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
-table_name = os.environ['DYNAMODB_TABLE']
+conversations_table_name = os.environ['CONVERSATIONS_DYNAMODB_TABLE']
 usage_table_name = os.environ['DYNAMODB_TABLE_USAGE']
 region = os.environ['REGION']
 
@@ -234,7 +234,7 @@ def process_websocket_message(event):
                                                     additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{}))
                     
                 assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers)
-                store_conversation_history_converse(session_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id)
+                store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id)
             except Exception as e:
                 logger.exception(e)
                 logger.error(f"Error calling bedrock model (912): {str(e)}")
@@ -290,7 +290,7 @@ def delete_conversation_history(session_id):
     """Function to delete conversation history from DDB"""
     try:
         dynamodb.delete_item(
-            TableName=table_name,
+            TableName=conversations_table_name,
             Key={'session_id': {'S': session_id}}
         )
         logger.info(f"Conversation history deleted for session ID: {session_id}")
@@ -303,7 +303,7 @@ def query_existing_history(session_id):
     """Function to query existing history from DDB"""
     try:
         response = dynamodb.get_item(
-            TableName=table_name,
+            TableName=conversations_table_name,
             Key={'session_id': {'S': session_id}},
             ProjectionExpression='conversation_history'
         )
@@ -375,18 +375,6 @@ def load_documents_from_existing_history(existing_history):
             modified_item['content'].append(modified_content_item)
         modified_history.append(modified_item)
     return modified_history
-    
-@tracer.capture_method
-def get_monthly_token_usage(user_id):
-    """Function to get monthly token usage from DDB"""
-    current_date_ym = datetime.now(tz=timezone.utc).strftime('%Y-%m')
-    response = dynamodb.get_item(
-        TableName=usage_table_name,
-        Key={'user_id': user_id+'-'+current_date_ym},
-        ProjectionExpression='input_tokens, output_tokens'
-    )
-    if 'Item' in response:
-        return response['Item']['input_tokens']['N'], response['Item']['output_tokens']['N']
 
 @tracer.capture_method    
 def save_token_usage(user_id, input_tokens,output_tokens):
@@ -426,7 +414,7 @@ def save_token_usage(user_id, input_tokens,output_tokens):
                 )
 
 @tracer.capture_method    
-def store_conversation_history_converse(session_id, existing_history, converse_content_array, user_message, assistant_message, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id):
+def store_conversation_history_converse(session_id,selected_model_id, existing_history, converse_content_array, user_message, assistant_message, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id):
     """Function to store conversation history in DDB or S3 in the converse format"""
     sid, model = session_id.rsplit('-model-', 1)
     prefix = rf'{sid}/{session_id}'
@@ -453,7 +441,7 @@ def store_conversation_history_converse(session_id, existing_history, converse_c
 
             # Update the DynamoDB item to indicate that the conversation history is in S3
                 dynamodb.update_item(
-                    TableName=table_name,
+                    TableName=conversations_table_name,
                     Key={'session_id': session_id},
                     UpdateExpression="SET conversation_history_in_s3=:true",
                     ExpressionAttributeValues={':true': True}
@@ -461,9 +449,11 @@ def store_conversation_history_converse(session_id, existing_history, converse_c
         else:
             # Store the updated conversation history in DynamoDB
             dynamodb.put_item(
-                TableName=table_name,
+                TableName=conversations_table_name,
                 Item={
                     'session_id': {'S': session_id},
+                    'user_id': {'S': user_id},
+                    'selected_model_id': {'S': selected_model_id},
                     'conversation_history': {'S': json.dumps(conversation_history)},
                     'conversation_history_in_s3': {'BOOL': False}
                 }
@@ -480,7 +470,7 @@ def load_and_send_conversation_history(session_id, connection_id):
     """Function to load and send conversation history"""
     try:
         response = dynamodb.get_item(
-            TableName=table_name,
+            TableName=conversations_table_name,
             Key={'session_id': {'S': session_id}}
         )
 
@@ -502,11 +492,17 @@ def load_and_send_conversation_history(session_id, connection_id):
                 conversation_history = json.loads(conversation_history_str)
             # Split the conversation history into chunks
             conversation_history_chunks = split_message(conversation_history)
+            # print number of chumks in conversation_history_chunks
+            logger.info(f"Number of chunks in conversation history: {len(conversation_history_chunks)}")
             # Send the conversation history chunks to the WebSocket client
-            for chunk in conversation_history_chunks:
+            total_chunks = len(conversation_history_chunks)
+            for index, chunk in enumerate(conversation_history_chunks, start=1):
                 commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'conversation_history',
-                    'chunk': chunk
+                    'last_message': index == total_chunks,
+                    'chunk': chunk,
+                    'current_chunk': index,
+                    'total_chunks': total_chunks
                 })
         else:
             return []
