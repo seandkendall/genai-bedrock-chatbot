@@ -34,6 +34,13 @@ WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 conversations_table_name = os.environ['CONVERSATIONS_DYNAMODB_TABLE']
 usage_table_name = os.environ['DYNAMODB_TABLE_USAGE']
 region = os.environ['REGION']
+# models that do not support a system prompt (also includes all amazon models)
+SYSTEM_PROMPT_EXCLUDED_MODELS = (
+                    'cohere.command-text-v14',
+                    'cohere.command-light-text-v14',
+                    'mistral.mistral-7b-instruct-v0:2',
+                    'mistral.mixtral-8x7b-instruct-v0:1'
+                )
 
 MAX_CONTENT_ITEMS = 20
 MAX_IMAGES = 20
@@ -226,11 +233,15 @@ def process_websocket_message(event):
             try:
                 tracer.put_annotation(key="Model", value=selected_model_id)
                 system_prompt_array = []
-                if system_prompt:
+                if system_prompt and selected_model_id not in SYSTEM_PROMPT_EXCLUDED_MODELS and model_provider != 'amazon':
                     system_prompt_array.append({'text': system_prompt})
-                response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
+                    response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
+                                                        modelId=selected_model_id,
+                                                        system=system_prompt_array,
+                                                        additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{}))
+                else:
+                    response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
                                                     modelId=selected_model_id,
-                                                    system=system_prompt_array,
                                                     additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{}))
                     
                 assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers)
@@ -505,6 +516,10 @@ def load_and_send_conversation_history(session_id, connection_id):
                     'total_chunks': total_chunks
                 })
         else:
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                    'type': 'no_conversation_to_load',
+                    'last_message': True
+                })
             return []
 
     except Exception as e:

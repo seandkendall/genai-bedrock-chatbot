@@ -107,7 +107,7 @@ def process_websocket_message(event, force_null_kb_session_id):
     elif selected_mode.get('category') == 'Bedrock Agents':
         response_stream_key = 'completion'
         response = bedrock.invoke_agent(
-                agentAliasId=selected_mode.get('agentAliasId'), 
+                agentAliasId=selected_mode.get('agentAliasId'),
                 agentId=selected_mode.get('agentId'),
                 enableTrace=False,
                 endSession=False,
@@ -115,7 +115,7 @@ def process_websocket_message(event, force_null_kb_session_id):
                 sessionId=session_id,
             )
         process_bedrock_agents_response(iter(response[response_stream_key]), connection_id, "Agent","Agent-"+selected_mode.get('agentAliasId'))
-    elif selected_mode.get('category') == 'Bedrock Prompt Flow':
+    elif selected_mode.get('category') == 'Bedrock Prompt Flows':
         response_stream_key = 'responseStream'
         response = bedrock.invoke_flow(
                 flowAliasIdentifier=selected_mode.get('id'),

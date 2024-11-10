@@ -13,7 +13,7 @@ const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages
         sessionId = `${sessionId}-agents-${selectedMode.agentAliasId}`;
       } else if (selectedMode.category === 'Bedrock KnowledgeBases') {
         sessionId = `${sessionId}-kb-${selectedMode.knowledgeBaseId}`;
-      } else if (selectedMode.category === 'Bedrock Prompt Flow') {
+      } else if (selectedMode.category === 'Bedrock Prompt Flows') {
         sessionId = `${sessionId}-pflow-${selectedMode.id}`;
       } else if (selectedMode.category === 'Bedrock Models') {
         sessionId = `${sessionId}-model-${selectedMode.modelId}`;

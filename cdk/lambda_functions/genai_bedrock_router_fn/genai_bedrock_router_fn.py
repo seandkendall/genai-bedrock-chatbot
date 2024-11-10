@@ -32,7 +32,7 @@ def lambda_handler(event, context):
     access_token = request_body.get('accessToken', 'none')
     allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
     if allowed:
-        if selected_mode.get('category') == 'Bedrock Agents' or selected_mode.get('category') == 'Bedrock KnowledgeBases':
+        if selected_mode.get('category') == 'Bedrock Agents' or selected_mode.get('category') == 'Bedrock KnowledgeBases' or selected_mode.get('category') == 'Bedrock Prompt Flows':
             # Invoke genai_bedrock_agents_client_fn
             if message_type == 'load':
                 response_message = 'no_conversation_to_load'
@@ -49,9 +49,6 @@ def lambda_handler(event, context):
                 response_message = 'no_conversation_to_load'
             if message_type != 'load':
                 lambda_client.invoke(FunctionName=image_generation_function_name, InvocationType='Event', Payload=json.dumps(event))
-        elif selected_mode.get('category') == 'Bedrock Prompt Flows':
-            if message_type == 'load':
-                response_message = 'no_conversation_to_load'
         else:
             return {
                 'statusCode': 404,

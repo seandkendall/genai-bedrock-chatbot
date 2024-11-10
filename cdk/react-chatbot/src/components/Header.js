@@ -124,12 +124,21 @@ const Header = ({
             {truncateText((() => {
               switch (title) {
                 case 'Bedrock Models':
+                  if (isMobile) {
+                    return `${item.modelName}`;
+                  }
                   return `${item.providerName} ${item.modelName}`;
                 case 'Bedrock Image Models':
+                  if (isMobile) {
+                    return `${item.modelName}`;
+                  }
                   return `${item.providerName} ${item.modelName}`;
                 case 'Bedrock KnowledgeBases':
                   return item.name;
                 case 'Bedrock Agents':
+                  if (isMobile) {
+                    return `${item.agentAliasName}`;
+                  }
                   return `${item.agent_name} (${item.agentAliasName})`;
                 case 'Bedrock Prompt Flows':
                   return item.name;
@@ -246,7 +255,26 @@ const Header = ({
           return selectedMode.knowledgeBaseId;
         case 'Bedrock Agents':
           return selectedMode.agentAliasId;
-        case 'Bedrock Prompt Flow':
+        case 'Bedrock Prompt Flows':
+          return selectedMode.id;
+        default:
+          return isMobile ? 'BR' : 'Bedrock';
+      }
+    }
+    return '';
+  };
+  const getHeaderLabelExtended = () => {
+    if (selectedMode) {
+      switch (selectedMode.category) {
+        case 'Bedrock Models':
+          return `${selectedMode.modelName} (${selectedMode.modelId})`;
+        case 'Bedrock Image Models':
+          return `${selectedMode.modelName} (${selectedMode.modelId})`;
+        case 'Bedrock KnowledgeBases':
+          return selectedMode.knowledgeBaseId;
+        case 'Bedrock Agents':
+          return selectedMode.agentAliasId;
+        case 'Bedrock Prompt Flows':
           return selectedMode.id;
         default:
           return isMobile ? 'BR' : 'Bedrock';
@@ -307,7 +335,7 @@ const Header = ({
                 <Box>
                   <Typography>Solution Designed and Built by Sean Kendall</Typography>
                   {user?.signInDetails?.loginId && <Typography>You are Logged in as: {user?.signInDetails?.loginId}</Typography>}
-                  <Typography>Active Model/Mode: {getHeaderLabel()}</Typography>
+                  <Typography>Active Model/Mode: {getHeaderLabelExtended()}</Typography>
                   <Typography>App Session ID: {appSessionid}</Typography>
                   {kbSessionId && <Typography>KnowledgeBase Session ID: {kbSessionId}</Typography>}
                   <Typography>Total Input/Output Tokens (Bedrock only): {totalInputTokens}/{totalOutputTokens}</Typography>
@@ -334,6 +362,7 @@ const Header = ({
                 <Select
                   id="mode-select"
                   labelId="mode-select-label"
+                  disabled={disabled || (allowlist && !isUserAllowed())}
                   value={selectedMode ? selectedMode.category + '%' + selectedMode.mode_selector : 'DEFAULT'}
                   onChange={onSelectedModeChange}
                   label={isMobile ? 'Model' : 'Bedrock Chatbot Model'}
@@ -362,6 +391,7 @@ const Header = ({
                   <Select
                     id="kbmode-select"
                     labelId="kbmode-select-label"
+                    disabled={disabled || (allowlist && !isUserAllowed())}
                     value={selectedKbMode ? selectedKbMode.category + '%' + selectedKbMode.mode_selector : 'DEFAULT'}
                     onChange={onSelectedKbModeChange}
                     label={isMobile ? 'KBModel' : 'KnowledgeBase Model'}
