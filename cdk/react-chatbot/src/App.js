@@ -542,17 +542,23 @@ const App = memo(({ signOut, user }) => {
           } else if (!messageString.includes('Message Received')) {
             console.log('Uncaught String Message 1:');
             console.log(messageString);
+            if (isRefreshing)
+              setIsRefreshing(false)
           }
         } else if (typeof message === 'string') {
           if(message.includes('no_conversation_to_load')){
             setIsRefreshing(false)
           } else if (!message.includes('Message Received')) {
+            if (isRefreshing)
+              setIsRefreshing(false)
             console.log('Uncaught String Message 2:');
             console.log(message);
           }
         } else {
           console.log('Uncaught Message (non-string, non-object):');
           console.log(message);
+          if (isRefreshing)
+            setIsRefreshing(false)
         }
       }
     }

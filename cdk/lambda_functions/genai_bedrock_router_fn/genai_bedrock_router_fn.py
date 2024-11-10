@@ -49,6 +49,9 @@ def lambda_handler(event, context):
                 response_message = 'no_conversation_to_load'
             if message_type != 'load':
                 lambda_client.invoke(FunctionName=image_generation_function_name, InvocationType='Event', Payload=json.dumps(event))
+        elif selected_mode.get('category') == 'Bedrock Prompt Flows':
+            if message_type == 'load':
+                response_message = 'no_conversation_to_load'
         else:
             return {
                 'statusCode': 404,
