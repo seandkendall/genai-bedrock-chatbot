@@ -45,6 +45,7 @@ const Header = ({
   onSelectedKbMode,
   triggerModelScan,
   isRefreshing,
+  isRefreshingMessage,
   user,
   allowlist,
   modelsLoaded
@@ -485,10 +486,10 @@ const Header = ({
         >
           <CircularProgress size={60} thickness={4} sx={{ color: 'white' }} />
           <Typography variant="h6" sx={{ color: 'white', mt: 2 }}>
-            Loading Models
+            {isRefreshingMessage}
           </Typography>
           <Typography variant="body1" sx={{ color: 'white', mt: 1 }}>
-            Please wait, this could take a minute...
+            Please wait...
           </Typography>
         </Box>
       )}

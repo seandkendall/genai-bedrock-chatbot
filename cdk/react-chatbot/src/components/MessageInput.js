@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef,forwardRef, useImperativeHandle } from 'react';
 import { Box, TextField, IconButton, Typography } from '@mui/material';
 import { FaPaperPlane, FaPaperclip, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
@@ -22,7 +22,8 @@ export const getPlaceholderText = (selectedMode, selectedKbMode) => {
 
 export function sanitizeFileName(name) {
   const lastDotIndex = name.lastIndexOf('.');
-  let filename, extension;
+  let filename
+  let extension;
 
   if (lastDotIndex === -1) {
     filename = name;
@@ -35,11 +36,20 @@ export function sanitizeFileName(name) {
   return `${sanitizedFilename}${extension}`;
 }
 
-const MessageInput = ({ appSessionid, onSend, disabled, setIsDisabled, selectedMode, selectedKbMode, getCurrentSession, attachments, setAttachments }) => {
+const MessageInput = forwardRef(({ appSessionid, onSend, disabled, setIsDisabled, selectedMode, selectedKbMode, getCurrentSession, attachments, setAttachments, setIsRefreshing, setIsRefreshingMessage },ref) => {
   const [message, setMessage] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        console.log('Focus called on input'); // Add this log
+      }
+    }
+  }));
 
   const handleAttachmentClick = () => {
     if (fileInputRef.current) {
@@ -145,6 +155,10 @@ const MessageInput = ({ appSessionid, onSend, disabled, setIsDisabled, selectedM
 
   const handleSend = async () => {
     if (message.trim() || attachments.length > 0) {
+      if(attachments.length > 0){
+        setIsRefreshingMessage('Uploading Files to Conversation. ')
+        setIsRefreshing(true)
+      }
       setIsDisabled(true);
       const uploadedAttachments = await Promise.all(attachments.map(uploadFileToS3));
       onSend(message.trim() ? message.trim() : '?', uploadedAttachments, false);
@@ -257,6 +271,7 @@ const MessageInput = ({ appSessionid, onSend, disabled, setIsDisabled, selectedM
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <TextField
           inputRef={inputRef}
+          onFocus={() => console.log('TextField focused')}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -294,6 +309,6 @@ const MessageInput = ({ appSessionid, onSend, disabled, setIsDisabled, selectedM
       </Box>
     </Box>
   );
-};
+});
 
 export default MessageInput;

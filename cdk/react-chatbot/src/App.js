@@ -76,8 +76,10 @@ const App = memo(({ signOut, user }) => {
   const [selectedKbMode, onSelectedKbMode] = useState(null);
   const [previousSentMessage, setPreviousSentMessage] = useState({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRefreshingMessage, setIsRefreshingMessage] = useState('Loading Models');
   const [attachments, setAttachments] = useState([]);
   const [allowlist, setAllowList] = useState(null);
+  const messageInputRef = useRef(null);
   
   
 
@@ -185,7 +187,7 @@ const App = memo(({ signOut, user }) => {
   const handleModeChange = (newMode) => {
     setMessages([]);
     setSelectedMode(newMode);
-    scrollToBottom();
+    setTimeout(scrollToBottom, 0);
   };
 
   const loadConfigSubaction = async (subaction) => {
@@ -200,6 +202,7 @@ const App = memo(({ signOut, user }) => {
   }
 
   const triggerModelScan = async () => {
+    setIsRefreshingMessage('Loading Models')
     setIsRefreshing(true);
     try{
       const { accessToken, idToken } = await getCurrentSession()
@@ -219,6 +222,8 @@ const App = memo(({ signOut, user }) => {
 
   const loadConversationHistory = async (sessId) => {
     if (models && selectedMode && (appSessionid || sessId)) {
+      setIsRefreshingMessage('Loading Previous Conversation')
+      setIsRefreshing(true);
       const { accessToken, idToken } = await getCurrentSession()
       const data = {
         type: 'load',
@@ -256,6 +261,9 @@ const App = memo(({ signOut, user }) => {
       if (message.type !== 'conversation_history') return;
       
       const current_chunk = message.current_chunk || 1;
+      const last_message = message.last_message;
+      // log last message
+      console.log('SDK: last message', last_message)
       const messageChunk = convertRuleToHuman(JSON.parse(message.chunk));
       
       // Memoize the comparison result
@@ -267,6 +275,11 @@ const App = memo(({ signOut, user }) => {
             ? messageChunk 
             : [...prevMessages, ...messageChunk]
         );
+      }
+      // if is last message then setIsRefreshing(false);
+      if (last_message) {
+        setIsRefreshing(false);
+        setTimeout(scrollToBottom, 0);
       }
     } catch (error) {
       console.error('Error processing message:', error);
@@ -377,7 +390,7 @@ const App = memo(({ signOut, user }) => {
       },
     ]);
 
-    scrollToBottom();
+    setTimeout(scrollToBottom, 0);
 
     sendMessage(JSON.stringify(data));
     setReloadPromptConfig(false);
@@ -421,7 +434,7 @@ const App = memo(({ signOut, user }) => {
       },
     ]);
 
-    scrollToBottom();
+    setTimeout(scrollToBottom, 0);
 
     sendMessage(JSON.stringify(data));
   };
@@ -450,24 +463,39 @@ const App = memo(({ signOut, user }) => {
       if (typeof message === 'string' && message.includes('You have not been allow-listed for this application')) {
         handleError(message);
       } else if (message.type === 'message_start') {
+        if(isRefreshing){
+          setIsRefreshing(false)
+        }
         const model = message?.message?.model
         setUsedModel(model)
         updateMessages(message);
       } else if (message.type === 'content_block_delta') {
+        if(isRefreshing){
+          setIsRefreshing(false)
+        }
         updateMessages(message);
       } else if (message.type === 'message_stop') {
+        if(isRefreshing){
+          setIsRefreshing(false)
+        }
         updateMessages(message);
         updateMessagesOnStop(message);
         setIsDisabled(false);
         setIsLoading(false);
-        scrollToBottom();
+        setTimeout(scrollToBottom, 0);
       } else if (message.type === 'error' || message.message === 'Internal server error') {
+        if(isRefreshing){
+          setIsRefreshing(false)
+        }
         updateMessagesOnStop(message);
         handleError(message);
         setIsDisabled(false);
         setIsLoading(false);
-        scrollToBottom();
+        setTimeout(scrollToBottom, 0);
       } else if (message.type === 'image_generated') {
+        if(isRefreshing){
+          setIsRefreshing(false)
+        }
         setMessages((prevMessages) => {
           const updatedMessages = [...prevMessages ? prevMessages : []];
           const lastIndex = updatedMessages.length - 1;
@@ -623,7 +651,7 @@ const App = memo(({ signOut, user }) => {
       }
       return updatedMessages;
     });
-    scrollToBottom();
+    setTimeout(scrollToBottom, 0);
   };
 
   const onClearConversation = () => {
@@ -653,6 +681,15 @@ const App = memo(({ signOut, user }) => {
       top: documentHeight,
       behavior: 'auto',
     });
+
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        if (messageInputRef.current) {
+          messageInputRef.current.focus();
+          console.log('Attempting to focus input'); // Add this log
+        }
+      });
+    }, 200);
   };
 
   const handleOpenSettingsModal = () => {
@@ -700,6 +737,7 @@ const App = memo(({ signOut, user }) => {
           onSelectedKbMode={onSelectedKbMode}
           triggerModelScan={triggerModelScan}
           isRefreshing={isRefreshing}
+          isRefreshingMessage={isRefreshingMessage}
           user={user}
           allowlist={allowlist}
           modelsLoaded={modelsLoaded}
@@ -707,7 +745,7 @@ const App = memo(({ signOut, user }) => {
         <div className="chat-history" ref={chatHistoryRef}>
           <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />
         </div>
-        <MessageInput appSessionid={appSessionid} onSend={onSend} disabled={isDisabled || isLoading} setIsDisabled={setIsDisabled} selectedMode={selectedMode} selectedKbMode={selectedKbMode} sendMessage={sendMessage} getCurrentSession={getCurrentSession} attachments={attachments} setAttachments={setAttachments} />
+        <MessageInput appSessionid={appSessionid} onSend={onSend} disabled={isDisabled || isLoading} setIsDisabled={setIsDisabled} selectedMode={selectedMode} selectedKbMode={selectedKbMode} sendMessage={sendMessage} getCurrentSession={getCurrentSession} attachments={attachments} setAttachments={setAttachments} setIsRefreshing={setIsRefreshing} setIsRefreshingMessage={setIsRefreshingMessage} ref={messageInputRef}/>
         {showPopup && <Popup message={popupMessage}
           type={popupType}
           onClose={() => setShowPopup(false)}

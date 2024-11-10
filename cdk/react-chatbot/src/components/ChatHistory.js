@@ -24,6 +24,7 @@ const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages
         setAppSessionId(sessionId);
 
       // Check if sessionId is different from loadedSessionId
+      console.log(`SDK LOG: sessionId: ${sessionId}, loadedSessionId: ${loadedSessionId.current}`);
       if (sessionId !== loadedSessionId.current) {
         console.log(`Loading chat history for session: ${sessionId}`);
         const chatHistory = localStorage.getItem(`chatHistory-${sessionId}`);

@@ -499,6 +499,7 @@ def load_and_send_conversation_history(session_id, connection_id):
             for index, chunk in enumerate(conversation_history_chunks, start=1):
                 commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'conversation_history',
+                    'last_message': index == total_chunks,
                     'chunk': chunk,
                     'current_chunk': index,
                     'total_chunks': total_chunks
