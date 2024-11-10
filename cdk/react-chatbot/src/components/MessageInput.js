@@ -46,7 +46,6 @@ const MessageInput = forwardRef(({ appSessionid, onSend, disabled, setIsDisabled
     focus: () => {
       if (inputRef.current) {
         inputRef.current.focus();
-        console.log('Focus called on input'); // Add this log
       }
     }
   }));
@@ -271,7 +270,6 @@ const MessageInput = forwardRef(({ appSessionid, onSend, disabled, setIsDisabled
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <TextField
           inputRef={inputRef}
-          onFocus={() => console.log('TextField focused')}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}

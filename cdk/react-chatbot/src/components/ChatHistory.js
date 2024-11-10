@@ -24,14 +24,12 @@ const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages
         setAppSessionId(sessionId);
 
       // Check if sessionId is different from loadedSessionId
-      console.log(`SDK LOG: sessionId: ${sessionId}, loadedSessionId: ${loadedSessionId.current}`);
       if (sessionId !== loadedSessionId.current) {
         console.log(`Loading chat history for session: ${sessionId}`);
         const chatHistory = localStorage.getItem(`chatHistory-${sessionId}`);
         setMessages(chatHistory ? JSON.parse(chatHistory) : []);
         // Update loadedSessionId with the new sessionId
         loadedSessionId.current = sessionId;
-        console.log(`triggering a new conversation load from the backend for sessionID: ${sessionId}`)
         loadConversationHistory(sessionId);
       }
     }

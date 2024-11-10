@@ -262,8 +262,6 @@ const App = memo(({ signOut, user }) => {
       
       const current_chunk = message.current_chunk || 1;
       const last_message = message.last_message;
-      // log last message
-      console.log('SDK: last message', last_message)
       const messageChunk = convertRuleToHuman(JSON.parse(message.chunk));
       
       // Memoize the comparison result
@@ -521,7 +519,7 @@ const App = memo(({ signOut, user }) => {
           if (message.load_models.image_models)
             setImageModels(filter_active_models(message.load_models.image_models))
           if (message.load_models.kb_models)
-            setKbModels(filter_active_models(message.load_models.kb_models))
+            setKbModels(message.load_models.kb_models)
         if (message.load_knowledge_bases?.knowledge_bases)
           setBedrockKnowledgeBases(message.load_knowledge_bases.knowledge_bases)
         if (message.load_agents?.agents)
@@ -539,12 +537,16 @@ const App = memo(({ signOut, user }) => {
       } else {
         if (typeof message === 'object' && message !== null) {
           const messageString = JSON.stringify(message);
-          if (!messageString.includes('Message Received')) {
+          if(messageString.includes('no_conversation_to_load')){
+            setIsRefreshing(false)
+          } else if (!messageString.includes('Message Received')) {
             console.log('Uncaught String Message 1:');
             console.log(messageString);
           }
         } else if (typeof message === 'string') {
-          if (!message.includes('Message Received')) {
+          if(message.includes('no_conversation_to_load')){
+            setIsRefreshing(false)
+          } else if (!message.includes('Message Received')) {
             console.log('Uncaught String Message 2:');
             console.log(message);
           }
@@ -686,7 +688,6 @@ const App = memo(({ signOut, user }) => {
       requestAnimationFrame(() => {
         if (messageInputRef.current) {
           messageInputRef.current.focus();
-          console.log('Attempting to focus input'); // Add this log
         }
       });
     }, 200);
