@@ -88,9 +88,22 @@ const App = memo(({ signOut, user }) => {
   // Use the useWebSocket hook to manage the WebSocket connection
   // eslint-disable-next-line
   const { sendMessage, lastMessage, readyState } = useWebSocket(websocketUrl, {
-    shouldReconnect: (closeEvent) => true, // Automatically reconnect on close
-    reconnectInterval: 3000, // Reconnect every 3 seconds
+    shouldReconnect: (closeEvent) => true,
+    reconnectAttempts: Number.POSITIVE_INFINITY, // Keep trying to reconnect
+    reconnectInterval: (attemptNumber) => Math.min(1000 * 2 ** attemptNumber, 30000), // Exponential backoff up to 30 seconds
   });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (readyState === WebSocket.OPEN) {
+        // Send a "ping" message every 3 minutes (180,000 milliseconds)
+        sendMessage(JSON.stringify({ type: 'ping' }));
+      }
+    }, 180000); // 3 minutes = 180000 milliseconds
+  
+    // Cleanup interval on component unmount
+    return () => clearInterval(interval);
+  }, [readyState, sendMessage]);
 
   //persist models to local storage if changed
   useEffect(() => {
@@ -548,7 +561,9 @@ const App = memo(({ signOut, user }) => {
         } else if (typeof message === 'string') {
           if(message.includes('no_conversation_to_load')){
             setIsRefreshing(false)
-          } else if (!message.includes('Message Received')) {
+          } else if(message.includes('pong')){
+            // do nothing
+          }else if (!message.includes('Message Received')) {
             if (isRefreshing)
               setIsRefreshing(false)
             console.log('Uncaught String Message 2:');

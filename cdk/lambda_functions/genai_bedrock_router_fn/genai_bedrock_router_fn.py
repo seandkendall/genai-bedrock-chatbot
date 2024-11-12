@@ -29,6 +29,12 @@ def lambda_handler(event, context):
     selected_mode = request_body.get('selectedMode', 'none')
     response_message = 'Message Received'
     message_type = request_body.get('type', '')
+    if message_type == 'ping':
+        return {
+            'statusCode': 200,
+            'body': json.dumps("pong")
+        }
+        
     access_token = request_body.get('accessToken', 'none')
     allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
     if allowed:
