@@ -24,7 +24,7 @@ Bedrock Router Function
 This is the first function to be called via websocket.  It will parse the message and determine
 which lambda function to call next, based on the selectedMode.category field in the input json
 
-The input json will look like this:
+You can see an example of the input json at /sample-json/1-message-from-browser.json
 
 """
 
