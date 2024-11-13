@@ -1,0 +1,9 @@
+{
+    "type": "content_block_delta",
+    "delta": {
+        "text": "This is the actual response to be displayed to the user.  There can be many of these, which is why it is called a delta"
+    },
+    "message_id": 1,
+    "kb_session_id": "dc2a66a8-48ab-4d0d-88b9-9767760883e5",
+    "backend_type": "Knowledgebase"
+}

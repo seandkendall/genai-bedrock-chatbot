@@ -1,0 +1,1 @@
+agentschema.json is an example schema for an agent use case.  It is not used in the core application.
