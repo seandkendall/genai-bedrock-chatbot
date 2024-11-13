@@ -165,7 +165,7 @@ const SettingsModal = ({
 
     useEffect(() => {
         setReloadPromptConfig(true);
-    }, [localState.systemPrompt, localState.systemPromptType, setReloadPromptConfig]);
+    }, [localState.userSystemPrompt, localState.systemSystemPrompt, localState.systemPromptType, setReloadPromptConfig]);
 
     const updateSystemPrompt = useCallback((configType, newPrompt) => {
         updateLocalState('systemPrompt', prevState => ({
