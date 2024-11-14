@@ -191,10 +191,8 @@ class ChatbotWebsiteStack(Stack):
             max_age=3600
         )
 
-        # generate unique origin ID including the region and stackID
-        origin_id = f"{region}-{self.stack_name}"
-        # Add the image bucket as a new origin
-        image_origin = origins.S3BucketOrigin.with_origin_access_control(image_bucket, origin_id=origin_id)
+        oac = cloudfront.S3OriginAccessControl(self, f"GenAIChatBotOAC-{region}")
+        image_origin = origins.S3BucketOrigin.with_origin_access_control(image_bucket, origin_access_control=oac)
 
         # Add a new behavior for the /images/* path
         cloudfront_distribution.add_behavior(
