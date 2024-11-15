@@ -75,7 +75,8 @@ def load_agents(bedrock_agent_client, table):
                 alias['is_active'] = ddb_config.get(alias['agentAliasId'], {}).get('access_granted', True)
                 alias['allow_input_image'] = ddb_config.get(alias['agentAliasId'], {}).get('IMAGE', False)
                 alias['allow_input_document'] = ddb_config.get(alias['agentAliasId'], {}).get('DOCUMENT', False)
-                ret.append(alias)
+                if alias['agentAliasName'] != 'AgentTestAlias':
+                    ret.append(alias)
 
         return {
             'type': 'load_agents',
@@ -113,7 +114,8 @@ def load_prompt_flows(bedrock_agent_client, table):
                 alias['is_active'] = ddb_config.get(alias['arn'], {}).get('access_granted', True)
                 alias['allow_input_image'] = ddb_config.get(alias['arn'], {}).get('IMAGE', False)
                 alias['allow_input_document'] = ddb_config.get(alias['arn'], {}).get('DOCUMENT', False)
-                ret.append(alias)
+                if alias['name'] != 'TSTALIASID':
+                    ret.append(alias)
 
         return {
             'type': 'load_prompt_flows',

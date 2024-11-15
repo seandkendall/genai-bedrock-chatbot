@@ -75,6 +75,7 @@ def process_websocket_message(event, force_null_kb_session_id):
         return
     
     prompt = request_body.get('prompt', '')
+    message_id = request_body.get('message_id', '')
     if selected_mode.get('category') == 'Bedrock KnowledgeBases':
         selected_kb_mode = request_body.get('selectedKbMode', 'none')
         retrieveAndGenerateConfigurationData={
@@ -103,7 +104,7 @@ def process_websocket_message(event, force_null_kb_session_id):
                 sessionId=kb_session_id,
             )
             
-        process_bedrock_knowledgebase_response(response, connection_id, 'Knowledgebase')
+        process_bedrock_knowledgebase_response(response, message_id, connection_id, 'Knowledgebase')
     elif selected_mode.get('category') == 'Bedrock Agents':
         response_stream_key = 'completion'
         response = bedrock.invoke_agent(
@@ -114,7 +115,7 @@ def process_websocket_message(event, force_null_kb_session_id):
                 inputText=prompt,
                 sessionId=session_id,
             )
-        process_bedrock_agents_response(iter(response[response_stream_key]), connection_id, "Agent","Agent-"+selected_mode.get('agentAliasId'))
+        process_bedrock_agents_response(iter(response[response_stream_key]), message_id, connection_id, "Agent","Agent-"+selected_mode.get('agentAliasId'))
     elif selected_mode.get('category') == 'Bedrock Prompt Flows':
         response_stream_key = 'responseStream'
         response = bedrock.invoke_flow(
@@ -129,13 +130,14 @@ def process_websocket_message(event, force_null_kb_session_id):
                     }
                 ],
             )
-        process_bedrock_agents_response(iter(response[response_stream_key]), connection_id, "AgentPromptFlow","PromptFlow-"+selected_mode.get('id'))
+        process_bedrock_agents_response(iter(response[response_stream_key]), message_id, connection_id, "AgentPromptFlow","PromptFlow-"+selected_mode.get('id'))
             
 @tracer.capture_method        
-def process_bedrock_knowledgebase_response(response, connection_id, backend_type):
+def process_bedrock_knowledgebase_response(response, message_id, connection_id, backend_type):
     counter = 0
     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                         'type': 'message_start',
+                        'message_id': message_id,
                         'message': 'Agent response started'
                     })
     counter += 1
@@ -146,8 +148,9 @@ def process_bedrock_knowledgebase_response(response, connection_id, backend_type
     
     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'content_block_delta',
+                    'message_id': message_id,
                     'delta': {'text': content},
-                    'message_id': counter,
+                    'message_counter': counter,
                     'kb_session_id':kb_session_id,
                     'backend_type': backend_type
                 })
@@ -156,6 +159,7 @@ def process_bedrock_knowledgebase_response(response, connection_id, backend_type
         for citation in citations:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'citation_data',
+                    'message_id': message_id,
                     'delta': citation,
                     'kb_session_id':kb_session_id,
                     'backend_type': backend_type
@@ -163,13 +167,14 @@ def process_bedrock_knowledgebase_response(response, connection_id, backend_type
     
     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'message_stop',
+                'message_id': message_id,
                 'timestamp': datetime.now(timezone.utc).isoformat(),
                 'kb_session_id':kb_session_id,
                 'backend_type': backend_type
             })
     
 @tracer.capture_method
-def process_bedrock_agents_response(response_stream, connection_id, backend_type,selected_model_id):
+def process_bedrock_agents_response(response_stream, message_id, connection_id, backend_type,selected_model_id):
     result_text = ""
     counter = 0
     message_stop_sent = False
@@ -190,9 +195,10 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
                 # Send the content_block_delta event to the WebSocket client
                 commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': message_type,
+                    'message_id': message_id,
                     'message': {"model": selected_model_id},
                     'delta': {'text': content_chunk},
-                    'message_id': counter,
+                    'message_counter': counter,
                     'backend_type': backend_type
                 })
                 message_type = 'content_block_delta'
@@ -208,9 +214,10 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
                     
                 commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': message_type,
+                    'message_id': message_id,
                     'message': {"model": selected_model_id},
                     'delta': {'text': content},
-                    'message_id': counter,
+                    'message_counter': counter,
                     'backend_type': backend_type
                 })
                 message_type = 'content_block_delta'
@@ -223,6 +230,7 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
                         # Send the message_stop event to the WebSocket client
                         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                             'type': 'message_stop',
+                            'message_id': message_id,
                             'timestamp': datetime.now(timezone.utc).isoformat(),
                             'backend_type': backend_type
                         })
@@ -231,6 +239,7 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
                     # Send an error message to the WebSocket client
                     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                         'type': 'error',
+                        'message_id': message_id,
                         'code': '9200',
                         'error': 'Flow completion event with non-success reason'
                     })
@@ -239,6 +248,7 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
             # Send the message_stop event to the WebSocket client
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'message_stop',
+                'message_id': message_id,
                 'timestamp': datetime.now(timezone.utc).isoformat(),
                 'backend_type': backend_type
             })
@@ -250,11 +260,12 @@ def process_bedrock_agents_response(response_stream, connection_id, backend_type
         # Send an error message to the WebSocket client
         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'error',
+            'message_id': message_id,
             'code': '9200',
             'error': str(e)
         })
         if counter > 0:
             logger.error('Sending message stop now...(error)')
-            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {'type': 'message_stop'})
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {'type': 'message_stop','message_id': message_id,})
 
     return result_text

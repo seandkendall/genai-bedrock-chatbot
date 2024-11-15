@@ -86,7 +86,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                         'type': 'message_start',
                         'message': {"model": selected_model_id},
                         'delta': {'text': msg_text},
-                        'message_id': counter
+                        'message_counter': counter
                     })
                 else:
                     if current_time - start_time <= 5:  # First 5 seconds
@@ -94,7 +94,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                             'type': 'content_block_delta',
                             'delta': {'text': msg_text},
-                            'message_id': counter
+                            'message_counter': counter
                         })
                     else:  # After 5 seconds
                         buffer.append(msg_text)
@@ -104,7 +104,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                                 'type': 'content_block_delta',
                                 'delta': {'text': combined_text},
-                                'message_id': counter
+                                'message_counter': counter
                             })
                             buffer.clear()
                             last_send_time = current_time
@@ -124,7 +124,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'content_block_delta',
                 'delta': {'text': combined_text},
-                'message_id': counter
+                'message_counter': counter
             })
         
         logger.info(f"TokenCounts (Converse): {str(current_input_tokens)}/{str(current_output_tokens)}")
@@ -132,7 +132,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
         message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'message_stop',
-            'message_id': counter,
+            'message_counter': counter,
             'timestamp': message_end_timestamp_utc,
             'converse_content_with_s3_pointers': converse_content_with_s3_pointers,
             'amazon-bedrock-invocationMetrics': {

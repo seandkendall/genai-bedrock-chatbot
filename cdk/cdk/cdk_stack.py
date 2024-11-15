@@ -552,8 +552,8 @@ class ChatbotWebsiteStack(Stack):
             ),
             o_auth=cognito.OAuthSettings(
                 flows=cognito.OAuthFlows(
-                    authorization_code_grant=False,
-                    implicit_code_grant=True,
+                    authorization_code_grant=True,
+                    implicit_code_grant=False,
                 ),
                 scopes=[cognito.OAuthScope.EMAIL],
                 callback_urls=[f'https://{cloudfront_distribution_domain_name}'],
@@ -593,7 +593,7 @@ class ChatbotWebsiteStack(Stack):
                 input=scheduler.ScheduleTargetInput.from_object({"immediate": True})
             ),
             description="Schedule to run the model_scan_function Lambda function",
-            enabled=True,
+            enabled=False,
             group=scheduler_group
         )
         # add env variable to lambda function model_scan_function

@@ -24,7 +24,9 @@ const SettingsModal = ({
     setHeightWidth,
     onModeChange,
     selectedMode,
-    setAllowList
+    setAllowList,
+    chatbotTitle,
+    setChatbotTitle
 }) => {
     const theme = useTheme();
     const [error, setError] = useState('');
@@ -38,6 +40,7 @@ const SettingsModal = ({
         selectedMode,
         userSystemPrompt: '',
         systemSystemPrompt: '',
+        chatbot_title: chatbotTitle,
         systemPromptType: systemPromptUserOrSystem,
         stylePreset: localStorage.getItem('stylePreset') || 'photographic',
         heightWidth: localStorage.getItem('heightWidth') || '1024x1024',
@@ -86,6 +89,15 @@ const SettingsModal = ({
         }));
         localStorage.setItem('stylePreset', newStylePreset);
     }, []);
+
+    const handleTitleChange = useCallback((event) => {
+        const newTitle = event.target.value;
+        setLocalState(prevState => ({
+            ...prevState,
+            chatbot_title: newTitle,
+        }));
+    }, []);
+    
 
     const handleHeightWidthChange = useCallback((event) => {
         const newHeightWidth = event.target.value;
@@ -195,8 +207,13 @@ const SettingsModal = ({
                         updateLocalState('pricePer1000OutputTokens', response.pricePer1000OutputTokens || pricePer1000OutputTokens);
                         updateLocalState('systemSystemPrompt', response.systemPrompt || '');
                         updateSystemPrompt('system', response.systemPrompt ?? localState.systemSystemPrompt);
+                        if (response.chatbot_title){
+                            updateLocalState('chatbot_title',response.chatbot_title)
+                            setChatbotTitle(response.chatbot_title)
+                        }
                         setEventBridgeScheduleEnabled(response.eventbridge_scheduler_enabled === true)
                         setAllowList(response.allowlist || '')
+                        
                     } else if (response.config_type === 'user') {
                         const newStylePreset = response.stylePreset || 'photographic';
                         const newHeightWidth = response.heightWidth || '1024x1024';
@@ -287,6 +304,7 @@ const SettingsModal = ({
         setError('');
         setPricePer1000InputTokens(localState.pricePer1000InputTokens);
         setPricePer1000OutputTokens(localState.pricePer1000OutputTokens);
+        setChatbotTitle(localState.chatbot_title);
         onModeChange(selectedMode)
 
         // Update image-related 
@@ -297,6 +315,7 @@ const SettingsModal = ({
 
         saveConfig('system', {
             systemPrompt: localState.systemSystemPrompt,
+            chatbot_title: localState.chatbot_title,
         });
 
         saveConfig('user', {
@@ -380,6 +399,19 @@ const SettingsModal = ({
                     <Link href="https://aws.amazon.com/bedrock/pricing/" target="_blank" rel="noopener noreferrer">
                         https://aws.amazon.com/bedrock/pricing/
                     </Link>
+                </Typography>
+
+                <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
+                    <Tooltip title="Chatbot Title" arrow>
+                        <TextField
+                            label="Chatbot Title"
+                            value={localState.chatbot_title}
+                            onChange={handleTitleChange}
+                            name="ChatbotTitle"
+                            fullWidth
+                            margin="normal"
+                        />
+                    </Tooltip>
                 </Typography>
 
                 {selectedMode && selectedMode.category === "Bedrock Models" && (

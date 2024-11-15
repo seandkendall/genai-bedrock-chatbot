@@ -48,7 +48,8 @@ const Header = ({
   isRefreshingMessage,
   user,
   allowlist,
-  modelsLoaded
+  modelsLoaded,
+  chatbotTitle
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
 
@@ -153,6 +154,8 @@ const Header = ({
   };
 
   const onSelectedModeChange = (event) => {
+    console.log('onSelectedModeChange')
+    console.log(event)
     if (event?.target?.value) {
       const [category, modeSelector] = event.target.value.split('%');
       let selectedObject = null;
@@ -311,6 +314,12 @@ const Header = ({
     }
   ], [models, imageModels, bedrockKnowledgeBases, bedrockAgents, promptFlows]);
 
+  useEffect(() => {
+    console.log('selectOptions:')
+    console.log(selectOptions)
+  },[selectOptions])
+  
+
   const kbModelOptions = useMemo(() => [
     {
       title: 'Bedrock Models',
@@ -329,7 +338,7 @@ const Header = ({
       <AppBar position="sticky">
         <Toolbar>
           <Typography variant={isMobile ? 'body1' : 'h6'} component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
-            {isMobile ? 'AWS' : 'AWS Bedrock KendallChat'}
+            {isMobile ? chatbotTitle.substring(0, 3).toUpperCase() : chatbotTitle}
             <NoMaxWidthTooltip
               title={
                 <Box>

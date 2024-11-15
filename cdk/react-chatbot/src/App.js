@@ -72,6 +72,7 @@ const App = memo(({ signOut, user }) => {
   const [usedModel, setUsedModel] = useState('');
   const [stylePreset, setStylePreset] = useState('photographic');
   const [heightWidth, setHeightWidth] = useState('1024x1024');
+  const [chatbotTitle, setChatbotTitle] = useState('AWS Bedrock KendallChat');
 
   const [selectedKbMode, onSelectedKbMode] = useState(null);
   const [previousSentMessage, setPreviousSentMessage] = useState({});
@@ -145,8 +146,15 @@ const App = memo(({ signOut, user }) => {
 
   // Add this function to update the prices based on the selected model
   const updatePricesFromModel = () => {
-    if (selectedMode && selectedMode.model && selectedMode.modelId) {
-      const modelId = selectedMode && selectedMode.model && selectedMode.modelId;
+    if (selectedMode?.modelId) {
+      const modelId = selectedMode?.modelId;
+      
+      if (modelPrices[modelId]) {
+        console.log('Found price info for modelId:', modelPrices[modelId]);
+      } else {
+        console.log(`No price info found for modelId: ${modelId}, using default values`);
+      }
+
       const modelPriceInfo = modelPrices[modelId] || {
         pricePer1000InputTokens: 0.00300,
         pricePer1000OutputTokens: 0.01500,
@@ -154,6 +162,7 @@ const App = memo(({ signOut, user }) => {
       setPricePer1000InputTokens(modelPriceInfo.pricePer1000InputTokens);
       setPricePer1000OutputTokens(modelPriceInfo.pricePer1000OutputTokens);
     } else {
+      console.log('No selectedMode, model, or modelId available, using default values');
       const modelPriceInfo = {
         pricePer1000InputTokens: 0.00300,
         pricePer1000OutputTokens: 0.01500,
@@ -162,9 +171,12 @@ const App = memo(({ signOut, user }) => {
       setPricePer1000OutputTokens(modelPriceInfo.pricePer1000OutputTokens);
     }
   };
-  useEffect(() => {
+  
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 
+    useEffect(() => {
     updatePricesFromModel()
   }, [selectedMode]);
+
 
 
 
@@ -763,6 +775,7 @@ const App = memo(({ signOut, user }) => {
           user={user}
           allowlist={allowlist}
           modelsLoaded={modelsLoaded}
+          chatbotTitle={chatbotTitle}
         />
         <div className="chat-history" ref={chatHistoryRef}>
           <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />
@@ -795,6 +808,8 @@ const App = memo(({ signOut, user }) => {
             onModeChange={handleModeChange}
             selectedMode={selectedMode}
             setAllowList={setAllowList}
+            chatbotTitle={chatbotTitle}
+            setChatbotTitle={setChatbotTitle}
           />
         </Suspense>
       </div>
