@@ -154,8 +154,6 @@ const Header = ({
   };
 
   const onSelectedModeChange = (event) => {
-    console.log('onSelectedModeChange')
-    console.log(event)
     if (event?.target?.value) {
       const [category, modeSelector] = event.target.value.split('%');
       let selectedObject = null;
@@ -313,11 +311,6 @@ const Header = ({
         .filter(item => item.is_active === true || !('is_active' in item))
     }
   ], [models, imageModels, bedrockKnowledgeBases, bedrockAgents, promptFlows]);
-
-  useEffect(() => {
-    console.log('selectOptions:')
-    console.log(selectOptions)
-  },[selectOptions])
   
 
   const kbModelOptions = useMemo(() => [
