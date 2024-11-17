@@ -1,0 +1,33 @@
+{
+    "type": "citation_data",
+    "delta": {
+        "generatedResponsePart": {
+            "textResponsePart": {
+                "span": {
+                    "end": 784,
+                    "start": 0
+                },
+                "text": "This is the text that will be displayed to the user.  It will be a repeat of the corresponding content-block-delta message (message-returned-from-api-3.json)"
+            }
+        },
+        "retrievedReferences": [
+            {
+                "content": {
+                    "text": "This is a chunk of text that was returned by the Vector DB, and then was used by the LLM in building the response.  There can be many of these."
+                },
+                "location": {
+                    "s3Location": {
+                        "uri": "s3://name-of-source-bucket/prefix/name-of-source-file.pdf"
+                    },
+                    "type": "S3"
+                },
+                "metadata": {
+                    "x-amz-bedrock-kb-source-uri": "s3://name-of-source-bucket/prefix/name-of-source-file.pdf",
+                    "x-amz-bedrock-kb-data-source-id": "K4SINWWJTC"
+                }
+            }
+        ]
+    },
+    "kb_session_id": "dc2a66a8-48ab-4d0d-88b9-9767760883e5",
+    "backend_type": "Knowledgebase"
+}

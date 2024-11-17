@@ -1,0 +1,36 @@
+{
+    "prompt": "This prompt field represents what the user has typed into the input textbox",
+    "message_id": "d9dwzj44",
+    "timestamp": "2024-11-12T20:26:31.958Z",
+    "session_id": "6871c3e0-d031-7006-3550-e207720b0ac7-kb-E8CNWAXMN2",
+    "kb_session_id": "dc2a66a8-48ab-4d0d-88b9-9767760883e5",
+    "selectedMode": {
+        "knowledgeBaseId": "E8CNWAXMN2",
+        "name": "the-name-of-the-bedrock-knowledge-base",
+        "status": "ACTIVE",
+        "updatedAt": "2024-08-17T01:59:37.781893+00:00",
+        "mode_selector": "E8CNWAXMN2",
+        "mode_selector_name": "E8CNWAXMN2",
+        "is_active": true,
+        "allow_input_image": false,
+        "allow_input_document": false,
+        "category": "Bedrock KnowledgeBases"
+    },
+    "idToken": "this-would-be-a-long-id-token",
+    "accessToken": "this-would-be-a-long-access-token",
+    "reloadPromptConfig": true,
+    "systemPromptUserOrSystem": "system",
+    "attachments": [],
+    "selectedKbMode": {
+        "providerName": "Anthropic",
+        "modelName": "Claude 3.5 Sonnet",
+        "modelId": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+        "modelArn": "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0",
+        "mode_selector": "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0",
+        "mode_selector_name": "Claude 3.5 Sonnet",
+        "is_active": true,
+        "allow_input_image": true,
+        "allow_input_document": true,
+        "category": "Bedrock Models"
+    }
+}
