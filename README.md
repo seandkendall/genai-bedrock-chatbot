@@ -51,6 +51,9 @@ cd genai-bedrock-chatbot
 ./deploy-cicd.sh -d --allowlist @example.com,@example.ca --branch feature_branch
 ```
 
+On any of these options, you can also specify a flag for `--schedule daily` if you would like to redeploy the latest changes daily, otherwise weekly releases will be auto-deployed
+
+
 5. Navigate to your CodeBuild console to view the status and the logs
 
 [CodeBuild History](https://console.aws.amazon.com/codesuite/codebuild/projects/genai-bedrock-chatbot-build/history)
@@ -288,4 +291,4 @@ npm-check -u -g
 Contributions are welcome! Please feel free to submit a Pull Request or open an issue for any bugs, feature requests, or improvements.
 
 ## Bugs or Enhancements?
-If you simply want to tell me a bug, e-mail me at [Seandall@Amazon.com](mailto:Seandall@Amazon.com)
+If you simply want to tell me a bug, e-mail me at [seandall@amazon.com](mailto:seandall@amazon.com)

@@ -6,20 +6,42 @@ REPO_URL="https://github.com/seandkendall/genai-bedrock-chatbot"
 # Project names
 CODEBUILD_PROJECT_NAME="genai-bedrock-chatbot-build"
 
+# Set default schedule to weekly
+schedule="weekly"
+
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -d) delete_flag=true; shift;;
         --deploy-agents-example) deploy_agents_example=true; shift;;
         --branch) branch_name="$2"; shift 2;;
+        --schedule) schedule="$2"; shift 2;;
         --allowlist) allowlist_pattern="$2"; shift 2;;
         *) echo "Unknown argument: $1"; shift;;
     esac
 done
 
+create_eventbridge_rule() {
+    local schedule=$1
+    local rule_name="$CODEBUILD_PROJECT_NAME-trigger"
+    
+    # Create the EventBridge rule
+    aws events put-rule \
+        --name "$rule_name" \
+        --schedule-expression "$schedule" \
+        --state "ENABLED"
+
+    # Create the target for the rule
+    aws events put-targets \
+        --rule "$rule_name" \
+        --targets "[{\"Id\": \"1\", \"Arn\": \"arn:aws:codebuild:$(aws configure get region):$(aws sts get-caller-identity --query Account --output text):project/$CODEBUILD_PROJECT_NAME\", \"RoleArn\": \"arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/service-role/Amazon_EventBridge_Invoke_CodeBuild\"}]"
+}
+
 # Function to delete existing resources
 delete_resources() {
     echo "Deleting existing resources..."
+    aws events remove-targets --rule "$CODEBUILD_PROJECT_NAME-trigger" --ids "1"
+    aws events delete-rule --name "$CODEBUILD_PROJECT_NAME-trigger"
     aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 
     aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-base-policy"
     aws iam delete-role --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role"
@@ -103,6 +125,14 @@ while [ $(date +%s) -lt $end_time ]; do
     fi
     sleep $INTERVAL
 done
+
+# Create EventBridge rule for scheduled trigger
+echo "Creating EventBridge rule for scheduled trigger..."
+if [ "$schedule" = "daily" ]; then
+    create_eventbridge_rule "cron(0 0 * * ? *)"
+else
+    create_eventbridge_rule "cron(0 0 ? * SUN *)"
+fi
 
 if [ "$build_success" = true ]; then
     # Start the CodeBuild project build

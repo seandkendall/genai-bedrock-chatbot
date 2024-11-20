@@ -129,8 +129,34 @@ start_docker_macos() {
     fi
 }
 
-# Main logic to check, install, and start Docker as needed
+# Get the current git repository URL
+repo_url=$(git config --get remote.origin.url)
+# Get the latest commit hash
+latest_commit=$(git rev-parse HEAD)
+table_name=$(aws dynamodb list-tables --output text --query "TableNames[?starts_with(@, 'ChatbotWebsiteStack-configurationstable')]" | head -n 1)
+deployed_hash=""
+# If a matching table was found, query it
+if [ ! -z "$table_name" ]; then
+    # Query DynamoDB for the deployed hash
+    deployed_hash=$(aws dynamodb get-item \
+        --table-name "$table_name" \
+        --key '{
+            "user": {"S": "system"},
+            "config_type": {"S": "deployed-hash"}
+        }' \
+        --projection-expression "deployed_hash" \
+        --output text \
+        --query "Item.deployed_hash.S" 2>/dev/null)
 
+    # If the query didn't return a result, set deployed_hash to "null"
+    if [ -z "$deployed_hash" ]; then
+        deployed_hash=""
+    fi
+else
+    echo "No matching DynamoDB table found"
+fi
+
+# Main logic to check, install, and start Docker as needed
 if ! check_docker_installed; then
     echo "Docker is not installed."
 
@@ -176,7 +202,7 @@ else
     RED_COLOR=""
 fi
 
-
+redeploy=false
 # Parse command-line arguments
 POSITIONAL_ARGS=()
 while [[ $# -gt 0 ]]; do
@@ -202,12 +228,23 @@ while [[ $# -gt 0 ]]; do
             run_bootstrap=true
             shift
             ;;
+        --redeploy)
+            redeploy=true
+            shift
+            ;;
         *)
             POSITIONAL_ARGS+=("$1")
             shift
             ;;
     esac
 done
+
+# Check if the latest commit is already deployed
+if [ "$latest_commit" = "$deployed_hash" ] && [ "$redeploy" = false ]; then
+    echo "The latest version ($latest_commit) is already deployed."
+    echo "Use --redeploy flag to force redeployment. (you may need to do this if you are manually deploying from a local environment.)"
+    exit 0
+fi
 
 # Restore the positional arguments
 set -- "${POSITIONAL_ARGS[@]}"
@@ -278,7 +315,7 @@ if [ -z "${VIRTUAL_ENV}" ]; then
     fi
     exit 1
 fi
-
+npm install -g aws-cdk
 user_pool_id=$(aws cognito-idp list-user-pools --max-results 60 --query 'UserPools[?contains(Name, `ChatbotUserPool`)].Id' --output text)
 if [ -n "$user_pool_id" ] && [ "$user_pool_id" != "None" ]; then
     cognitoDomain=$(aws cognito-idp describe-user-pool --user-pool-id "$user_pool_id" --query 'UserPool.Domain' --output text)
@@ -477,10 +514,18 @@ fi
 cd ../static-website-source
 aws s3 sync . s3://$s3bucket/ --delete
 
+aws dynamodb put-item \
+        --table-name "$table_name" \
+        --item '{
+            "user": {"S": "system"},
+            "config_type": {"S": "deployed-hash"},
+            "deployed_hash": {"S": "'"$latest_commit"'"}
+        }'
+
 # Go back to the parent directory
 cd ..
 rm outputs.json
 cd ..
-echo -e "${GREEN_COLOR}Deployment complete!${DEFAULT_COLOR}"
+echo -e "${GREEN_COLOR}Deployment complete! (Git Version $latest_commit)${DEFAULT_COLOR}"
 # tell user to visit the url: awschatboturl
 echo -e "${GREEN_COLOR}Visit the chatbot here: ${awschatboturl}${DEFAULT_COLOR}"
