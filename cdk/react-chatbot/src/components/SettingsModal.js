@@ -209,6 +209,8 @@ const SettingsModal = ({
                         updateSystemPrompt('system', response.systemPrompt ?? localState.systemSystemPrompt);
                         if (response.chatbot_title){
                             updateLocalState('chatbot_title',response.chatbot_title)
+                            localStorage.setItem('chatbot_title', response.chatbot_title)
+                            document.title = response.chatbot_title;
                             setChatbotTitle(response.chatbot_title)
                         }
                         setEventBridgeScheduleEnabled(response.eventbridge_scheduler_enabled === true)
@@ -304,7 +306,9 @@ const SettingsModal = ({
         setError('');
         setPricePer1000InputTokens(localState.pricePer1000InputTokens);
         setPricePer1000OutputTokens(localState.pricePer1000OutputTokens);
+        localStorage.setItem('chatbot_title', localState.chatbot_title)
         setChatbotTitle(localState.chatbot_title);
+        document.title = localState.chatbot_title;
         onModeChange(selectedMode)
 
         // Update image-related 

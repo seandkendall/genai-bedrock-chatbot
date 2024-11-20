@@ -72,7 +72,8 @@ const App = memo(({ signOut, user }) => {
   const [usedModel, setUsedModel] = useState('');
   const [stylePreset, setStylePreset] = useState('photographic');
   const [heightWidth, setHeightWidth] = useState('1024x1024');
-  const [chatbotTitle, setChatbotTitle] = useState('AWS Bedrock KendallChat');
+  // chatbotTitle will be loaded from local storage(chatbot_title) if it exists, otherwise it will be set to 'AWS Bedrock KendallChat'
+  const [chatbotTitle, setChatbotTitle] = useState(localStorage.getItem('chatbot_title') || 'AWS Bedrock KendallChat');
 
   const [selectedKbMode, onSelectedKbMode] = useState(null);
   const [previousSentMessage, setPreviousSentMessage] = useState({});
