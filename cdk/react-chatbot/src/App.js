@@ -7,7 +7,7 @@ import MessageInput from './components/MessageInput';
 import './App.css';
 import Popup from './components/Popup';
 import { Amplify } from 'aws-amplify';
-import { fetchAuthSession } from 'aws-amplify/auth';
+import { fetchAuthSession, signOut } from 'aws-amplify/auth';
 import { withAuthenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import amplifyConfig from './config.json';
@@ -565,6 +565,12 @@ const App = memo(({ signOut, user }) => {
           const messageString = JSON.stringify(message);
           if(messageString.includes('no_conversation_to_load')){
             setIsRefreshing(false)
+          } else if(messageString.includes('Access Token has expired')){
+            try {
+              signOut();
+            } catch (error) {
+              console.error('Error signing out: ', error);
+            }
           } else if (!messageString.includes('Message Received')) {
             console.log('Uncaught String Message 1:');
             console.log(messageString);

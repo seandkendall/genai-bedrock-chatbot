@@ -51,7 +51,11 @@ def lambda_handler(event, context):
         except json.JSONDecodeError:
             request_body = {}
         access_token = request_body.get('accessToken', 'none')
-        allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
+        try:
+            allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
+        except ClientError as e:
+            allowed, not_allowed_message = (False, "Your Access Token has expired. Please log in again.") if e.response['Error']['Code'] == 'NotAuthorizedException' else (None, None)
+            
         if not allowed:
             return {
                 'statusCode': 403,

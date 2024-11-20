@@ -1,6 +1,7 @@
 import json, os, boto3
 from datetime import datetime, timezone
 from chatbot_commons import commons
+from botocore.exceptions import ClientError
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from load_utilities import (
     load_knowledge_bases,
@@ -51,7 +52,10 @@ def lambda_handler(event, context):
         user = request_body.get('user', 'system')
         config = request_body.get('config')
         
-        allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
+        try:
+            allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
+        except ClientError as e:
+            allowed, not_allowed_message = (False, "Your Access Token has expired. Please log in again.") if e.response['Error']['Code'] == 'NotAuthorizedException' else (None, None)
         if not allowed:
             return {
                 'statusCode': 403,

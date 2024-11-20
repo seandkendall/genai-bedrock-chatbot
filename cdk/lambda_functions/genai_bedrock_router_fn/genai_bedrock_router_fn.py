@@ -2,6 +2,7 @@ import json
 import boto3
 import os
 from chatbot_commons import commons
+from botocore.exceptions import ClientError
 from aws_lambda_powertools import Logger, Metrics, Tracer
 
 logger = Logger(service="BedrockRouter")
@@ -45,7 +46,11 @@ def lambda_handler(event, context):
         }
         
     access_token = request_body.get('accessToken', 'none')
-    allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
+    try:
+        allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache, allowlist_domain, access_token)
+    except ClientError as e:
+        allowed, not_allowed_message = (False, "Your Access Token has expired. Please log in again.") if e.response['Error']['Code'] == 'NotAuthorizedException' else (None, None)
+
     if allowed:
         if selected_mode.get('category') == 'Bedrock Agents' or selected_mode.get('category') == 'Bedrock KnowledgeBases' or selected_mode.get('category') == 'Bedrock Prompt Flows':
             # Invoke genai_bedrock_agents_client_fn

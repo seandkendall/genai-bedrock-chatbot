@@ -127,6 +127,7 @@ def get_user_attributes(cognito_client, user_cache, access_token):
 
     Raises:
         botocore.exceptions.ClientError: If there's an error calling the Cognito service.
+        NotAuthorizedException: When the access token is invalid, expired, or revoked.
 
     Note:
         This function assumes that the cognito_client has the necessary permissions
@@ -141,6 +142,33 @@ def get_user_attributes(cognito_client, user_cache, access_token):
 
     
 def keep_latest_versions(models):
+    """
+    Keep only the latest version of each model in the list.
+
+    This function processes a list of models, keeping only the latest version of each model.
+    If a model has multiple versions, only the one with the highest version number is kept.
+    The input models are expected to be in the format of a list of dictionaries, where each
+    dictionary represents a model with 'providerName', 'modelName', and 'modelId' keys.
+
+    Args:
+        models (list): A list of dictionaries representing models.
+                       Each dictionary should have 'providerName', 'modelName', and 'modelId' keys.
+
+    Returns:
+        list: A list of dictionaries representing the latest version of each model.
+              The returned list will have the same structure as the input list.
+
+    Example:
+        >>> input_models = [
+        ...     {'providerName': 'Bedrock', 'modelName': 'amazon.ai21.j2-mid-v1', 'modelId': 'XXXXXX'},
+        ...     {'providerName': 'Bedrock', 'modelName': 'amazon.ai21.j2-mid-v1', 'modelId': 'XXXXXX'},
+        ...     {'providerName': 'Bedrock', 'modelName': 'amazon.ai21.j2-ultra-v1', 'modelId': 'XXXXXX'}
+        ... ]
+        >>> keep_latest_versions(input_models)
+        [{'providerName': 'Bedrock', 'modelName': 'amazon.ai21.j2-ultra-v1', 'modelId': 'XXXXXX'}]
+    """
+    if not models:
+        return []
     latest_models = {}
     for model in models:
         model_key = (model['providerName'], model['modelName'])
@@ -170,6 +198,25 @@ def compare_versions(version1, version2):
     return 1 if len(v1_parts) > len(v2_parts) else (-1 if len(v2_parts) > len(v1_parts) else 0)    
 
 def get_ddb_config(table,ddb_cache,ddb_cache_timestamp,cache_duration,logger):
+    """
+    Retrieves the DynamoDB configuration from the table and caches it.
+
+    This function attempts to fetch the configuration from a local cache first.
+    If the cache is not available or has expired, it fetches the configuration from DynamoDB.
+    The configuration is then cached for future use.
+
+    Args:
+        table (boto3.resource.Table): An initialized DynamoDB table resource.
+        ddb_cache (dict): A dictionary to store the configuration, keyed by 'user'.
+        ddb_cache_timestamp (datetime): The timestamp when the cache was last updated.
+        cache_duration (int): The duration (in seconds) for which the cache is considered valid.
+        logger (logging.Logger): A logger object for logging messages and errors.
+
+    Returns:
+        dict: The configuration retrieved from DynamoDB or the cache.
+              The returned dictionary has 'user' as the key, and the value is the configuration.
+    """
+    logger.info("Getting DynamoDB config")
 
     # Check if the cache is valid
     if ddb_cache and ddb_cache_timestamp and (datetime.now(timezone.utc) - ddb_cache_timestamp) < timedelta(seconds=cache_duration):
