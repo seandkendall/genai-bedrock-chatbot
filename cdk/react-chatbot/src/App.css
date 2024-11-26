@@ -16,6 +16,23 @@ body {
   min-height: 100vh;
 }
 
+.login-button-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.login-button {
+  padding: 10px 20px;
+  background-color: #007aff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+
 /* Header Styles */
 .header {
   display: flex;
