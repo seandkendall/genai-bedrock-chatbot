@@ -1,7 +1,14 @@
 import json
+import decimal
 import random
 from datetime import datetime, timezone, timedelta
 from botocore.exceptions import ClientError
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, decimal.Decimal):
+            return float(obj)
+        return super(DecimalEncoder, self).default(obj)
 
 def send_websocket_message(logger, apigateway_management_api, connection_id, message):
     """
@@ -44,7 +51,7 @@ def send_websocket_message(logger, apigateway_management_api, connection_id, mes
 
         apigateway_management_api.post_to_connection(
             ConnectionId=connection_id,
-            Data=json.dumps(message).encode()
+            Data=json.dumps(message, cls=DecimalEncoder).encode()
         )
     except apigateway_management_api.exceptions.GoneException:
         logger.info(f"WebSocket connection is closed (connectionId: {connection_id})")
@@ -52,12 +59,9 @@ def send_websocket_message(logger, apigateway_management_api, connection_id, mes
         logger.exception(e)
         logger.error(f"Error sending WebSocket message (9012): {str(e)}")
         
-def validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token):
+def validate_jwt_token(cognito_client, user_cache, allowlist_domain, access_token):
     """
     Validate a JWT token and check if the user's email domain is in the allowlist.
-
-    This function retrieves user attributes from Cognito, checks if the email is verified,
-    and validates if the email domain is in the specified allowlist.
 
     Args:
         cognito_client (boto3.client): An initialized Boto3 Cognito client.
@@ -66,47 +70,30 @@ def validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
         access_token (str): The Cognito access token for the user.
 
     Returns:
-        tuple: A tuple containing three elements:
-            - bool: True if the token is valid and the email domain is allowed, False otherwise.
-            - str: An error message if validation fails, empty string if successful.
-            - None: Always None in the current implementation.
-
-    Note:
-        - The function does not explicitly check if the email is verified, although it sets the 'email_verified' variable.
-        - If allowlist_domain is empty or None, the function will return True, allowing all domains.
-        - The domain check is case-insensitive and uses a substring match, not an exact domain match.
-        - Multiple domains in allowlist_domain should be separated by commas.
-
-    Example:
-        >>> is_valid, error_message, _ = validate_jwt_token(cognito_client, user_cache, "example.com,test.com", "user_access_token")
-        >>> if is_valid:
-        ...     logger.info("User validated successfully")
-        ... else:
-        ...     logger.info(error_message)
+        tuple: (is_valid: bool, error_message: str)
     """
-    user_attributes = get_user_attributes(cognito_client, user_cache,access_token)
-    email_verified = False
-    email = None
-    for attribute in user_attributes:
-        if attribute['Name'] == 'email_verified':
-            email_verified = attribute['Value'] == 'true'
-        elif attribute['Name'] == 'email':
-            email = attribute['Value']
-    # if allowlist_domain contains a comma, then split it into a list and return true of the email ends with any of the domains
-    if ',' in allowlist_domain:
-        allowlist_domains = allowlist_domain.split(',')
-        for domain in allowlist_domains:
-            if email.casefold().find(domain.casefold()) != -1:
-                return True, ''
-            
-    # if allowlist_domain is not empty and not null then
-    if allowlist_domain and allowlist_domain != '':
-        if email.casefold().find(allowlist_domain.casefold()) != -1:
-            return True, ''
-    else:
+    user_attributes = get_user_attributes(cognito_client, user_cache, access_token)
+    
+    # Extract email using dictionary comprehension
+    email = next((attr['Value'] for attr in user_attributes if attr['Name'] == 'email'), None)
+    
+    # If allowlist_domain is empty or None, allow all domains
+    if not allowlist_domain:
         return True, ''
-    return False, f'You have not been allow-listed for this application. You require a domain containing: {allowlist_domain}'
-        
+
+    # Convert email to lowercase once
+    email_lower = email.casefold()
+    
+    # Handle both single and multiple domains
+    domains = allowlist_domain.split(',') if ',' in allowlist_domain else [allowlist_domain]
+    
+    # Check if any domain matches
+    if any(email_lower.find(domain.casefold()) != -1 for domain in domains):
+        return True, ''
+
+    return False, (f'You have not been allow-listed for this application. '
+                  f'You require a domain containing: {allowlist_domain}')
+
 
 def get_user_attributes(cognito_client, user_cache, access_token):
     """

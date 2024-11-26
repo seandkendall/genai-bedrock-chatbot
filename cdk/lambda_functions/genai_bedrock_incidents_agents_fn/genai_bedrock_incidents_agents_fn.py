@@ -6,7 +6,6 @@ import os
 from botocore.exceptions import ClientError
 from aws_lambda_powertools import Logger, Metrics, Tracer
 
-dynamodb = boto3.resource('dynamodb')
 
 logger = Logger(service="BedrockIncidentsAgents")
 metrics = Metrics()
@@ -19,7 +18,7 @@ except KeyError:
     logger.error("INCIDENTS_DYNAMODB_TABLE environment variable is not set")
     raise
 
-incidents_table = dynamodb.Table(incidents_dynamodb_table_name)
+incidents_table = boto3.resource('dynamodb').Table(incidents_dynamodb_table_name)
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):

@@ -1,5 +1,5 @@
 from aws_cdk import ( # type: ignore
-    Stack, Duration, CfnOutput,
+    Stack, Duration, CfnOutput,Fn,
     aws_s3 as s3,
     aws_lambda as _lambda,
     aws_lambda_python_alpha as lambda_python,
@@ -19,8 +19,9 @@ from aws_cdk import ( # type: ignore
     aws_scheduler_alpha as scheduler,
     aws_scheduler_targets_alpha as scheduler_targets,
 )
-from constructs import Construct
 from datetime import datetime, timezone
+from urllib.parse import quote
+from constructs import Construct
 from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3 # type: ignore
 from .constructs.user_pool_user import UserPoolUser
 import json
@@ -71,6 +72,13 @@ class ChatbotWebsiteStack(Stack):
             compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
             compatible_architectures=[_lambda.Architecture.ARM_64],
             description="KendallChat Commons: Making all the code more simple and reusable"
+        )
+        conversations_layer = _lambda.LayerVersion(
+            self, "KendallChatConversations",
+            code=_lambda.Code.from_asset("lambda_functions/conversations_layer"),
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
+            compatible_architectures=[_lambda.Architecture.ARM_64],
+            description="KendallChat Conversations: Making all the code more simple and reusable in relation to loading and deleting conversations"
         )
         
         # ARN Lookup: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versionsARM.html
@@ -209,11 +217,17 @@ class ChatbotWebsiteStack(Stack):
                                                                                        type=dynamodb.AttributeType.STRING),
                                                                                        billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
                                                                                        removal_policy=RemovalPolicy.DESTROY, )
-        
-        dynamodb_conversations_table = dynamodb.Table(self, "conversations_table", 
+        # add secondary index for user_id to dynamodb_conversations_table
+        dynamodb_conversations_table = dynamodb.Table(self, "conversations_table",
                                                       partition_key=dynamodb.Attribute(name="session_id", type=dynamodb.AttributeType.STRING),
                                                       billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
                                                       removal_policy=RemovalPolicy.DESTROY,)
+        dynamodb_conversations_table.add_global_secondary_index(
+            index_name='user_id-index',
+            partition_key=dynamodb.Attribute(name='user_id', type=dynamodb.AttributeType.STRING),
+            sort_key=dynamodb.Attribute(name='last_modified_date', type=dynamodb.AttributeType.NUMBER),
+            projection_type=dynamodb.ProjectionType.ALL
+        )
         dynamodb_incidents_table_name = 'NONE'
         if deploy_example_incidents_agent:
             dynamodb_incidents_table = dynamodb.Table(self, "incidents_table", 
@@ -244,6 +258,25 @@ class ChatbotWebsiteStack(Stack):
             auto_deploy=True
         )
         
+        # Create a Cognito User Pool
+        user_pool = cognito.UserPool(
+            self, "ChatbotUserPool",
+            user_pool_name="ChatbotUserPool",
+            self_sign_up_enabled=True,
+            sign_in_aliases={"email": True},  # Enable sign-in with email
+            auto_verify={"email": True},  # Auto-verify email addresses
+            account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
+            removal_policy=RemovalPolicy.DESTROY,
+            password_policy=cognito.PasswordPolicy(  # Configure password policy
+                min_length=8,
+                require_lowercase=True,
+                require_uppercase=True,
+                require_digits=True,
+                require_symbols=True,
+            ),
+        )
+        cognito_public_key_url = f"https://cognito-idp.{region}.amazonaws.com/{user_pool.user_pool_id}/.well-known/jwks.json"
+        
         
         # Create the Lambda function for image generation
         image_generation_function = _lambda.Function(self, "ImageGenerationFunction",
@@ -260,6 +293,8 @@ class ChatbotWebsiteStack(Stack):
                 "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                 "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
                 "CLOUDFRONT_DOMAIN": cloudfront_distribution.distribution_domain_name,
+                "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
+                "POWERTOOLS_SERVICE_NAME":"IMAGE_GENERATION_SERVICE",
             },
         )
         image_generation_function.apply_removal_policy(RemovalPolicy.DESTROY)
@@ -283,6 +318,7 @@ class ChatbotWebsiteStack(Stack):
                 "DYNAMODB_CONFIG_TABLE": dynamodb_configurations_table.table_name,
                 "ALLOWLIST_DOMAIN": allowlist_domain_string,
                 "REGION": region,
+                "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                 "POWERTOOLS_SERVICE_NAME":"CONFIG_SERVICE",
             }
         )
@@ -309,11 +345,13 @@ class ChatbotWebsiteStack(Stack):
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer, commons_layer, lambda_insights_layer],
+                                     layers=[boto3_layer, commons_layer,conversations_layer, lambda_insights_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
                                           "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
+                                          "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
+                                          "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
                                           "POWERTOOLS_SERVICE_NAME":"AGENTS_CLIENT_SERVICE",
                                      }
                                      )
@@ -341,6 +379,7 @@ class ChatbotWebsiteStack(Stack):
                                         log_retention=logs.RetentionDays.FIVE_DAYS,
                                         environment={
                                             "INCIDENTS_DYNAMODB_TABLE": dynamodb_incidents_table_name,
+                                            "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                                             "POWERTOOLS_SERVICE_NAME":"AGENTS_SERVICE",
                                         }
                                         )
@@ -361,7 +400,7 @@ class ChatbotWebsiteStack(Stack):
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer, commons_layer, lambda_insights_layer],
+                                     layers=[boto3_layer, commons_layer,conversations_layer, lambda_insights_layer],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
@@ -370,9 +409,10 @@ class ChatbotWebsiteStack(Stack):
                                           "DYNAMODB_TABLE_CONFIG": dynamodb_configurations_table.table_name,
                                           "DYNAMODB_TABLE_USAGE": dynamodb_bedrock_usage_table.table_name,
                                           "REGION": region,
-                                          "POWERTOOLS_SERVICE_NAME":"BEDROCK_ASYNC_SERVICE",
                                           "ATTACHMENT_BUCKET": attachment_bucket.bucket_name,
                                           "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
+                                          "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
+                                          "POWERTOOLS_SERVICE_NAME":"BEDROCK_ASYNC_SERVICE",
                                      }
                                      )
         lambda_fn_async.apply_removal_policy(RemovalPolicy.DESTROY)
@@ -385,24 +425,36 @@ class ChatbotWebsiteStack(Stack):
         conversation_history_bucket.grant_read_write(lambda_fn_async)
         dynamodb_bedrock_usage_table.grant_full_access(lambda_fn_async)
         attachment_bucket.grant_read_write(lambda_fn_async)
+        image_bucket.grant_read_write(lambda_fn_async)
+        
+        # Create the "genai_bedrock_fn_conversations" Lambda function
+        lambda_conversations_fn = _lambda.Function(self, "genai_bedrock_fn_conversations",
+                                     runtime=_lambda.Runtime.PYTHON_3_12,
+                                     handler="genai_bedrock_conversations_fn.lambda_handler",
+                                     code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_conversations_fn/"),
+                                     timeout=Duration.seconds(30),
+                                     architecture=_lambda.Architecture.ARM_64,
+                                     tracing=_lambda.Tracing.ACTIVE,
+                                     memory_size=1024,
+                                     layers=[boto3_layer, commons_layer, lambda_insights_layer],
+                                     log_retention=logs.RetentionDays.FIVE_DAYS,
+                                     environment={
+                                          "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
+                                          "CONVERSATION_HISTORY_BUCKET": conversation_history_bucket.bucket_name,
+                                          "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
+                                          "DYNAMODB_TABLE_CONFIG": dynamodb_configurations_table.table_name,
+                                          "DYNAMODB_TABLE_USAGE": dynamodb_bedrock_usage_table.table_name,
+                                          "REGION": region,
+                                          "ATTACHMENT_BUCKET": attachment_bucket.bucket_name,
+                                          "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
+                                          "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
+                                          "POWERTOOLS_SERVICE_NAME":"BEDROCK_CONVERSATIONS_SERVICE",
+                                     }
+                                     )
+        lambda_conversations_fn.apply_removal_policy(RemovalPolicy.DESTROY)
+        websocket_api.grant_manage_connections(lambda_conversations_fn)
+        dynamodb_conversations_table.grant_full_access(lambda_conversations_fn)
 
-        # Create a Cognito User Pool
-        user_pool = cognito.UserPool(
-            self, "ChatbotUserPool",
-            user_pool_name="ChatbotUserPool",
-            self_sign_up_enabled=True,
-            sign_in_aliases={"email": True},  # Enable sign-in with email
-            auto_verify={"email": True},  # Auto-verify email addresses
-            account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
-            removal_policy=RemovalPolicy.DESTROY,
-            password_policy=cognito.PasswordPolicy(  # Configure password policy
-                min_length=8,
-                require_lowercase=True,
-                require_uppercase=True,
-                require_digits=True,
-                require_symbols=True,
-            ),
-        )
         # Create the Lambda function for Scanning through LLM Models
         model_scan_function = _lambda.Function(self, "ModelScanFunction",
             runtime=_lambda.Runtime.PYTHON_3_12,
@@ -420,6 +472,7 @@ class ChatbotWebsiteStack(Stack):
                 "REGION": region,
                 "ALLOWLIST_DOMAIN": allowlist_domain_string,
                 "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
+                "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                 "POWERTOOLS_SERVICE_NAME":"MODEL_SCAN_SERVICE",
                 "POWERTOOLS_METRICS_NAMESPACE": "BedrockChatbotModelScan"
             },
@@ -450,9 +503,11 @@ class ChatbotWebsiteStack(Stack):
                                           "USER_POOL_ID": user_pool.user_pool_id,
                                           "REGION": region,
                                           "AGENTS_FUNCTION_NAME": agents_client_function.function_name,
+                                          "CONVERSATIONS_LIST_FUNCTION_NAME": lambda_conversations_fn.function_name,
                                           "BEDROCK_FUNCTION_NAME": lambda_fn_async.function_name,
                                           "ALLOWLIST_DOMAIN": allowlist_domain_string,
                                           "IMAGE_GENERATION_FUNCTION_NAME": image_generation_function.function_name,
+                                          "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                                           "POWERTOOLS_SERVICE_NAME":"BEDROCK_ROUTER",
                                         }
                                      )
@@ -461,6 +516,7 @@ class ChatbotWebsiteStack(Stack):
         lambda_fn_async.grant_invoke(lambda_router_fn)
         agents_client_function.grant_invoke(lambda_router_fn)
         image_generation_function.grant_invoke(lambda_router_fn)
+        lambda_conversations_fn.grant_invoke(lambda_router_fn)
         if deploy_example_incidents_agent:
             dynamodb_incidents_table.grant_full_access(agents_client_function)
         
@@ -476,6 +532,8 @@ class ChatbotWebsiteStack(Stack):
                                     log_retention=logs.RetentionDays.FIVE_DAYS,
                                     environment={
                                         "ATTACHMENT_BUCKET": attachment_bucket.bucket_name,
+                                        "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
+                                        "POWERTOOLS_SERVICE_NAME":"PRESIGNED_URL_SERVICE",
                                     },
         )
         presigned_url_function.apply_removal_policy(RemovalPolicy.DESTROY)
@@ -607,7 +665,34 @@ class ChatbotWebsiteStack(Stack):
             resources=["*"],
         ))
         
+        # List of Lambda functions
+        lambda_functions = [
+            config_function,
+            lambda_router_fn,
+            image_generation_function,
+            model_scan_function,
+            agents_client_function,
+            lambda_fn_async,
+            lambda_conversations_fn
+        ]
 
+        # Construct the log group ARNs for all Lambda functions
+        log_group_arns = [
+            Fn.sub("~'arn*3aaws*3alogs*3a${AWS::Region}*3a${AWS::AccountId}*3alog-group*3a${LogGroupName}*3a*2a",
+                {"LogGroupName": lambda_function.log_group.log_group_name})
+            for lambda_function in lambda_functions
+        ]
+
+        # Join the log group ARNs into a single string for the URL
+        log_group_arns_str = "~(" + ",".join(log_group_arns) + ")"
+
+        # Construct the CloudWatch Logs live tail URL
+        cloudwatch_logs_url = (
+            f"https://{region}.console.aws.amazon.com/cloudwatch/home?region={region}"
+            f"#logsV2:live-tail$3FlogGroupArns$3D{log_group_arns_str}"
+        )
+
+    
         # Export CloudFormation outputs
         CfnOutput(self, "AWSChatBotURL", value=f"https://{cloudfront_distribution_domain_name}")
         CfnOutput(self, "s3bucket", value=website_content_bucket.bucket_name)
@@ -616,4 +701,5 @@ class ChatbotWebsiteStack(Stack):
         CfnOutput(self, "user_pool_client_id", value=user_pool_client.user_pool_client_id)
         CfnOutput(self, "websocket_api_endpoint", value=websocket_api_endpoint+'/ws')
         CfnOutput(self, "RestApiUrl", value=rest_api.url)
+        CfnOutput(self,"CloudWatchLogsLiveTailURL",value=cloudwatch_logs_url,description="URL to CloudWatch Logs live tail screen for all Lambda functions")
 

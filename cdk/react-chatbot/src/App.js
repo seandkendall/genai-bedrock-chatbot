@@ -4,15 +4,17 @@ import DOMPurify from 'dompurify';
 import Header from './components/Header';
 import ChatHistory from './components/ChatHistory';
 import MessageInput from './components/MessageInput';
+import LeftSideBar from './components/LeftSideBar';
 import './App.css';
 import Popup from './components/Popup';
 import { Amplify } from 'aws-amplify';
-import { fetchAuthSession, signOut } from 'aws-amplify/auth';
+import { fetchAuthSession } from 'aws-amplify/auth';
 import { withAuthenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import amplifyConfig from './config.json';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { Box, useMediaQuery } from '@mui/material';
 import useWebSocket from 'react-use-websocket';
 import { modelPrices } from './modelPrices.js';
 
@@ -39,8 +41,16 @@ Amplify.configure(amplifyConfig);
 
 const App = memo(({ signOut, user }) => {
   const [messages, setMessages] = useState([]);
+  const [currentConversationMessageTitle, setCurrentConversationMessageTitle] = useState('');
+  const [uploadedFileNames, setUploadedFileNames] = useState([]);
+  const [conversationList, setConversationList] = useState([]);
+  const [conversationListLoading, setConversationListLoading] = useState(false);
+  const [selectedChatId, setSelectedChatId] = useState('');
+  const [requireConversationLoad, setRequireConversationLoad] = useState(true);
   const [isDisabled, setIsDisabled] = useState(false);
   const [selectedMode, setSelectedMode] = useState(null);
+  const [selectedTitleGenerationMode, setSelectedTitleGenerationMode] = useState(null);
+  const [selectedTitleGenerationTheme, setSelectedTitleGenerationTheme] = useState(localStorage.getItem('title_generation_theme') || '');
   const chatHistoryRef = useRef(null);
   const [showPopup, setShowPopup] = useState(false);
   const [popupMessage, setPopupMessage] = useState('');
@@ -82,6 +92,11 @@ const App = memo(({ signOut, user }) => {
   const [attachments, setAttachments] = useState([]);
   const [allowlist, setAllowList] = useState(null);
   const messageInputRef = useRef(null);
+
+  const [sidebarWidth, setSidebarWidth] = useState(250);
+  const [isDragging, setIsDragging] = useState(false);
+  const isMobile = useMediaQuery('(max-width:600px)');
+
   
   
 
@@ -211,7 +226,22 @@ const App = memo(({ signOut, user }) => {
   };
 
   const handleModeChange = (newMode) => {
-    setMessages([]);
+    if (selectedMode?.output_type !== newMode?.output_type) {
+      // print a user message telling them we are creating a new conversation
+      if (selectedMode && selectedMode?.output_type?.length > 0) {
+        setPopupMessage(`You were currently interacting with a model capable of outputting ${selectedMode?.output_type.charAt(0).toUpperCase() + selectedMode?.output_type.substring(1).toLowerCase()} and are now switching to an output type of ${newMode?.output_type.charAt(0).toUpperCase() + newMode?.output_type.substring(1).toLowerCase()}. I have created a new chat for you.`);
+        setPopupType('success');
+        setShowPopup(true);
+        setTimeout(() => setShowPopup(false), 3000);
+      }
+      handleNewChat()
+    }else if(selectedMode.category !== newMode?.category){
+      setPopupMessage(`You were currently interacting with a ${selectedMode?.category.charAt(0).toUpperCase()+selectedMode?.category.substring(1).toLowerCase()} model and are now switching to a ${newMode?.category.charAt(0).toUpperCase()+newMode?.category.substring(1).toLowerCase()} model. I have created a new chat for you.`);
+      setPopupType('success');
+      setShowPopup(true);
+      setTimeout(() => setShowPopup(false), 3000);
+      handleNewChat()
+    }
     setSelectedMode(newMode);
     setTimeout(scrollToBottom, 0);
   };
@@ -246,8 +276,23 @@ const App = memo(({ signOut, user }) => {
     loadConfigSubaction('load_models,load_prompt_flows,load_knowledge_bases,load_agents,modelscan');
   }
 
+  const loadConversationList = async() => {
+    setConversationListLoading(true)
+      const { accessToken, idToken } = await getCurrentSession()
+      const data = {
+        type: 'load_conversation_list',
+        idToken: `${idToken}`,
+        accessToken: `${accessToken}`,
+      };
+      sendMessage(JSON.stringify(data));
+  }
+  
   const loadConversationHistory = async (sessId) => {
     if (models && selectedMode && (appSessionid || sessId)) {
+      // if selectedMode.category doesnt exist print a warning log
+      if (!selectedMode.category) {
+        console.log('SDK Warning: selectedMode.category is not set, this is a bug and should be fixed');
+      }
       setIsRefreshingMessage('Loading Previous Conversation')
       setIsRefreshing(true);
       const { accessToken, idToken } = await getCurrentSession()
@@ -263,19 +308,18 @@ const App = memo(({ signOut, user }) => {
     }
   };
 
-  const clearConversationHistory = async () => {
-    if (models && selectedMode && appSessionid) {
-      const { accessToken, idToken } = await getCurrentSession()
-      const data = {
-        type: 'clear_conversation',
-        session_id: appSessionid,
-        kb_session_id: kbSessionId,
-        selectedMode: selectedMode,
-        idToken: `${idToken}`,
-        accessToken: `${accessToken}`,
-      };
-      sendMessage(JSON.stringify(data));
-    }
+  const clearConversationHistory = async (session_id) => {
+    localStorage.removeItem(`chatHistory-${session_id}`);
+    const { accessToken, idToken } = await getCurrentSession()
+    const data = {
+      type: 'clear_conversation',
+      session_id: session_id,
+      kb_session_id: kbSessionId,
+      selectedMode: selectedMode,
+      idToken: `${idToken}`,
+      accessToken: `${accessToken}`,
+    };
+    sendMessage(JSON.stringify(data));
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: only fire this when lastMessage changes
@@ -342,7 +386,14 @@ const App = memo(({ signOut, user }) => {
   }
 
   const onSend = async (message, attachments,retryPreviousMessage) => {
-    
+    // if appsessionid is null then setappsessionid
+    let newAppSessionid;
+    if (!appSessionid) {
+      setRequireConversationLoad(false)
+      newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`
+      setAppSessionId(newAppSessionid)
+    }
+
     if (retryPreviousMessage){
       message = previousSentMessage.message;
       attachments = previousSentMessage.attachments;
@@ -366,9 +417,11 @@ const App = memo(({ signOut, user }) => {
       prompt: sanitizedMessage,
       message_id: randomMessageId,
       timestamp: message_timestamp,
-      session_id: appSessionid,
+      session_id: newAppSessionid ? newAppSessionid : appSessionid,
       kb_session_id: kbSessionId,
       selectedMode: selectedMode,
+      titleGenModel: selectedTitleGenerationMode,
+      titleGenTheme: selectedTitleGenerationTheme,
       idToken: `${idToken}`,
       accessToken: `${accessToken}`,
       reloadPromptConfig: reloadPromptConfig,
@@ -479,13 +532,16 @@ const App = memo(({ signOut, user }) => {
             console.log('Sorry, I am unable to assist you with this request.');
           } else {
             setKBSessionId(message.kb_session_id);
-            localStorage.setItem('kbSessionId', message.kb_session_id);
+            localStorage.setItem(`kbSessionId-${appSessionid}`, message.kb_session_id);
           }
         }
       }
 
       if (typeof message === 'string' && message.includes('You have not been allow-listed for this application')) {
         handleError(message);
+      } else if (message.type === 'message_title') {
+        if(message.title)
+          setCurrentConversationMessageTitle(message.title)
       } else if (message.type === 'message_start') {
         if(isRefreshing){
           setIsRefreshing(false)
@@ -507,6 +563,10 @@ const App = memo(({ signOut, user }) => {
         setIsDisabled(false);
         setIsLoading(false);
         setTimeout(scrollToBottom, 0);
+        if (message.new_conversation) {
+          loadConversationList()
+          setSelectedChatId(message.session_id)
+        }
       } else if (message.type === 'error' || message.message === 'Internal server error') {
         if(isRefreshing){
           setIsRefreshing(false)
@@ -558,6 +618,9 @@ const App = memo(({ signOut, user }) => {
         setModelsLoaded(true)
       } else if (message.type === 'conversation_history') {
         // Do nothing, UseEffect will handle this 
+      } else if (message.type === 'load_conversation_list') {
+        setConversationList(message.conversation_list)
+        setConversationListLoading(false)
       } else if (message.type === 'modelscan') {
         triggerModelScanFinished();
       } else {
@@ -622,6 +685,7 @@ const App = memo(({ signOut, user }) => {
   };
 
   const updateMessagesOnStop = (messageStop) => {
+    console.log('SDK: updateMessagesOnStop:', messageStop)
     setMessages((prevMessages) => {
       const updatedMessages = [...prevMessages ? prevMessages : []];
       const lastIndex = updatedMessages.length - 1;
@@ -696,19 +760,6 @@ const App = memo(({ signOut, user }) => {
     setTimeout(scrollToBottom, 0);
   };
 
-  const onClearConversation = () => {
-    setMessages([]);
-    setAttachments([]);
-    clearConversationHistory();
-    setKBSessionId('');
-    localStorage.removeItem('kbSessionId');
-    localStorage.removeItem(`chatHistory-${appSessionid}`);
-    setPopupMessage('Conversation Cleared');
-    setPopupType('success');
-    setShowPopup(true);
-    setTimeout(() => setShowPopup(false), 3000);
-  };
-
   const scrollToBottom = () => {
     const documentHeight = Math.max(
       document.body.scrollHeight,
@@ -744,6 +795,79 @@ const App = memo(({ signOut, user }) => {
   const handleSaveSettings = () => {
     handleCloseSettingsModal();
   };
+  // Code Supporting SideBar
+  const handleNewChat = () => {
+    setRequireConversationLoad(false)
+    setMessages([]);
+    setAttachments([]);
+    setUploadedFileNames([]);
+    setSelectedChatId('');
+    setAppSessionId(`session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`)
+  };
+
+  const handleDeleteChat = (chatId) => {
+    //Show Message to user, telling them the chat was deleted
+    setPopupMessage('Chat/Conversation Deleted');
+    setPopupType('success');
+    setShowPopup(true);
+    setTimeout(() => setShowPopup(false), 3000);
+
+    //logic for handling the current loaded chat
+    if(selectedChatId === chatId){
+      setAppSessionId('')
+      setSelectedChatId('')
+      setMessages([])
+      setUploadedFileNames([]);
+      setAttachments([])
+      setKBSessionId('');
+      localStorage.removeItem(`kbSessionId-${appSessionid}`);
+    }
+    //delete the chat
+    clearConversationHistory(chatId)
+    // remove conversation matching chatId from conversationList
+    setConversationList(conversationList.filter((conversation) => conversation.session_id !== chatId))
+  };
+
+  const handleMouseDown = (e) => {
+    setIsDragging(true);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseMove = (e) => {
+    if (isDragging) {
+      const newWidth = e.clientX;
+      setSidebarWidth(newWidth);
+    }
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+  // End of Code Supporting SideBar
+
+  const getModeObjectFromModelID = (selectedModelId) => {
+    console.log('SDK LOH for selectedModelId')
+    console.log(selectedModelId)
+    console.log(models)
+    console.log('SDK END LOH for selectedModelId')
+    let selectedObject = null;
+    selectedObject = models.find((item) => item.modelId === selectedModelId);
+    return selectedObject;
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -755,9 +879,8 @@ const App = memo(({ signOut, user }) => {
           setKBSessionId={setKBSessionId}
           handleOpenSettingsModal={handleOpenSettingsModal}
           signOut={signOut}
-          onClearConversation={onClearConversation}
           selectedMode={selectedMode}
-          onModeChange={handleModeChange}
+          handleModeChange={handleModeChange}
           showPopup={showPopup}
           setShowPopup={setShowPopup}
           popupMessage={popupMessage}
@@ -783,11 +906,49 @@ const App = memo(({ signOut, user }) => {
           allowlist={allowlist}
           modelsLoaded={modelsLoaded}
           chatbotTitle={chatbotTitle}
+          isMobile={isMobile}
         />
-        <div className="chat-history" ref={chatHistoryRef}>
-          <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />
-        </div>
-        <MessageInput appSessionid={appSessionid} onSend={onSend} disabled={isDisabled || isLoading} setIsDisabled={setIsDisabled} selectedMode={selectedMode} selectedKbMode={selectedKbMode} sendMessage={sendMessage} getCurrentSession={getCurrentSession} attachments={attachments} setAttachments={setAttachments} setIsRefreshing={setIsRefreshing} setIsRefreshingMessage={setIsRefreshingMessage} ref={messageInputRef}/>
+        <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
+          <Box
+            sx={{
+              width: isMobile ? 0 : sidebarWidth,
+              flexShrink: 0,
+              transition: 'width 0.3s',
+              borderRight: '1px solid',
+              borderColor: 'divider',
+              overflow: 'hidden',
+            }}
+          >
+            <LeftSideBar
+              handleNewChat={handleNewChat}
+              handleDeleteChat={handleDeleteChat}
+              conversationList={conversationList}
+              conversationListLoading={conversationListLoading}
+              selectedChatId={selectedChatId}
+              setSelectedChatId={setSelectedChatId}
+              setAppSessionId={setAppSessionId}
+              setRequireConversationLoad={setRequireConversationLoad}
+              handleModeChange={handleModeChange}
+              getModeObjectFromModelID={getModeObjectFromModelID}
+              kbSessionId={kbSessionId}
+              setKBSessionId={setKBSessionId}
+            />
+          </Box>
+          <Box
+            sx={{
+              width: '4px',
+              cursor: 'ew-resize',
+              backgroundColor: 'divider',
+            }}
+            onMouseDown={handleMouseDown}
+          />
+          <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+            <div className="chat-history" ref={chatHistoryRef}>
+              <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} loadConversationHistory={loadConversationHistory} loadConversationList={loadConversationList} onSend={onSend} requireConversationLoad={requireConversationLoad} setRequireConversationLoad={setRequireConversationLoad} />
+            </div>
+            <MessageInput appSessionid={appSessionid} onSend={onSend} disabled={isDisabled || isLoading} setIsDisabled={setIsDisabled} selectedMode={selectedMode} selectedKbMode={selectedKbMode} sendMessage={sendMessage} getCurrentSession={getCurrentSession} attachments={attachments} setAttachments={setAttachments} setIsRefreshing={setIsRefreshing} setIsRefreshingMessage={setIsRefreshingMessage} ref={messageInputRef} uploadedFileNames={uploadedFileNames} setUploadedFileNames={setUploadedFileNames}/>
+          </Box>
+        </Box>
         {showPopup && <Popup message={popupMessage}
           type={popupType}
           onClose={() => setShowPopup(false)}
@@ -812,11 +973,16 @@ const App = memo(({ signOut, user }) => {
             setStylePreset={setStylePreset}
             heightWidth={heightWidth}
             setHeightWidth={setHeightWidth}
-            onModeChange={handleModeChange}
+            handleModeChange={handleModeChange}
             selectedMode={selectedMode}
             setAllowList={setAllowList}
             chatbotTitle={chatbotTitle}
             setChatbotTitle={setChatbotTitle}
+            selectedTitleGenerationMode={selectedTitleGenerationMode}
+            setSelectedTitleGenerationMode={setSelectedTitleGenerationMode}
+            selectedTitleGenerationTheme={selectedTitleGenerationTheme}
+            setSelectedTitleGenerationTheme={setSelectedTitleGenerationTheme}
+            models={models}
           />
         </Suspense>
       </div>

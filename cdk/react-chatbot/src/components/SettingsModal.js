@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Tooltip, Modal, Box, Typography, TextField, Button, Link, Switch, FormControl, IconButton, InputLabel, Select, MenuItem } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { FaInfoCircle } from 'react-icons/fa';
@@ -22,11 +22,16 @@ const SettingsModal = ({
     setStylePreset,
     heightWidth,
     setHeightWidth,
-    onModeChange,
+    handleModeChange,
     selectedMode,
     setAllowList,
     chatbotTitle,
-    setChatbotTitle
+    setChatbotTitle,
+    selectedTitleGenerationMode,
+    setSelectedTitleGenerationMode,
+    selectedTitleGenerationTheme,
+    setSelectedTitleGenerationTheme,
+    models,
 }) => {
     const theme = useTheme();
     const [error, setError] = useState('');
@@ -41,6 +46,8 @@ const SettingsModal = ({
         userSystemPrompt: '',
         systemSystemPrompt: '',
         chatbot_title: chatbotTitle,
+        conversation_generation_mode: selectedTitleGenerationMode,
+        conversation_generation_theme: selectedTitleGenerationTheme,
         systemPromptType: systemPromptUserOrSystem,
         stylePreset: localStorage.getItem('stylePreset') || 'photographic',
         heightWidth: localStorage.getItem('heightWidth') || '1024x1024',
@@ -95,6 +102,36 @@ const SettingsModal = ({
         setLocalState(prevState => ({
             ...prevState,
             chatbot_title: newTitle,
+        }));
+    }, []);
+    
+    const handleConvoGenModelChange = useCallback((event) => {
+        const newMode = event.target.value;
+        setLocalState(prevState => ({
+            ...prevState,
+            conversation_generation_mode: newMode,
+        }));
+    }, []);
+    const handleConvoGenModelChangeOnSave = useCallback((cgm) => {
+        const [category, modeSelector] = cgm.split('%');
+        
+        if (category === 'Bedrock Models') {
+            const selectedObject = models.find(item => item.mode_selector === modeSelector);
+            if (selectedObject) {
+                setSelectedTitleGenerationMode({
+                    ...selectedObject,
+                    category
+                });
+            }
+        }
+    }, [models,setSelectedTitleGenerationMode]);
+    
+
+    const handleConvoGenThemeChange = useCallback((event) => {
+        const newTheme = event.target.value;
+        setLocalState(prevState => ({
+            ...prevState,
+            conversation_generation_theme: newTheme,
         }));
     }, []);
     
@@ -213,6 +250,16 @@ const SettingsModal = ({
                             document.title = response.chatbot_title;
                             setChatbotTitle(response.chatbot_title)
                         }
+                        if (response.conversation_generation_mode){
+                            updateLocalState('conversation_generation_mode',response.conversation_generation_mode)
+                            localStorage.setItem('conversation_generation_mode', response.conversation_generation_mode)
+                            setSelectedTitleGenerationMode(response.conversation_generation_mode)
+                        }
+                        if (response.conversation_generation_theme){
+                            updateLocalState('conversation_generation_theme',response.conversation_generation_theme)
+                            localStorage.setItem('conversation_generation_theme', response.conversation_generation_theme)
+                            setSelectedTitleGenerationTheme(response.conversation_generation_theme)
+                        }
                         setEventBridgeScheduleEnabled(response.eventbridge_scheduler_enabled === true)
                         setAllowList(response.allowlist || '')
                         
@@ -306,10 +353,23 @@ const SettingsModal = ({
         setError('');
         setPricePer1000InputTokens(localState.pricePer1000InputTokens);
         setPricePer1000OutputTokens(localState.pricePer1000OutputTokens);
+        
         localStorage.setItem('chatbot_title', localState.chatbot_title)
         setChatbotTitle(localState.chatbot_title);
         document.title = localState.chatbot_title;
-        onModeChange(selectedMode)
+
+        localStorage.setItem('conversation_generation_mode', localState.conversation_generation_mode)
+        setSelectedTitleGenerationMode(localState.conversation_generation_mode);
+        handleConvoGenModelChangeOnSave(localState.conversation_generation_mode)
+
+        localStorage.setItem('conversation_generation_theme', localState.conversation_generation_theme)
+        setSelectedTitleGenerationTheme(localState.conversation_generation_theme);
+
+        
+        console.log('SDK HMC 1')
+        console.log(selectedMode)
+        handleModeChange(selectedMode)
+        console.log('SDK HMC 1 DONE')
 
         // Update image-related 
         setStylePreset(localState.stylePreset);
@@ -320,6 +380,8 @@ const SettingsModal = ({
         saveConfig('system', {
             systemPrompt: localState.systemSystemPrompt,
             chatbot_title: localState.chatbot_title,
+            conversation_generation_mode: localState.conversation_generation_mode,
+            conversation_generation_theme: localState.conversation_generation_theme,
         });
 
         saveConfig('user', {
@@ -339,7 +401,7 @@ const SettingsModal = ({
         saveConfig,
         onSave,
         onClose,
-        onModeChange,
+        handleModeChange,
         selectedMode]);
 
     const modalStyle = {
@@ -362,6 +424,30 @@ const SettingsModal = ({
     const handleInfoTooltipClose = () => {
         setShowInfoTooltip(false);
     };
+
+    const truncateText = (text, maxLength) => {
+        return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
+    };
+
+    const selectOptions = useMemo(() => [
+        {
+          title: 'Bedrock Models',
+          data: (models ? models : JSON.parse(localStorage.getItem('local-models')))
+            .filter(item => item.is_active === true || !('is_active' in item))
+        }
+      ], [models]);
+
+      const renderSelectOptions = (options, maxLength) => {
+        return options.flatMap(({ title, data }) =>
+          data.length > 0 ? [
+            ...data.map((item) => (
+              <MenuItem key={`${title}%${item.mode_selector}`} value={`${title}%${item.mode_selector}`}>
+                {truncateText((() => {return `${item.providerName} ${item.modelName}`;})(), maxLength)}
+              </MenuItem>
+            ))
+          ] : []
+        );
+      };
 
     return (
         <Modal open={showSettingsModal} onClose={onClose}>
@@ -412,6 +498,32 @@ const SettingsModal = ({
                             value={localState.chatbot_title}
                             onChange={handleTitleChange}
                             name="ChatbotTitle"
+                            fullWidth
+                            margin="normal"
+                        />
+                    </Tooltip>
+                </Typography>
+                <Select
+                  id="conversation-mode-select"
+                  labelId="conversation-mode-select-label"
+                  value={localState.conversation_generation_mode ? localState.conversation_generation_mode  : 'DEFAULT'}
+                  onChange={handleConvoGenModelChange}
+                  fullWidth
+                  label="Conversation Title Generation Model"
+                >
+                    <MenuItem value="DEFAULT" >
+                        <em>Select a Model</em>
+                    </MenuItem>
+                    {renderSelectOptions(selectOptions,50)}
+                </Select>
+
+                <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
+                    <Tooltip title="Conversation Title Generation Theme" arrow>
+                        <TextField
+                            label="Conversation Title Generation Theme"
+                            value={localState.conversation_generation_theme}
+                            onChange={handleConvoGenThemeChange}
+                            name="ConversationGenerationTheme"
                             fullWidth
                             margin="normal"
                         />

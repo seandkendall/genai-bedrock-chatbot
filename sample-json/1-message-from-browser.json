@@ -14,6 +14,7 @@
         "is_active": true,
         "allow_input_image": false,
         "allow_input_document": false,
+        "output_type": "TEXT",
         "category": "Bedrock KnowledgeBases"
     },
     "idToken": "this-would-be-a-long-id-token",
@@ -31,6 +32,7 @@
         "is_active": true,
         "allow_input_image": true,
         "allow_input_document": true,
+        "output_type": "TEXT",
         "category": "Bedrock Models"
     }
 }

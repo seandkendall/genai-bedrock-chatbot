@@ -1,12 +1,14 @@
 import json
 import os
 import boto3
+from boto3.dynamodb.conditions import Key
 import jwt
 import re
 import sys
 import base64
 import copy
 from chatbot_commons import commons
+from conversations import conversations
 from datetime import datetime, timezone
 from botocore.exceptions import ClientError
 #use AWS powertools for logging
@@ -15,7 +17,8 @@ from llm_conversion_functions import (
     generate_random_string,
     process_message_history_converse,
     split_message,
-    process_bedrock_converse_response
+    process_bedrock_converse_response,
+    process_bedrock_converse_response_for_title
 )
 logger = Logger(service="BedrockAsync")
 metrics = Metrics()
@@ -32,6 +35,7 @@ attachment_bucket = os.environ['ATTACHMENT_BUCKET']
 image_bucket = os.environ['S3_IMAGE_BUCKET_NAME']
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 conversations_table_name = os.environ['CONVERSATIONS_DYNAMODB_TABLE']
+conversations_table = boto3.resource('dynamodb').Table(conversations_table_name)
 usage_table_name = os.environ['DYNAMODB_TABLE_USAGE']
 region = os.environ['REGION']
 # models that do not support a system prompt (also includes all amazon models)
@@ -41,6 +45,11 @@ SYSTEM_PROMPT_EXCLUDED_MODELS = (
                     'mistral.mistral-7b-instruct-v0:2',
                     'mistral.mixtral-8x7b-instruct-v0:1'
                 )
+
+# Constants
+MAX_DDB_SIZE = 400 * 1024  # 400KB
+DDB_SIZE_THRESHOLD = 0.8
+S3_KEY_FORMAT = "{prefix}/{session_id}.json"
 
 MAX_CONTENT_ITEMS = 20
 MAX_IMAGES = 20
@@ -81,6 +90,7 @@ def process_websocket_message(event):
     id_token = request_body.get('idToken', 'none')
     decoded_token = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
     user_id = decoded_token['cognito:username']
+    tracer.put_annotation(key="UserID", value=user_id)
     message_type = request_body.get('type', '')
     tracer.put_annotation(key="MessageType", value=message_type)
     session_id = request_body.get('session_id', 'XYZ')
@@ -101,14 +111,14 @@ def process_websocket_message(event):
     if message_type == 'clear_conversation':
         # logger.info(f'Action: Clear Conversation {session_id}')
         # Delete the conversation history from DynamoDB
-        delete_s3_attachments_for_session(session_id,attachment_bucket)
-        delete_s3_attachments_for_session(session_id,image_bucket)
-        delete_s3_attachments_for_session(session_id,conversation_history_bucket)
-        delete_conversation_history(session_id)
+        delete_s3_attachments_for_session(session_id,attachment_bucket,user_id) 
+        delete_s3_attachments_for_session(session_id,image_bucket,user_id)
+        delete_s3_attachments_for_session(session_id,conversation_history_bucket,user_id)
+        conversations.delete_conversation_history(dynamodb,conversations_table_name,logger,session_id)
         return
     elif message_type == 'load':
         # Load conversation history from DynamoDB
-        load_and_send_conversation_history(session_id, connection_id)
+        load_and_send_conversation_history(session_id, connection_id,user_id)
         return
     else:
         # Handle other message types (e.g., prompt)
@@ -171,22 +181,21 @@ def process_websocket_message(event):
             })
 
         # Query existing history for the session from DynamoDB
-        needs_load_from_s3, original_existing_history = query_existing_history(session_id)
+        needs_load_from_s3, chat_title, original_existing_history = conversations.query_existing_history(dynamodb,conversations_table_name,logger,session_id)
         if needs_load_from_s3:
             existing_history = load_documents_from_existing_history(original_existing_history)
         else:
             existing_history = copy.deepcopy(original_existing_history)
-        id_token = request_body.get('idToken', 'none')
-        decoded_token = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
-        user_id = decoded_token['cognito:username']
-        tracer.put_annotation(key="UserID", value=user_id)
         reload_prompt_config = bool(request_body.get('reloadPromptConfig', 'False'))
         system_prompt_user_or_system = request_body.get('systemPromptUserOrSystem', 'system')
         tracer.put_annotation(key="PromptUserOrSystem", value=system_prompt_user_or_system)
         if not system_prompt or reload_prompt_config:
             system_prompt = load_system_prompt_config(system_prompt_user_or_system,user_id)
         selected_mode = request_body.get('selectedMode', '')
+        title_theme = request_body.get('titleGenTheme', '')
+        title_gen_model = request_body.get('titleGenModel', '')
         selected_model_id = selected_mode.get('modelId','')
+        selected_model_category = selected_mode.get('category','')
         model_provider = selected_model_id.split('.')[0]
         message_id = request_body.get('message_id', None)
         message_received_timestamp_utc = request_body.get('timestamp', datetime.now(tz=timezone.utc).isoformat())
@@ -233,6 +242,23 @@ def process_websocket_message(event):
             try:
                 tracer.put_annotation(key="Model", value=selected_model_id)
                 system_prompt_array = []
+                if (not chat_title and len(bedrock_request.get('messages')) == 1) or (chat_title.startswith('New Conversation:')):
+                    title_prompt_string = (
+                        f'Generate a Title in under 16 characters, '
+                        f'for a Chatbot conversation Header where the initial user prompt is: "{prompt}". '
+                    )
+                    if len(title_theme) > 0:
+                        title_prompt_string = title_prompt_string + f' Be creative using the following theme: "{title_theme}" '
+                    title_prompt_string = title_prompt_string +  'You MUST answer in RAW JSON format only matching this well defined json format: {"title":"title_value"}'
+                    
+                    title_prompt_request = [{'role': 'user','content': [{'text': title_prompt_string}]}]
+                    try: 
+                        chat_title = get_title_from_message(title_prompt_request, selected_model_id, connection_id, message_id)
+                    except Exception as e:
+                        logger.exception(e)
+                        logger.error(f"Error calling bedrock model for title (909912): {str(e)}")
+                        chat_title = f'New Conversation: {hash(prompt) % 1000000:06x}'
+                new_conversation = bool(not original_existing_history or len(original_existing_history) == 0)
                 if system_prompt and selected_model_id not in SYSTEM_PROMPT_EXCLUDED_MODELS and model_provider != 'amazon':
                     system_prompt_array.append({'text': system_prompt})
                     response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
@@ -244,8 +270,8 @@ def process_websocket_message(event):
                                                     modelId=selected_model_id,
                                                     additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{}))
                     
-                assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers)
-                store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id)
+                assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)
+                store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id,chat_title,new_conversation,selected_model_category)
             except Exception as e:
                 logger.exception(e)
                 logger.error(f"Error calling bedrock model (912): {str(e)}")
@@ -262,14 +288,30 @@ def process_websocket_message(event):
                     })
         else:
             logger.warn('No bedrock request')
-
 @tracer.capture_method
-def delete_s3_attachments_for_session(session_id,bucket):
+def get_title_from_message(messages: list, selected_model_id: str,connection_id: str, message_id: str) -> str:
+    print('SDK: DEBUGGING for message_id: '+message_id)
+    print(messages)
+    print('SDK: END DEBUGGING for message_id: '+message_id)
+    response = bedrock.converse_stream(messages=messages,
+                                           modelId=selected_model_id,
+                                           additionalModelRequestFields={})
+    # chat_title is a json object
+    chat_title = process_bedrock_converse_response_for_title(response)
+    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+        'type': 'message_title',
+        'message_id': message_id,
+        'title': chat_title['title']
+    })
+    return chat_title['title']
+
+    
+@tracer.capture_method
+def delete_s3_attachments_for_session(session_id: str,bucket: str,user_id:str):
     """Function to delete conversation attachments from s3"""
     deleted_objects = []
     errors = []
-    sid, model = session_id.rsplit('-model-', 1)
-    prefix = rf'{sid}/{session_id}'
+    prefix = rf'{user_id}/{session_id}'
     
     try:
         # List objects with the specified prefix
@@ -295,43 +337,7 @@ def delete_s3_attachments_for_session(session_id,bucket):
         logger.error(f"Encountered {len(errors)} errors:")
         for error in errors:
             logger.error(f"- {error}")
-            
-@tracer.capture_method
-def delete_conversation_history(session_id):
-    """Function to delete conversation history from DDB"""
-    try:
-        dynamodb.delete_item(
-            TableName=conversations_table_name,
-            Key={'session_id': {'S': session_id}}
-        )
-        logger.info(f"Conversation history deleted for session ID: {session_id}")
-    except Exception as e:
-        logger.exception(e)
-        logger.error(f"Error deleting conversation history (9781): {str(e)}")
-
-@tracer.capture_method
-def query_existing_history(session_id):
-    """Function to query existing history from DDB"""
-    try:
-        response = dynamodb.get_item(
-            TableName=conversations_table_name,
-            Key={'session_id': {'S': session_id}},
-            ProjectionExpression='conversation_history'
-        )
-
-        if 'Item' in response:
-            conversation_history_string = response['Item']['conversation_history']['S']
-            # if s3source exists in conversation_history_string then needs_load_from_s3 = true
-            needs_load_from_s3 = 's3source' in conversation_history_string
-            return needs_load_from_s3,json.loads(conversation_history_string)
-
-        return False,[]
-
-    except Exception as e:
-        logger.exception(e)
-        logger.error("Error querying existing history: " + str(e))
-        return []
-    
+              
 @tracer.capture_method
 def download_s3_content(item, content_type):
     """
@@ -425,59 +431,105 @@ def save_token_usage(user_id, input_tokens,output_tokens):
                 )
 
 @tracer.capture_method    
-def store_conversation_history_converse(session_id,selected_model_id, existing_history, converse_content_array, user_message, assistant_message, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id):
+def store_conversation_history_converse(session_id, selected_model_id, existing_history,
+    converse_content_array, user_message, assistant_message, user_id,
+    input_tokens, output_tokens, message_end_timestamp_utc,
+    message_received_timestamp_utc, message_id, title,new_conversation,selected_model_category):
     """Function to store conversation history in DDB or S3 in the converse format"""
-    sid, model = session_id.rsplit('-model-', 1)
-    prefix = rf'{sid}/{session_id}'
-    if user_message.strip() and assistant_message.strip():
-        # Prepare the updated conversation history
-        conversation_history = existing_history + [
-            {'role': 'user', 'content': converse_content_array, 'timestamp': message_received_timestamp_utc, 'message_id':message_id},
-            {'role': 'assistant', 'content': [{'text':assistant_message}], 'timestamp': message_end_timestamp_utc, 'message_id':generate_random_string()}
-        ]
-        conversation_history_size = len(json.dumps(conversation_history).encode('utf-8'))
-        
-        # Check if the conversation history size is greater than 80% of the 400KB limit (327,680)
-        if conversation_history_size > (400 * 1024 * 0.8):
-            logger.warn(f"Warning: Session ID {session_id} has reached 80% of the DynamoDB limit. Storing conversation history in S3.")
-            # Store the conversation history in S3
-            try:
-                s3_client.put_object(
-                    Bucket=conversation_history_bucket,
-                    Key=f"{prefix}/{session_id}.json",
-                    Body=json.dumps(conversation_history).encode('utf-8')
-                )
-            except ClientError as e:
-                logger.error(f"Error storing conversation history in S3: {e}")
-
-            # Update the DynamoDB item to indicate that the conversation history is in S3
-                dynamodb.update_item(
-                    TableName=conversations_table_name,
-                    Key={'session_id': session_id},
-                    UpdateExpression="SET conversation_history_in_s3=:true",
-                    ExpressionAttributeValues={':true': True}
-                )
-        else:
-            # Store the updated conversation history in DynamoDB
-            dynamodb.put_item(
-                TableName=conversations_table_name,
-                Item={
-                    'session_id': {'S': session_id},
-                    'user_id': {'S': user_id},
-                    'selected_model_id': {'S': selected_model_id},
-                    'conversation_history': {'S': json.dumps(conversation_history)},
-                    'conversation_history_in_s3': {'BOOL': False}
-                }
-            )
-        save_token_usage(user_id, input_tokens, output_tokens)
-    else:
+    
+    if not (user_message.strip() and assistant_message.strip()):
         if not user_message.strip():
             logger.info(f"User message is empty, skipping storage for session ID: {session_id}")
         if not assistant_message.strip():
             logger.info(f"Assistant response is empty, skipping storage for session ID: {session_id}")
+        return
+
+    prefix = rf'{user_id}/{session_id}'
+    
+    # Prepare the updated conversation history once
+    conversation_history = existing_history + [
+        {
+            'role': 'user',
+            'content': converse_content_array,
+            'timestamp': message_received_timestamp_utc,
+            'message_id': message_id
+        },
+        {
+            'role': 'assistant',
+            'content': [{'text': assistant_message}],
+            'timestamp': message_end_timestamp_utc,
+            'message_id': generate_random_string()
+        }
+    ]
+    
+    # Convert to JSON string once
+    conversation_json = json.dumps(conversation_history)
+    conversation_history_size = len(conversation_json.encode('utf-8'))
+    current_timestamp = str(datetime.now(tz=timezone.utc).timestamp())
+    
+    try:
+        if conversation_history_size > (MAX_DDB_SIZE * DDB_SIZE_THRESHOLD):
+            logger.warn(f"Warning: Session ID {session_id} has reached 80% of the DynamoDB limit. Storing conversation history in S3.")
+            
+            # Store in S3
+            s3_client.put_object(
+                Bucket=conversation_history_bucket,
+                Key=S3_KEY_FORMAT.format(prefix=prefix, session_id=session_id),
+                Body=conversation_json.encode('utf-8')
+            )
+            
+            # Update DynamoDB to indicate S3 storage
+            dynamodb.update_item(
+                TableName=conversations_table_name,
+                Key={'session_id': session_id},
+                UpdateExpression="SET conversation_history_in_s3=:true, last_modified_date = :current_time",
+                ExpressionAttributeValues={
+                    ':true': True,
+                    ':current_time': {'N': current_timestamp}
+                }
+            )
+        else:
+            # Store in DynamoDB
+            logger.info(f"Storing TITLE for conversation history in DynamoDB: {title}")
+            if new_conversation:
+                print('SDK: 55455: Storing a new conversation')
+                dynamodb.put_item(
+                    TableName=conversations_table_name,
+                    Item={
+                        'session_id': {'S': session_id},
+                        'user_id': {'S': user_id},
+                        'title': {'S': title},
+                        'last_modified_date': {'N': current_timestamp},
+                        'selected_model_id': {'S': selected_model_id},
+                        'category': {'S': selected_model_category},
+                        'conversation_history': {'S': conversation_json},
+                        'conversation_history_in_s3': {'BOOL': False}
+                    }
+                )
+            else:
+                print('SDK: 55455: UPDATING an existing conversation')
+                dynamodb.update_item(
+                    TableName=conversations_table_name,
+                    Key={'session_id': {'S': session_id}},
+                    UpdateExpression="SET last_modified_date = :current_time, title = :title, selected_model_id = :selected_model_id, conversation_history = :conversation_history, category = :category",
+                    ExpressionAttributeValues={
+                        ':current_time': {'N': current_timestamp},
+                        ':title': {'S': title},
+                        ':selected_model_id': {'S': selected_model_id},
+                        ':conversation_history': {'S': conversation_json},
+                        ':category': {'S': selected_model_category},
+                    }
+                )
+        
+        # Batch token usage update
+        save_token_usage(user_id, input_tokens, output_tokens)
+        
+    except (ClientError, Exception) as e:
+        logger.error(f"Error storing conversation history: {e}")
+        raise
                    
 @tracer.capture_method
-def load_and_send_conversation_history(session_id, connection_id):
+def load_and_send_conversation_history(session_id:str, connection_id:str, user_id:str):
     """Function to load and send conversation history"""
     try:
         response = dynamodb.get_item(
@@ -492,8 +544,7 @@ def load_and_send_conversation_history(session_id, connection_id):
             if isinstance(conversation_history_in_s3_value, dict):
                 conversation_history_in_s3 = conversation_history_in_s3_value.get('BOOL', False)
             if conversation_history_in_s3:
-                sid, model = session_id.rsplit('-model-', 1)
-                prefix = rf'{sid}/{session_id}'
+                prefix = rf'{user_id}/{session_id}'
                 # Load conversation history from S3
                 response = s3_client.get_object(Bucket=conversation_history_bucket, Key=f"{prefix}/{session_id}.json")
                 conversation_history = json.loads(response['Body'].read().decode('utf-8'))

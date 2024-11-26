@@ -3,9 +3,8 @@ import useTimer from '../useTimer'
 import { AppBar, Toolbar, CircularProgress, Typography, Box, Link, Button, IconButton, Menu, MenuItem, Select, Tooltip, InputLabel, FormControl } from '@mui/material';
 import { tooltipClasses } from '@mui/material/Tooltip';
 import { styled } from '@mui/material/styles';
-import { FaSignOutAlt, FaInfoCircle, FaCog, FaBroom } from 'react-icons/fa';
+import { FaSignOutAlt, FaInfoCircle, FaCog } from 'react-icons/fa';
 import Popup from './Popup';
-import useMediaQuery from '@mui/material/useMediaQuery';
 
 const NoMaxWidthTooltip = styled(({ className, ...props }) => (
   <Tooltip {...props} classes={{ popper: className }} />
@@ -22,9 +21,8 @@ const Header = ({
   setKBSessionId,
   handleOpenSettingsModal,
   signOut,
-  onClearConversation,
   selectedMode,
-  onModeChange,
+  handleModeChange,
   showPopup,
   setShowPopup,
   popupMessage,
@@ -49,13 +47,13 @@ const Header = ({
   user,
   allowlist,
   modelsLoaded,
-  chatbotTitle
+  chatbotTitle,
+  isMobile
 }) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
 
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
-  const isMobile = useMediaQuery('(max-width:600px)');
   
 
   
@@ -71,7 +69,10 @@ const Header = ({
         localStorage.removeItem('selectedMode')
       }
       if (savedOption) {
-        onModeChange(savedOption);
+        console.log('SDK HMC 3')
+        console.log(savedOption)
+        handleModeChange(savedOption);
+        console.log('SDK HMC 3 DONE')
       }
     }
     if (selectedKbMode === null) {
@@ -160,23 +161,18 @@ const Header = ({
       switch (category) {
         case 'Bedrock Models':
           selectedObject = models.find((item) => item.mode_selector === modeSelector);
-          selectedObject.category = category;
           break;
         case 'Bedrock Image Models':
           selectedObject = imageModels.find((item) => item.mode_selector === modeSelector);
-          selectedObject.category = category;
           break;
         case 'Bedrock KnowledgeBases':
           selectedObject = bedrockKnowledgeBases.find((item) => item.mode_selector === modeSelector);
-          selectedObject.category = category;
           break;
         case 'Bedrock Agents':
           selectedObject = bedrockAgents.find((item) => item.mode_selector === modeSelector);
-          selectedObject.category = category;
           break;
         case 'Bedrock Prompt Flows':
           selectedObject = promptFlows.find((item) => item.mode_selector === modeSelector);
-          selectedObject.category = category;
           break;
         case 'RELOAD':
           triggerModelScan();
@@ -187,7 +183,10 @@ const Header = ({
           break;
       }
       if (selectedObject) {
-        onModeChange(selectedObject);
+        console.log('SDK HMC 2')
+        console.log(selectedObject)
+        handleModeChange(selectedObject);
+        console.log('SDK HMC 2 DONE')
         localStorage.setItem('selectedMode', JSON.stringify(selectedObject));
       }
     }
@@ -200,7 +199,6 @@ const Header = ({
       switch (category) {
         case 'Bedrock Models':
           selectedObject = models.find((item) => item.mode_selector === modeSelector);
-          selectedObject.category = category;
           break;
         default:
           break;
@@ -209,7 +207,7 @@ const Header = ({
         onSelectedKbMode(selectedObject);
         localStorage.setItem('selectedKbMode', JSON.stringify(selectedObject));
         setKBSessionId('')
-        localStorage.removeItem('kbSessionId');
+        localStorage.removeItem(`kbSessionId-${appSessionid}`);
 
       }
     }
@@ -419,9 +417,6 @@ const Header = ({
 
             <IconButton color="inherit" onClick={() => handleOpenSettingsModal()}>
               <FaCog />
-            </IconButton>
-            <IconButton color="inherit" onClick={onClearConversation} disabled={disabled || (allowlist && !isUserAllowed()) || (!selectedMode) || (selectedMode.category === "Bedrock KnowledgeBases" && !selectedKbMode)}>
-              <FaBroom />
             </IconButton>
             <IconButton color="inherit" onClick={handleMenuOpen} disabled={disabled}>
               <FaSignOutAlt />

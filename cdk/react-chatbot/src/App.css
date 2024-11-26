@@ -351,3 +351,23 @@ body {
 .logout-btn svg {
   margin-right: 5px;
 }
+
+@media (max-width: 600px) {
+  .app {
+    flex-direction: column;
+  }
+}
+
+/* Sidebar List Item Styles */
+.left-sidebar .MuiListItem-root {
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.left-sidebar .MuiListItem-root:hover {
+  background-color: rgba(0, 0, 255, 0.1); /* Light blue on hover */
+}
+
+.left-sidebar .Mui-selected {
+  background-color: rgba(0, 255, 0, 0.3); /* Light green for selected */
+}

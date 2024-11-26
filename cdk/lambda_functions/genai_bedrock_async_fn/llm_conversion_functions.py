@@ -61,7 +61,7 @@ def split_message(message, max_chunk_size=30 * 1024):  # 30 KB chunk size
 from time import time
 from collections import deque
 
-def process_bedrock_converse_response(apigateway_management_api, response, selected_model_id, connection_id, converse_content_with_s3_pointers):
+def process_bedrock_converse_response(apigateway_management_api, response, selected_model_id, connection_id, converse_content_with_s3_pointers,new_conversation,session_id):
     """Function to process a bedrock response and send the messages back to the websocket for converse API"""
     result_text = ""
     current_input_tokens = 0
@@ -85,24 +85,27 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                         'type': 'message_start',
                         'message': {"model": selected_model_id},
+                        'session_id':session_id,
                         'delta': {'text': msg_text},
                         'message_counter': counter
                     })
                 else:
-                    if current_time - start_time <= 5:  # First 5 seconds
+                    if current_time - start_time <= 20:  # First 20 seconds
                         # Send messages immediately
                         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                             'type': 'content_block_delta',
+                            'session_id':session_id,
                             'delta': {'text': msg_text},
                             'message_counter': counter
                         })
-                    else:  # After 5 seconds
+                    else:  # After 20 seconds
                         buffer.append(msg_text)
                         # Send combined messages once per second
                         if current_time - last_send_time >= 1 and buffer:
                             combined_text = ''.join(buffer)
                             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                                 'type': 'content_block_delta',
+                                'session_id':session_id,
                                 'delta': {'text': combined_text},
                                 'message_counter': counter
                             })
@@ -123,6 +126,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
             combined_text = ''.join(buffer)
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'content_block_delta',
+                'session_id':session_id,
                 'delta': {'text': combined_text},
                 'message_counter': counter
             })
@@ -132,7 +136,9 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
         message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'message_stop',
+            'session_id':session_id,
             'message_counter': counter,
+            'new_conversation': new_conversation,
             'timestamp': message_end_timestamp_utc,
             'converse_content_with_s3_pointers': converse_content_with_s3_pointers,
             'amazon-bedrock-invocationMetrics': {
@@ -142,3 +148,24 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
         })
         
         return result_text, current_input_tokens, current_output_tokens, message_end_timestamp_utc
+    
+    
+def process_bedrock_converse_response_for_title(response):
+    """Function to process a bedrock title response for converse API"""
+    result_text = ""
+    stream = response.get('stream')
+    if stream:
+        for event in stream:
+            if 'contentBlockDelta' in event:
+                result_text += event['contentBlockDelta']['delta']['text']
+                
+        
+    try:
+        # Parse the JSON string into a Python dictionary
+        json_result = json.loads(result_text)
+        return json_result
+    except json.JSONDecodeError as e:
+        # Handle the case where the string is not valid JSON
+        print(f"Error(0901) parsing JSON: {e}")
+        print(f"Original result_text: {result_text}")
+        return None
