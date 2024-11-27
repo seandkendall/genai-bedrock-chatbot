@@ -358,12 +358,16 @@ const SettingsModal = ({
         setChatbotTitle(localState.chatbot_title);
         document.title = localState.chatbot_title;
 
-        localStorage.setItem('conversation_generation_mode', localState.conversation_generation_mode)
-        setSelectedTitleGenerationMode(localState.conversation_generation_mode);
-        handleConvoGenModelChangeOnSave(localState.conversation_generation_mode)
+        if(localState.conversation_generation_mode){
+            localStorage.setItem('conversation_generation_mode', localState.conversation_generation_mode)
+            setSelectedTitleGenerationMode(localState.conversation_generation_mode);
+            handleConvoGenModelChangeOnSave(localState.conversation_generation_mode)
+        }
 
-        localStorage.setItem('conversation_generation_theme', localState.conversation_generation_theme)
-        setSelectedTitleGenerationTheme(localState.conversation_generation_theme);
+        if(localState.conversation_generation_mode){
+            localStorage.setItem('conversation_generation_theme', localState.conversation_generation_theme)
+            setSelectedTitleGenerationTheme(localState.conversation_generation_theme);
+        }
         handleModeChange(selectedMode,false)
 
 

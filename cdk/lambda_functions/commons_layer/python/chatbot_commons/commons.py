@@ -260,16 +260,17 @@ def generate_image_titan(logger,bedrock,model_id, prompt, width, height, seed):
             })
         )
     except ClientError as e:
+        error_message = e.response['Error']['Message']
         if e.response['Error']['Code'] == 'AccessDeniedException':
             logger.warn("No Model Access to: %s",model_id)
         else:
             logger.exception(e)
-        return None
+        return None,False,error_message
     except Exception as e:
         logger.exception(e)
-        return None
+        return None, False, str(e)
     response_body = json.loads(response['body'].read())
-    return response_body['images'][0]
+    return response_body['images'][0], True, None
 
 def generate_random_string(length=8):
     """Function to generate a random String of length 8"""
@@ -299,17 +300,18 @@ def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, heig
                 })
             )
         except ClientError as e:
+            error_message = e.response['Error']['Message']
             if e.response['Error']['Code'] == 'AccessDeniedException':
                 logger.warn("No Model Access to: %s",model_id)
             else:
                 logger.exception(e)
-            return None
+            return None,False,error_message
         except Exception as e:
             logger.exception(e)
-            return None
+            return None, False, str(e)
         model_response = json.loads(response["body"].read())
         base64_image_data = model_response["images"][0]
-        return base64_image_data
+        return base64_image_data,True,None
     else:
         body_attributes = {
                 "text_prompts": [{"text": prompt}],
@@ -331,14 +333,15 @@ def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, heig
                 body=json.dumps(body_attributes)
             )
         except ClientError as e:
+            error_message = e.response['Error']['Message']
             if e.response['Error']['Code'] == 'AccessDeniedException':
                 logger.warn("No Model Access to: %s",model_id)
             else:
                 logger.exception(e)
-            return None
+            return None,False,error_message
         except Exception as e:
             logger.exception(e)
-            return None
+            return None, False, str(e)
         
         response_body = json.loads(response['body'].read())
-        return response_body['artifacts'][0]['base64']
+        return response_body['artifacts'][0]['base64'],True,None

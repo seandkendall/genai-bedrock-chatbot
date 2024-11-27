@@ -49,12 +49,43 @@ def lambda_handler(event, context):
         message_received_timestamp_utc = request_body.get('timestamp', datetime.now(timezone.utc).isoformat())
         #if model_id contains titan then
         if 'titan' in model_id:
-            image_base64 = commons.generate_image_titan(logger,bedrock_runtime,model_id, prompt, width, height,None)
+            image_base64,success_status,error_message = commons.generate_image_titan(logger,bedrock_runtime,model_id, prompt, width, height,None)
         elif 'stability' in model_id:
-            image_base64 = commons.generate_image_stable_diffusion(logger,bedrock_runtime,model_id, prompt, width, height, style_preset,None,None)
+            image_base64,success_status,error_message = commons.generate_image_stable_diffusion(logger,bedrock_runtime,model_id, prompt, width, height, style_preset,None,None)
         else:
             raise ValueError(f"Unsupported model: {model_id}")
-
+        
+        needs_load_from_s3, chat_title_loaded, original_existing_history = conversations.query_existing_history(dynamodb,conversations_table_name,logger,session_id)
+        existing_history = copy.deepcopy(original_existing_history)
+        new_conversation = bool(not existing_history or len(existing_history) == 0)
+        persisted_chat_title = chat_title_loaded if chat_title_loaded and chat_title_loaded.strip() else chat_title
+        
+        if not success_status:
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                'type': 'message_start',
+                'message': {"model": model_id},
+                'session_id':session_id,
+                'delta': {'text': error_message},
+                'message_counter': 0
+            })
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                    'type': 'message_title',
+                    'message_id': message_id,
+                    'title': persisted_chat_title
+                })
+            message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                'type': 'message_stop',
+                'session_id':session_id,
+                'message_counter': 1,
+                'new_conversation': True,
+                'timestamp': message_end_timestamp_utc,
+                'amazon-bedrock-invocationMetrics': {
+                    'inputTokenCount': 0,
+                    'outputTokenCount': 0
+                },
+            })
+            return {'statusCode': 200, 'body': json.dumps(f"Image Generation failed due to: {error_message}")}
         # Save image to S3 and generate pre-signed URL
         image_url = save_image_to_s3_and_get_url(image_base64)
         # logger.info("Image saved to S3 and URL generated")
@@ -66,10 +97,7 @@ def lambda_handler(event, context):
             'message_id': message_id,
             'timestamp': message_received_timestamp_utc,
         })
-        needs_load_from_s3, chat_title_loaded, original_existing_history = conversations.query_existing_history(dynamodb,conversations_table_name,logger,session_id)
-        existing_history = copy.deepcopy(original_existing_history)
-        new_conversation = bool(not existing_history or len(existing_history) == 0)
-        persisted_chat_title = chat_title_loaded if chat_title_loaded and chat_title_loaded.strip() else chat_title
+        
         
         
         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
