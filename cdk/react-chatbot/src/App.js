@@ -7,8 +7,8 @@ import MessageInput from './components/MessageInput';
 import './App.css';
 import Popup from './components/Popup';
 import { Amplify } from 'aws-amplify';
-import { fetchAuthSession, signOut } from 'aws-amplify/auth';
-import { withAuthenticator } from '@aws-amplify/ui-react';
+import { fetchAuthSession, signInWithRedirect } from 'aws-amplify/auth'
+import { useAuthenticator } from '@aws-amplify/ui-react'
 import '@aws-amplify/ui-react/styles.css';
 import amplifyConfig from './config.json';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
@@ -37,7 +37,7 @@ const theme = createTheme({
 
 Amplify.configure(amplifyConfig);
 
-const App = memo(({ signOut, user }) => {
+const App = memo(() => {
   const [messages, setMessages] = useState([]);
   const [isDisabled, setIsDisabled] = useState(false);
   const [selectedMode, setSelectedMode] = useState(null);
@@ -82,10 +82,8 @@ const App = memo(({ signOut, user }) => {
   const [attachments, setAttachments] = useState([]);
   const [allowlist, setAllowList] = useState(null);
   const messageInputRef = useRef(null);
-  
-  
 
-
+  const { authStatus, user, signOut } = useAuthenticator(context => [context.authStatus]);
 
   // Use the useWebSocket hook to manage the WebSocket connection
   // eslint-disable-next-line
@@ -102,7 +100,7 @@ const App = memo(({ signOut, user }) => {
         sendMessage(JSON.stringify({ type: 'ping' }));
       }
     }, 180000); // 3 minutes = 180000 milliseconds
-  
+
     // Cleanup interval on component unmount
     return () => clearInterval(interval);
   }, [readyState, sendMessage]);
@@ -118,10 +116,10 @@ const App = memo(({ signOut, user }) => {
       localStorage.setItem('local-image-models', JSON.stringify(imageModels));
   }, [imageModels]);
   useEffect(() => {
-    if (kbModels && kbModels.length > 0) 
+    if (kbModels && kbModels.length > 0)
       localStorage.setItem('local-kb-models', JSON.stringify(kbModels));
   }, [kbModels]);
-  
+
   //persist prompt flows to local storage if changed
   useEffect(() => {
     if (promptFlows && promptFlows.length > 0)
@@ -149,7 +147,7 @@ const App = memo(({ signOut, user }) => {
   const updatePricesFromModel = () => {
     if (selectedMode?.modelId) {
       const modelId = selectedMode?.modelId;
-      
+
       if (modelPrices[modelId]) {
         console.log('Found price info for modelId:', modelPrices[modelId]);
       } else {
@@ -172,9 +170,9 @@ const App = memo(({ signOut, user }) => {
       setPricePer1000OutputTokens(modelPriceInfo.pricePer1000OutputTokens);
     }
   };
-  
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: 
-    useEffect(() => {
+  useEffect(() => {
     updatePricesFromModel()
   }, [selectedMode]);
 
@@ -230,7 +228,7 @@ const App = memo(({ signOut, user }) => {
   const triggerModelScan = async () => {
     setIsRefreshingMessage('Loading Models')
     setIsRefreshing(true);
-    try{
+    try {
       const { accessToken, idToken } = await getCurrentSession()
       const data = {
         action: 'modelscan',
@@ -281,22 +279,22 @@ const App = memo(({ signOut, user }) => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: only fire this when lastMessage changes
   useEffect(() => {
     if (!lastMessage) return;
-  
+
     try {
       const message = JSON.parse(lastMessage.data);
       if (message.type !== 'conversation_history') return;
-      
+
       const current_chunk = message.current_chunk || 1;
       const last_message = message.last_message;
       const messageChunk = convertRuleToHuman(JSON.parse(message.chunk));
-      
+
       // Memoize the comparison result
       const isMessageDifferent = JSON.stringify(messageChunk) !== JSON.stringify(messages);
-      
+
       if (isMessageDifferent) {
-        setMessages(prevMessages => 
-          current_chunk === 1 
-            ? messageChunk 
+        setMessages(prevMessages =>
+          current_chunk === 1
+            ? messageChunk
             : [...prevMessages, ...messageChunk]
         );
       }
@@ -308,14 +306,14 @@ const App = memo(({ signOut, user }) => {
     } catch (error) {
       console.error('Error processing message:', error);
     }
-  // Remove messages from dependency array since it causes infinite loop
-  }, [lastMessage]);   
+    // Remove messages from dependency array since it causes infinite loop
+  }, [lastMessage]);
 
   const handleError = (message) => {
     const errormessage = typeof message === 'string' ? message : message.error || message.message;
-  
+
     let popupMsg = 'Sorry, we encountered an issue. Please try resubmitting your message.';
-  
+
     if (errormessage.includes('allow-listed') || errormessage.includes('You have not requested access to a model in Bedrock')) {
       popupMsg = errormessage;
     } else if (errormessage.includes('throttlingException')) {
@@ -323,33 +321,33 @@ const App = memo(({ signOut, user }) => {
     } else if (errormessage.includes('AUP or AWS Responsible AI')) {
       popupMsg = 'This request has been blocked by our content filters because the generated image(s) may conflict with our AUP or AWS Responsible AI Policy. Please try again.';
     }
-  
+
     setIsDisabled(false);
     setPopupMessage(popupMsg);
     setPopupType('error');
     setShowPopup(true);
     setTimeout(() => setShowPopup(false), 3000);
-  
+
     console.error('WebSocket error:', errormessage);
   };
-  
+
   function reformat_attachments(attachments) {
     return attachments.map(attachment => {
-      if (attachment.type.startsWith('image')) 
-        return { image: {s3source:{s3key:attachment.url}} };
-      return { document: {s3source:{s3key:attachment.url}} };
+      if (attachment.type.startsWith('image'))
+        return { image: { s3source: { s3key: attachment.url } } };
+      return { document: { s3source: { s3key: attachment.url } } };
     });
   }
 
-  const onSend = async (message, attachments,retryPreviousMessage) => {
-    
-    if (retryPreviousMessage){
+  const onSend = async (message, attachments, retryPreviousMessage) => {
+
+    if (retryPreviousMessage) {
       message = previousSentMessage.message;
       attachments = previousSentMessage.attachments;
-    }else{
-      setPreviousSentMessage({'message': message, 'attachments': attachments })
+    } else {
+      setPreviousSentMessage({ 'message': message, 'attachments': attachments })
     }
-      
+
     setIsLoading(true);
 
     const sanitizedMessage = DOMPurify.sanitize(message);
@@ -487,19 +485,19 @@ const App = memo(({ signOut, user }) => {
       if (typeof message === 'string' && message.includes('You have not been allow-listed for this application')) {
         handleError(message);
       } else if (message.type === 'message_start') {
-        if(isRefreshing){
+        if (isRefreshing) {
           setIsRefreshing(false)
         }
         const model = message?.message?.model
         setUsedModel(model)
         updateMessages(message);
       } else if (message.type === 'content_block_delta') {
-        if(isRefreshing){
+        if (isRefreshing) {
           setIsRefreshing(false)
         }
         updateMessages(message);
       } else if (message.type === 'message_stop') {
-        if(isRefreshing){
+        if (isRefreshing) {
           setIsRefreshing(false)
         }
         updateMessages(message);
@@ -508,7 +506,7 @@ const App = memo(({ signOut, user }) => {
         setIsLoading(false);
         setTimeout(scrollToBottom, 0);
       } else if (message.type === 'error' || message.message === 'Internal server error') {
-        if(isRefreshing){
+        if (isRefreshing) {
           setIsRefreshing(false)
         }
         updateMessagesOnStop(message);
@@ -517,7 +515,7 @@ const App = memo(({ signOut, user }) => {
         setIsLoading(false);
         setTimeout(scrollToBottom, 0);
       } else if (message.type === 'image_generated') {
-        if(isRefreshing){
+        if (isRefreshing) {
           setIsRefreshing(false)
         }
         setMessages((prevMessages) => {
@@ -542,17 +540,17 @@ const App = memo(({ signOut, user }) => {
         if (message.load_models)
           if (message.load_models.text_models)
             setModels(filter_active_models(message.load_models.text_models))
-          if (message.load_models.image_models)
-            setImageModels(filter_active_models(message.load_models.image_models))
-          if (message.load_models.kb_models)
-            setKbModels(message.load_models.kb_models)
+        if (message.load_models.image_models)
+          setImageModels(filter_active_models(message.load_models.image_models))
+        if (message.load_models.kb_models)
+          setKbModels(message.load_models.kb_models)
         if (message.load_knowledge_bases?.knowledge_bases)
           setBedrockKnowledgeBases(message.load_knowledge_bases.knowledge_bases)
         if (message.load_agents?.agents)
           setBedrockAgents(message.load_agents.agents)
         if (message.load_prompt_flows?.prompt_flows)
           setPromptFlows(message.load_prompt_flows.prompt_flows)
-        if (message.modelscan === true) 
+        if (message.modelscan === true)
           setIsRefreshing(false);
 
         setModelsLoaded(true)
@@ -563,9 +561,9 @@ const App = memo(({ signOut, user }) => {
       } else {
         if (typeof message === 'object' && message !== null) {
           const messageString = JSON.stringify(message);
-          if(messageString.includes('no_conversation_to_load')){
+          if (messageString.includes('no_conversation_to_load')) {
             setIsRefreshing(false)
-          } else if(messageString.includes('Access Token has expired')){
+          } else if (messageString.includes('Access Token has expired')) {
             try {
               signOut();
             } catch (error) {
@@ -578,11 +576,11 @@ const App = memo(({ signOut, user }) => {
               setIsRefreshing(false)
           }
         } else if (typeof message === 'string') {
-          if(message.includes('no_conversation_to_load')){
+          if (message.includes('no_conversation_to_load')) {
             setIsRefreshing(false)
-          } else if(message.includes('pong')){
+          } else if (message.includes('pong')) {
             // do nothing
-          }else if (!message.includes('Message Received')) {
+          } else if (!message.includes('Message Received')) {
             if (isRefreshing)
               setIsRefreshing(false)
             console.log('Uncaught String Message 2:');
@@ -609,7 +607,7 @@ const App = memo(({ signOut, user }) => {
           lastMessage.content = '';
         }
         if (lastMessage && lastMessage.role === 'assistant') {
-          const newContent =  message.delta?.text ? lastMessage.content + message.delta.text : (message.error ? message.error : 'no content');
+          const newContent = message.delta?.text ? lastMessage.content + message.delta.text : (message.error ? message.error : 'no content');
           updatedMessages[lastIndex] = {
             ...lastMessage,
             content: newContent,
@@ -643,7 +641,7 @@ const App = memo(({ signOut, user }) => {
         ? JSON.parse(localStorage.getItem('lastTokenIdentifier'))
         : '';
 
-      if (tokenidentifier === lastStoredTokenIdentifier) 
+      if (tokenidentifier === lastStoredTokenIdentifier)
         return updatedMessages;
 
       localStorage.setItem('lastTokenIdentifier', tokenidentifier);
@@ -677,9 +675,9 @@ const App = memo(({ signOut, user }) => {
               // Skip this message and the previous one
               return false;
             }
-            if (index < array.length - 1 && 
-                array[index + 1].raw_message && 
-                array[index + 1].raw_message.type === 'error') {
+            if (index < array.length - 1 &&
+              array[index + 1].raw_message &&
+              array[index + 1].raw_message.type === 'error') {
               // Skip this message as it's followed by an error
               return false;
             }
@@ -747,79 +745,82 @@ const App = memo(({ signOut, user }) => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <div className="app">
-        <Header
-          disabled={isDisabled || isLoading}
-          appSessionid={appSessionid}
-          kbSessionId={kbSessionId}
-          setKBSessionId={setKBSessionId}
-          handleOpenSettingsModal={handleOpenSettingsModal}
-          signOut={signOut}
-          onClearConversation={onClearConversation}
-          selectedMode={selectedMode}
-          onModeChange={handleModeChange}
-          showPopup={showPopup}
-          setShowPopup={setShowPopup}
-          popupMessage={popupMessage}
-          popupType={popupType}
-          totalInputTokens={totalInputTokens}
-          totalOutputTokens={totalOutputTokens}
-          pricePer1000InputTokens={pricePer1000InputTokens}
-          pricePer1000OutputTokens={pricePer1000OutputTokens}
-          monthlyInputTokens={monthlyInputTokens}
-          monthlyOutputTokens={monthlyOutputTokens}
-          bedrockAgents={bedrockAgents}
-          bedrockKnowledgeBases={bedrockKnowledgeBases}
-          models={models}
-          imageModels={imageModels}
-          kbModels={kbModels}
-          promptFlows={promptFlows}
-          selectedKbMode={selectedKbMode}
-          onSelectedKbMode={onSelectedKbMode}
-          triggerModelScan={triggerModelScan}
-          isRefreshing={isRefreshing}
-          isRefreshingMessage={isRefreshingMessage}
-          user={user}
-          allowlist={allowlist}
-          modelsLoaded={modelsLoaded}
-          chatbotTitle={chatbotTitle}
-        />
-        <div className="chat-history" ref={chatHistoryRef}>
-          <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />
-        </div>
-        <MessageInput appSessionid={appSessionid} onSend={onSend} disabled={isDisabled || isLoading} setIsDisabled={setIsDisabled} selectedMode={selectedMode} selectedKbMode={selectedKbMode} sendMessage={sendMessage} getCurrentSession={getCurrentSession} attachments={attachments} setAttachments={setAttachments} setIsRefreshing={setIsRefreshing} setIsRefreshingMessage={setIsRefreshingMessage} ref={messageInputRef}/>
-        {showPopup && <Popup message={popupMessage}
-          type={popupType}
-          onClose={() => setShowPopup(false)}
-          showPopup={showPopup}
-          setShowPopup={setShowPopup} />}
-        <Suspense fallback={<div>Loading...</div>}>
-          <SettingsModal
-            onClose={handleCloseSettingsModal}
-            onSave={handleSaveSettings}
-            showSettingsModal={showSettingsModal}
-            setPricePer1000InputTokens={setPricePer1000InputTokens}
-            pricePer1000InputTokens={pricePer1000InputTokens}
-            setPricePer1000OutputTokens={setPricePer1000OutputTokens}
-            pricePer1000OutputTokens={pricePer1000OutputTokens}
-            user={user}
-            websocketUrl={websocketUrl}
-            getCurrentSession={getCurrentSession}
-            systemPromptUserOrSystem={systemPromptUserOrSystem}
-            setSystemPromptUserOrSystem={setSystemPromptUserOrSystem}
-            setReloadPromptConfig={setReloadPromptConfig}
-            stylePreset={stylePreset}
-            setStylePreset={setStylePreset}
-            heightWidth={heightWidth}
-            setHeightWidth={setHeightWidth}
-            onModeChange={handleModeChange}
+      {authStatus === 'configuring' && 'Loading...'}
+      {authStatus !== 'authenticated' ? <div className='login-button-wrapper'><button className='login-button' onClick={() => signInWithRedirect({ provider: 'mocksaml' })}>Log in with SAML</button></div> :
+        <div className="app">
+          <Header
+            disabled={isDisabled || isLoading}
+            appSessionid={appSessionid}
+            kbSessionId={kbSessionId}
+            setKBSessionId={setKBSessionId}
+            handleOpenSettingsModal={handleOpenSettingsModal}
+            signOut={signOut}
+            onClearConversation={onClearConversation}
             selectedMode={selectedMode}
-            setAllowList={setAllowList}
+            onModeChange={handleModeChange}
+            showPopup={showPopup}
+            setShowPopup={setShowPopup}
+            popupMessage={popupMessage}
+            popupType={popupType}
+            totalInputTokens={totalInputTokens}
+            totalOutputTokens={totalOutputTokens}
+            pricePer1000InputTokens={pricePer1000InputTokens}
+            pricePer1000OutputTokens={pricePer1000OutputTokens}
+            monthlyInputTokens={monthlyInputTokens}
+            monthlyOutputTokens={monthlyOutputTokens}
+            bedrockAgents={bedrockAgents}
+            bedrockKnowledgeBases={bedrockKnowledgeBases}
+            models={models}
+            imageModels={imageModels}
+            kbModels={kbModels}
+            promptFlows={promptFlows}
+            selectedKbMode={selectedKbMode}
+            onSelectedKbMode={onSelectedKbMode}
+            triggerModelScan={triggerModelScan}
+            isRefreshing={isRefreshing}
+            isRefreshingMessage={isRefreshingMessage}
+            user={user}
+            allowlist={allowlist}
+            modelsLoaded={modelsLoaded}
             chatbotTitle={chatbotTitle}
-            setChatbotTitle={setChatbotTitle}
           />
-        </Suspense>
-      </div>
+          <div className="chat-history" ref={chatHistoryRef}>
+            <ChatHistory user={user} messages={messages} selectedMode={selectedMode} setMessages={setMessages} appSessionid={appSessionid} setAppSessionId={setAppSessionId} loadConversationHistory={loadConversationHistory} onSend={onSend} />
+          </div>
+          <MessageInput appSessionid={appSessionid} onSend={onSend} disabled={isDisabled || isLoading} setIsDisabled={setIsDisabled} selectedMode={selectedMode} selectedKbMode={selectedKbMode} sendMessage={sendMessage} getCurrentSession={getCurrentSession} attachments={attachments} setAttachments={setAttachments} setIsRefreshing={setIsRefreshing} setIsRefreshingMessage={setIsRefreshingMessage} ref={messageInputRef} />
+          {showPopup && <Popup message={popupMessage}
+            type={popupType}
+            onClose={() => setShowPopup(false)}
+            showPopup={showPopup}
+            setShowPopup={setShowPopup} />}
+          <Suspense fallback={<div>Loading...</div>}>
+            <SettingsModal
+              onClose={handleCloseSettingsModal}
+              onSave={handleSaveSettings}
+              showSettingsModal={showSettingsModal}
+              setPricePer1000InputTokens={setPricePer1000InputTokens}
+              pricePer1000InputTokens={pricePer1000InputTokens}
+              setPricePer1000OutputTokens={setPricePer1000OutputTokens}
+              pricePer1000OutputTokens={pricePer1000OutputTokens}
+              user={user}
+              websocketUrl={websocketUrl}
+              getCurrentSession={getCurrentSession}
+              systemPromptUserOrSystem={systemPromptUserOrSystem}
+              setSystemPromptUserOrSystem={setSystemPromptUserOrSystem}
+              setReloadPromptConfig={setReloadPromptConfig}
+              stylePreset={stylePreset}
+              setStylePreset={setStylePreset}
+              heightWidth={heightWidth}
+              setHeightWidth={setHeightWidth}
+              onModeChange={handleModeChange}
+              selectedMode={selectedMode}
+              setAllowList={setAllowList}
+              chatbotTitle={chatbotTitle}
+              setChatbotTitle={setChatbotTitle}
+            />
+          </Suspense>
+        </div>
+      }
     </ThemeProvider>
   );
 });
@@ -839,6 +840,6 @@ function filter_active_models(models) {
   return models.filter(model => model.is_active === true);
 }
 
-const AuthenticatedApp = withAuthenticator(App);
+// const AuthenticatedApp = withAuthenticator(App);
 
-export default AuthenticatedApp;
+export default App;
