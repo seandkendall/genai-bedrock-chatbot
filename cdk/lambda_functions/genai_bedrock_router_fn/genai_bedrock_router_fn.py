@@ -51,12 +51,7 @@ def lambda_handler(event, context):
         allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache, allowlist_domain, access_token)
     except ClientError as e:
         allowed, not_allowed_message = (False, "Your Access Token has expired. Please log in again.") if e.response['Error']['Code'] == 'NotAuthorizedException' else (None, None)
-    print('SDK HERES THE SELECTED MODE')
-    print(selected_mode)
-    print('SDK HERES THE SELECTED message_type')
-    print(message_type)
-    print('SDK HERES THE SELECTED allowed')
-    print(allowed)
+
     if allowed:
         if message_type == 'load_conversation_list':
             lambda_client.invoke(FunctionName=conversations_list_function_name, InvocationType='Event', Payload=json.dumps(event))

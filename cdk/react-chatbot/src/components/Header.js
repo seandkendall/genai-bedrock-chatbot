@@ -69,10 +69,7 @@ const Header = ({
         localStorage.removeItem('selectedMode')
       }
       if (savedOption) {
-        console.log('SDK HMC 3')
-        console.log(savedOption)
-        handleModeChange(savedOption);
-        console.log('SDK HMC 3 DONE')
+        handleModeChange(savedOption,false);
       }
     }
     if (selectedKbMode === null) {
@@ -183,10 +180,7 @@ const Header = ({
           break;
       }
       if (selectedObject) {
-        console.log('SDK HMC 2')
-        console.log(selectedObject)
-        handleModeChange(selectedObject);
-        console.log('SDK HMC 2 DONE')
+        handleModeChange(selectedObject,false);
         localStorage.setItem('selectedMode', JSON.stringify(selectedObject));
       }
     }
@@ -208,7 +202,6 @@ const Header = ({
         localStorage.setItem('selectedKbMode', JSON.stringify(selectedObject));
         setKBSessionId('')
         localStorage.removeItem(`kbSessionId-${appSessionid}`);
-
       }
     }
   };

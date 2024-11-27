@@ -30,6 +30,9 @@ export const getPlaceholderText = (selectedMode, selectedKbMode) => {
 	if (!selectedMode || !selectedMode.category) {
 		return "Select a Model, Agent, KnowledgeBase or PromptFlow in the Header";
 	}
+  if(selectedMode.category === "Bedrock Image Models"){
+		return "Generate an Image of...";
+	}
 	return selectedMode.category === "Bedrock KnowledgeBases" && !selectedKbMode
 		? "Select a Model for your KnowledgeBase in the Header"
 		: "Type your message...";

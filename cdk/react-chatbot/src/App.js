@@ -225,24 +225,24 @@ const App = memo(({ signOut, user }) => {
     return true;
   };
 
-  const handleModeChange = (newMode) => {
-    if (selectedMode?.output_type !== newMode?.output_type) {
-      // print a user message telling them we are creating a new conversation
-      if (selectedMode && selectedMode?.output_type?.length > 0) {
+  const handleModeChange = (newMode,chatSelectedByUser) => {
+    // if not chatSelectedByUser
+    if(!chatSelectedByUser ){
+      if((selectedMode && newMode) &&(selectedMode?.output_type !== newMode?.output_type || 
+        selectedMode?.category !== newMode?.category || 
+        selectedMode?.knowledgeBaseId !== newMode?.knowledgeBaseId ||
+        selectedMode?.knowledgeBaseId !== newMode?.knowledgeBaseId)){
         setPopupMessage(`You were currently interacting with a model capable of outputting ${selectedMode?.output_type.charAt(0).toUpperCase() + selectedMode?.output_type.substring(1).toLowerCase()} and are now switching to an output type of ${newMode?.output_type.charAt(0).toUpperCase() + newMode?.output_type.substring(1).toLowerCase()}. I have created a new chat for you.`);
         setPopupType('success');
         setShowPopup(true);
         setTimeout(() => setShowPopup(false), 3000);
+        handleNewChat()
       }
-      handleNewChat()
-    }else if(selectedMode.category !== newMode?.category){
-      setPopupMessage(`You were currently interacting with a ${selectedMode?.category.charAt(0).toUpperCase()+selectedMode?.category.substring(1).toLowerCase()} model and are now switching to a ${newMode?.category.charAt(0).toUpperCase()+newMode?.category.substring(1).toLowerCase()} model. I have created a new chat for you.`);
-      setPopupType('success');
-      setShowPopup(true);
-      setTimeout(() => setShowPopup(false), 3000);
-      handleNewChat()
+
     }
-    setSelectedMode(newMode);
+    if(newMode){
+      setSelectedMode(newMode);
+    }
     setTimeout(scrollToBottom, 0);
   };
 
@@ -289,10 +289,6 @@ const App = memo(({ signOut, user }) => {
   
   const loadConversationHistory = async (sessId) => {
     if (models && selectedMode && (appSessionid || sessId)) {
-      // if selectedMode.category doesnt exist print a warning log
-      if (!selectedMode.category) {
-        console.log('SDK Warning: selectedMode.category is not set, this is a bug and should be fixed');
-      }
       setIsRefreshingMessage('Loading Previous Conversation')
       setIsRefreshing(true);
       const { accessToken, idToken } = await getCurrentSession()
@@ -685,7 +681,6 @@ const App = memo(({ signOut, user }) => {
   };
 
   const updateMessagesOnStop = (messageStop) => {
-    console.log('SDK: updateMessagesOnStop:', messageStop)
     setMessages((prevMessages) => {
       const updatedMessages = [...prevMessages ? prevMessages : []];
       const lastIndex = updatedMessages.length - 1;
@@ -859,12 +854,12 @@ const App = memo(({ signOut, user }) => {
   // End of Code Supporting SideBar
 
   const getModeObjectFromModelID = (selectedModelId) => {
-    console.log('SDK LOH for selectedModelId')
-    console.log(selectedModelId)
-    console.log(models)
-    console.log('SDK END LOH for selectedModelId')
     let selectedObject = null;
     selectedObject = models.find((item) => item.modelId === selectedModelId);
+    // if selectedObject is null then find by modelArn
+    if (!selectedObject) {
+      selectedObject = models.find((item) => item.modelArn === selectedModelId);
+    }
     return selectedObject;
   };
 
@@ -930,8 +925,10 @@ const App = memo(({ signOut, user }) => {
               setRequireConversationLoad={setRequireConversationLoad}
               handleModeChange={handleModeChange}
               getModeObjectFromModelID={getModeObjectFromModelID}
-              kbSessionId={kbSessionId}
               setKBSessionId={setKBSessionId}
+              onSelectedKbMode={onSelectedKbMode}
+              kbModels={kbModels}
+              bedrockKnowledgeBases={bedrockKnowledgeBases}
             />
           </Box>
           <Box

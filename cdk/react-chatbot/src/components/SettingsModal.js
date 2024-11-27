@@ -364,12 +364,8 @@ const SettingsModal = ({
 
         localStorage.setItem('conversation_generation_theme', localState.conversation_generation_theme)
         setSelectedTitleGenerationTheme(localState.conversation_generation_theme);
+        handleModeChange(selectedMode,false)
 
-        
-        console.log('SDK HMC 1')
-        console.log(selectedMode)
-        handleModeChange(selectedMode)
-        console.log('SDK HMC 1 DONE')
 
         // Update image-related 
         setStylePreset(localState.stylePreset);

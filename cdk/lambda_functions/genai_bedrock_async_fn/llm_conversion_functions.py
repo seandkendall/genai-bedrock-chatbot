@@ -26,40 +26,7 @@ def process_message_history_converse(existing_history):
             normalized_history.append(normalized_message)
 
     return normalized_history
-    
 
-
-def generate_random_string(length=8):
-    """Function to generate a random String of length 8"""
-    characters = string.ascii_lowercase + string.digits
-    random_part = ''.join(random.choice(characters) for _ in range(length))
-    return f"RES{random_part}"
-
-def split_message(message, max_chunk_size=30 * 1024):  # 30 KB chunk size
-    """Function to split messages into 30Kb chunks to support websockets"""
-    chunks = []
-    current_chunk = []
-    current_chunk_size = 0
-
-    for msg in message:
-        msg_json = json.dumps({'role': msg['role'], 'content': msg['content'], 'timestamp': msg['timestamp'], 'message_id': msg['message_id']})
-        msg_size = len(msg_json.encode('utf-8'))
-
-        if current_chunk_size + msg_size > max_chunk_size:
-            chunks.append(json.dumps(current_chunk))
-            current_chunk = []
-            current_chunk_size = 0
-
-        current_chunk.append(msg)
-        current_chunk_size += msg_size
-
-    if current_chunk:
-        chunks.append(json.dumps(current_chunk))
-
-    return chunks
-
-from time import time
-from collections import deque
 
 def process_bedrock_converse_response(apigateway_management_api, response, selected_model_id, connection_id, converse_content_with_s3_pointers,new_conversation,session_id):
     """Function to process a bedrock response and send the messages back to the websocket for converse API"""

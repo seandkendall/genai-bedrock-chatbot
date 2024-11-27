@@ -1,6 +1,7 @@
 import json
 import decimal
 import random
+import string
 from datetime import datetime, timezone, timedelta
 from botocore.exceptions import ClientError
 
@@ -269,6 +270,12 @@ def generate_image_titan(logger,bedrock,model_id, prompt, width, height, seed):
         return None
     response_body = json.loads(response['body'].read())
     return response_body['images'][0]
+
+def generate_random_string(length=8):
+    """Function to generate a random String of length 8"""
+    characters = string.ascii_lowercase + string.digits
+    random_part = ''.join(random.choice(characters) for _ in range(length))
+    return f"RES{random_part}"
 
 def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, height, style_preset,seed,steps):
     """Generates an image using StableDiffusion"""

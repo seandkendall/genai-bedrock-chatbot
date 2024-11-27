@@ -58,13 +58,19 @@ def get_conversation_list_from_dynamodb_conversation_history_table(user_id):
         response = conversations_table.query(
             IndexName='user_id-index',
             KeyConditionExpression=Key('user_id').eq(user_id),
-            ProjectionExpression="#session_id, #selected_model_id, #last_modified_date, #title, #category",
+            ProjectionExpression="#session_id, #selected_model_id, #last_modified_date, #title, #category,#kb_session_id,#selected_knowledgebase_id,#flow_id,#flow_alias_id,#selected_agent_id,#selected_agent_alias_id",
             ExpressionAttributeNames={
                 "#session_id": "session_id",
                 "#title":"title",
                 "#selected_model_id": "selected_model_id",
                 "#last_modified_date": "last_modified_date",
                 "#category": "category",
+                "#kb_session_id":"kb_session_id",
+                "#selected_knowledgebase_id":"selected_knowledgebase_id",
+                "#flow_id": "flow_id",
+                "#flow_alias_id": "flow_alias_id",
+                "#selected_agent_id": "selected_agent_id",
+                "#selected_agent_alias_id": "selected_agent_alias_id"
             },
             ScanIndexForward=False
         )

@@ -14,9 +14,7 @@ from botocore.exceptions import ClientError
 #use AWS powertools for logging
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from llm_conversion_functions import (
-    generate_random_string,
     process_message_history_converse,
-    split_message,
     process_bedrock_converse_response,
     process_bedrock_converse_response_for_title
 )
@@ -118,7 +116,7 @@ def process_websocket_message(event):
         return
     elif message_type == 'load':
         # Load conversation history from DynamoDB
-        load_and_send_conversation_history(session_id, connection_id,user_id)
+        conversations.load_and_send_conversation_history(session_id, connection_id, user_id, dynamodb,conversations_table_name,s3_client,conversation_history_bucket,logger, commons,apigateway_management_api)
         return
     else:
         # Handle other message types (e.g., prompt)
@@ -290,9 +288,6 @@ def process_websocket_message(event):
             logger.warn('No bedrock request')
 @tracer.capture_method
 def get_title_from_message(messages: list, selected_model_id: str,connection_id: str, message_id: str) -> str:
-    print('SDK: DEBUGGING for message_id: '+message_id)
-    print(messages)
-    print('SDK: END DEBUGGING for message_id: '+message_id)
     response = bedrock.converse_stream(messages=messages,
                                            modelId=selected_model_id,
                                            additionalModelRequestFields={})
@@ -394,43 +389,6 @@ def load_documents_from_existing_history(existing_history):
     return modified_history
 
 @tracer.capture_method    
-def save_token_usage(user_id, input_tokens,output_tokens):
-    """Function to save token usage in DDB"""
-    current_date_ymd = datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')
-    current_date_ym = datetime.now(tz=timezone.utc).strftime('%Y-%m')
-    
-    dynamodb.update_item(
-                    TableName=usage_table_name,
-                    Key={'user_id': {'S': user_id }},
-                    UpdateExpression=f"ADD input_tokens :input_tokens, output_tokens :output_tokens, message_count :message_count",
-                    ExpressionAttributeValues={
-                        ':input_tokens': {'N': str(input_tokens)},
-                        ':output_tokens': {'N': str(output_tokens)},
-                        ':message_count': {'N': str(1)}
-                    }
-                )
-    dynamodb.update_item(
-                    TableName=usage_table_name,
-                    Key={'user_id': {'S': user_id + '-' + current_date_ym}},
-                    UpdateExpression="ADD input_tokens :input_tokens, output_tokens :output_tokens, message_count :message_count",
-                    ExpressionAttributeValues={
-                        ':input_tokens': {'N': str(input_tokens)},
-                        ':output_tokens': {'N': str(output_tokens)},
-                        ':message_count': {'N': str(1)}
-                    }
-                )
-    dynamodb.update_item(
-                    TableName=usage_table_name,
-                    Key={'user_id': {'S': user_id + '-' + current_date_ymd}},
-                    UpdateExpression="ADD input_tokens :input_tokens, output_tokens :output_tokens, message_count :message_count",
-                    ExpressionAttributeValues={
-                        ':input_tokens': {'N': str(input_tokens)},
-                        ':output_tokens': {'N': str(output_tokens)},
-                        ':message_count': {'N': str(1)}
-                    }
-                )
-
-@tracer.capture_method    
 def store_conversation_history_converse(session_id, selected_model_id, existing_history,
     converse_content_array, user_message, assistant_message, user_id,
     input_tokens, output_tokens, message_end_timestamp_utc,
@@ -458,7 +416,7 @@ def store_conversation_history_converse(session_id, selected_model_id, existing_
             'role': 'assistant',
             'content': [{'text': assistant_message}],
             'timestamp': message_end_timestamp_utc,
-            'message_id': generate_random_string()
+            'message_id': commons.generate_random_string()
         }
     ]
     
@@ -492,7 +450,6 @@ def store_conversation_history_converse(session_id, selected_model_id, existing_
             # Store in DynamoDB
             logger.info(f"Storing TITLE for conversation history in DynamoDB: {title}")
             if new_conversation:
-                print('SDK: 55455: Storing a new conversation')
                 dynamodb.put_item(
                     TableName=conversations_table_name,
                     Item={
@@ -507,7 +464,6 @@ def store_conversation_history_converse(session_id, selected_model_id, existing_
                     }
                 )
             else:
-                print('SDK: 55455: UPDATING an existing conversation')
                 dynamodb.update_item(
                     TableName=conversations_table_name,
                     Key={'session_id': {'S': session_id}},
@@ -522,61 +478,11 @@ def store_conversation_history_converse(session_id, selected_model_id, existing_
                 )
         
         # Batch token usage update
-        save_token_usage(user_id, input_tokens, output_tokens)
+        conversations.save_token_usage(user_id, input_tokens,output_tokens,dynamodb,usage_table_name)
         
     except (ClientError, Exception) as e:
         logger.error(f"Error storing conversation history: {e}")
         raise
-                   
-@tracer.capture_method
-def load_and_send_conversation_history(session_id:str, connection_id:str, user_id:str):
-    """Function to load and send conversation history"""
-    try:
-        response = dynamodb.get_item(
-            TableName=conversations_table_name,
-            Key={'session_id': {'S': session_id}}
-        )
-
-        if 'Item' in response:
-            item = response['Item']
-            conversation_history_in_s3 = False
-            conversation_history_in_s3_value = item.get('conversation_history_in_s3', False)
-            if isinstance(conversation_history_in_s3_value, dict):
-                conversation_history_in_s3 = conversation_history_in_s3_value.get('BOOL', False)
-            if conversation_history_in_s3:
-                prefix = rf'{user_id}/{session_id}'
-                # Load conversation history from S3
-                response = s3_client.get_object(Bucket=conversation_history_bucket, Key=f"{prefix}/{session_id}.json")
-                conversation_history = json.loads(response['Body'].read().decode('utf-8'))
-            else:
-                # Load conversation history from DynamoDB
-                conversation_history_str = item['conversation_history']['S']
-                conversation_history = json.loads(conversation_history_str)
-            # Split the conversation history into chunks
-            conversation_history_chunks = split_message(conversation_history)
-            # print number of chumks in conversation_history_chunks
-            logger.info(f"Number of chunks in conversation history: {len(conversation_history_chunks)}")
-            # Send the conversation history chunks to the WebSocket client
-            total_chunks = len(conversation_history_chunks)
-            for index, chunk in enumerate(conversation_history_chunks, start=1):
-                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                    'type': 'conversation_history',
-                    'last_message': index == total_chunks,
-                    'chunk': chunk,
-                    'current_chunk': index,
-                    'total_chunks': total_chunks
-                })
-        else:
-            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                    'type': 'no_conversation_to_load',
-                    'last_message': True
-                })
-            return []
-
-    except Exception as e:
-        logger.error("Error loading conversation history")
-        logger.exception(e)
-        return []
     
 @tracer.capture_method
 def load_system_prompt_config(system_prompt_user_or_system, user_id):

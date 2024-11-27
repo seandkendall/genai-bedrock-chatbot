@@ -287,13 +287,14 @@ class ChatbotWebsiteStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             tracing=_lambda.Tracing.ACTIVE,
             memory_size=1024,
-            layers=[boto3_layer, commons_layer, lambda_insights_layer],
+            layers=[boto3_layer, commons_layer, conversations_layer,lambda_insights_layer],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={
                 "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                 "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
                 "CLOUDFRONT_DOMAIN": cloudfront_distribution.distribution_domain_name,
                 "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
+                "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
                 "POWERTOOLS_SERVICE_NAME":"IMAGE_GENERATION_SERVICE",
             },
         )
@@ -302,6 +303,7 @@ class ChatbotWebsiteStack(Stack):
         image_bucket.grant_read_write(image_generation_function)
         image_generation_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
         image_generation_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"))
+        dynamodb_conversations_table.grant_full_access(image_generation_function)
 
         config_function = _lambda.Function(
             self, "GenAIBedrockConfigFunction",
@@ -352,6 +354,8 @@ class ChatbotWebsiteStack(Stack):
                                           "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                                           "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                                           "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
+                                          "CONVERSATION_HISTORY_BUCKET": conversation_history_bucket.bucket_name,
+                                          "DYNAMODB_TABLE_USAGE": dynamodb_bedrock_usage_table.table_name,
                                           "POWERTOOLS_SERVICE_NAME":"AGENTS_CLIENT_SERVICE",
                                      }
                                      )
