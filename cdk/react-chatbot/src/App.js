@@ -36,6 +36,9 @@ const theme = createTheme({
 });
 
 Amplify.configure(amplifyConfig);
+// uncomment the below lines to troubleshoot Cognito config
+//const currentConfig = Amplify.getConfig();
+//console.log(JSON.stringify(currentConfig, null, 2));
 
 const App = memo(() => {
   const [messages, setMessages] = useState([]);

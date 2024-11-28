@@ -1,0 +1,29 @@
+{ //this template provides the expected structure of config.json, and documentation for each field
+    "auth": {
+      "aws_region": "us-east-1",  // Replace with your AWS region
+      "user_pool_id": "us-east-1_123456789",  // Replace with your Cognito User Pool ID
+      "user_pool_client_id": "123456789abcdefghij",  // Replace with your Cognito User Pool Client ID
+      "identity_pool_id": "us-east-1:12345678-1234-1234-1234-123456789abc",  // Replace with your Cognito Identity Pool ID
+      "password_policy": {
+        "min_length": 8,  // Minimum password length (6–99)
+        "require_numbers": true,  // Set to true if numbers are required
+        "require_lowercase": true,  // Set to true if lowercase letters are required
+        "require_uppercase": true,  // Set to true if uppercase letters are required
+        "require_symbols": false  // Set to true if symbols are required
+      },
+      "oauth": {
+        "identity_providers": ["GOOGLE", "FACEBOOK"],  // Replace with desired providers (e.g., GOOGLE, FACEBOOK, etc.)
+        "domain": "your-auth-domain.auth.us-east-1.amazoncognito.com",  // Replace with your Cognito domain
+        "scopes": ["email", "openid"],  // Replace with desired OAuth scopes
+        "redirect_sign_in_uri": ["https://yourapp.com/signin"],  // Replace with your redirect URIs for sign-in
+        "redirect_sign_out_uri": ["https://yourapp.com/signout"],  // Replace with your redirect URIs for sign-out
+        "response_type": "code"  // Choose between "code" or "token"
+      },
+      "standard_required_attributes": ["email", "phone_number"],  // Add required attributes (e.g., email, phone_number)
+      "username_attributes": ["email"],  // Choose username attributes (e.g., email, phone_number, username)
+      "user_verification_types": ["email"],  // Choose verification types (e.g., email, phone_number)
+      "unauthenticated_identities_enabled": true,  // Set to true or false based on whether unauthenticated identities are allowed
+      "mfa_configuration": "OPTIONAL",  // Choose MFA configuration ("NONE", "OPTIONAL", or "REQUIRED")
+      "mfa_methods": ["SMS"]  // Choose MFA methods (e.g., SMS, TOTP)
+    }
+  }
