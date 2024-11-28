@@ -1,5 +1,23 @@
 #!/usr/bin/env bash
 
+# Purpose:
+# This script provides a streamlined way to deploy updates to the web application
+# component of your solution to Amazon S3. It should only be used after you have
+# successfully completed at least one full deployment of the entire application stack.
+#
+# Use Case:
+# - When you've made changes only to the web application code
+# - When you want to update the frontend without modifying backend resources
+# - For rapid iteration on UI changes without redeploying infrastructure
+#
+# Prerequisites:
+# - A complete initial deployment must exist
+# - Valid AWS credentials with S3 access
+# - The S3 bucket from the initial deployment must still exist
+#
+# Note: If you need to deploy backend changes or if this is your first deployment,
+# use the complete deployment script instead.
+
 # Define colors
 has_colors() {
     local has_colors=false
