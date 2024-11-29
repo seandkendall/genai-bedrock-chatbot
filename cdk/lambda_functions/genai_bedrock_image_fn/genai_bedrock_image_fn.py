@@ -80,7 +80,7 @@ def lambda_handler(event, context):
                 'message_counter': 1,
                 'new_conversation': True,
                 'timestamp': message_end_timestamp_utc,
-                'amazon-bedrock-invocationMetrics': {
+                'amazon_bedrock_invocation_metrics': {
                     'inputTokenCount': 0,
                     'outputTokenCount': 0
                 },

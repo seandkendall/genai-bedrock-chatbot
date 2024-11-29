@@ -280,7 +280,7 @@ def generate_random_string(length=8):
 
 def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, height, style_preset,seed,steps):
     """Generates an image using StableDiffusion"""
-    # write log printing model_id
+    # write log for model_id
     logger.info(f"Generating image using Model ID: {model_id}")
     if not seed:
         seed = random.randint(0, 2147483646)

@@ -1,6 +1,7 @@
 import random
 import string
 import json
+import re
 import os
 import boto3
 from time import time
@@ -35,13 +36,13 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
     current_output_tokens = 0
     counter = 0
     message_end_timestamp_utc = ''
+    message_stop_reason = ''
     stream = response.get('stream')
     
     if stream:
         start_time = time()
         buffer = deque()
         last_send_time = start_time
-        
         for event in stream:
             if 'contentBlockDelta' in event:
                 current_time = time()
@@ -82,6 +83,11 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                 result_text += msg_text
                 counter += 1
                 
+            if 'messageStop' in event:
+                message_stop = event['messageStop']
+                if 'stopReason' in message_stop:
+                    message_stop_reason = message_stop['stopReason']
+                    
             if 'metadata' in event:
                 metadata = event['metadata']
                 if 'usage' in metadata:
@@ -105,16 +111,17 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
             'type': 'message_stop',
             'session_id':session_id,
             'message_counter': counter,
+            'message_stop_reason': message_stop_reason,
             'new_conversation': new_conversation,
             'timestamp': message_end_timestamp_utc,
             'converse_content_with_s3_pointers': converse_content_with_s3_pointers,
-            'amazon-bedrock-invocationMetrics': {
+            'amazon_bedrock_invocation_metrics': {
                 'inputTokenCount': current_input_tokens,
                 'outputTokenCount': current_output_tokens
             },
         })
         
-        return result_text, current_input_tokens, current_output_tokens, message_end_timestamp_utc
+        return result_text, current_input_tokens, current_output_tokens, message_end_timestamp_utc, message_stop_reason
     
     
 def process_bedrock_converse_response_for_title(response):
@@ -129,10 +136,31 @@ def process_bedrock_converse_response_for_title(response):
         
     try:
         # Parse the JSON string into a Python dictionary
-        json_result = json.loads(result_text)
+        json_result = extract_and_parse_json(result_text)
         return json_result
     except json.JSONDecodeError as e:
         # Handle the case where the string is not valid JSON
-        print(f"Error(0901) parsing JSON: {e}")
-        print(f"Original result_text: {result_text}")
+        logger.warn(f"Error(0901) parsing JSON: {e}")
+        logger.warn(f"Original result_text: {result_text}")
         return None
+
+def extract_and_parse_json(text):
+    # Regular expression to find JSON-like structures
+    json_pattern = r'\{(?:[^{}]|(?R))*\}'
+    
+    try:
+        # First, try to parse the entire text as JSON
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # If that fails, try to find JSON within the text
+        match = re.search(json_pattern, text)
+        if match:
+            try:
+                # Try to parse the extracted JSON
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                # If parsing fails, return None or raise an exception
+                return None
+        else:
+            # If no JSON-like structure is found, return None or raise an exception
+            return None

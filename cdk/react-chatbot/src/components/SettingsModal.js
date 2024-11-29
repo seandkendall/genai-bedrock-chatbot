@@ -503,6 +503,10 @@ const SettingsModal = ({
                         />
                     </Tooltip>
                 </Typography>
+                <Typography variant="h6" component="h3">
+                     
+                     Select a model to be used to generate chat titles:
+                </Typography>
                 <Select
                   id="conversation-mode-select"
                   labelId="conversation-mode-select-label"
@@ -517,10 +521,15 @@ const SettingsModal = ({
                     {renderSelectOptions(selectOptions,50)}
                 </Select>
 
+                <Typography variant="h6" component="h3">
+                     
+                     Set a Theme for automatic Chat titles:
+                </Typography>
+
                 <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
-                    <Tooltip title="Conversation Title Generation Theme" arrow>
+                    <Tooltip title="Chat Title Generation Theme" arrow>
                         <TextField
-                            label="Conversation Title Generation Theme"
+                            label="Chat Title Generation Theme"
                             value={localState.conversation_generation_theme}
                             onChange={handleConvoGenThemeChange}
                             name="ConversationGenerationTheme"
@@ -528,6 +537,10 @@ const SettingsModal = ({
                             margin="normal"
                         />
                     </Tooltip>
+                </Typography>
+                <Typography variant="h6" component="h2">
+                     
+
                 </Typography>
 
                 {selectedMode && selectedMode.category === "Bedrock Models" && (

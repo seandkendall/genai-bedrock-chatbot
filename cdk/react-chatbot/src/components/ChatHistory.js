@@ -2,18 +2,20 @@ import React, { useEffect, useRef, forwardRef, memo } from 'react';
 import ChatMessage from './ChatMessage';
 import { Box } from '@mui/material';
 
-const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages, appSessionid, loadConversationHistory,loadConversationList, onSend,requireConversationLoad,setRequireConversationLoad }, ref) => {
+const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages, appSessionid, loadConversationHistory,loadConversationList, onSend,requireConversationLoad,setRequireConversationLoad,setAppSessionId }, ref) => {
   const lastMessageRef = useRef(null);
 
   useEffect(() => {
       if (requireConversationLoad) {
         // if appSessionid is not null and not empty
         if (appSessionid && appSessionid !== '') {
-          console.log(`Loading chat history for session: ${appSessionid}`);
           const chatHistory = localStorage.getItem(`chatHistory-${appSessionid}`);
           setMessages(chatHistory ? JSON.parse(chatHistory) : []);
           loadConversationHistory(appSessionid);
         }else{
+          setAppSessionId(
+            `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
+          );
           loadConversationList()
         }
         setRequireConversationLoad(false);

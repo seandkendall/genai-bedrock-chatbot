@@ -253,8 +253,6 @@ def process_websocket_message(event):
                     try: 
                         chat_title = get_title_from_message(title_prompt_request, selected_model_id, connection_id, message_id)
                     except Exception as e:
-                        logger.exception(e)
-                        logger.error(f"Error calling bedrock model for title (909912): {str(e)}")
                         chat_title = f'New Conversation: {hash(prompt) % 1000000:06x}'
                 new_conversation = bool(not original_existing_history or len(original_existing_history) == 0)
                 if system_prompt and selected_model_id not in SYSTEM_PROMPT_EXCLUDED_MODELS and model_provider != 'amazon':
@@ -268,8 +266,8 @@ def process_websocket_message(event):
                                                     modelId=selected_model_id,
                                                     additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{}))
                     
-                assistant_response, input_tokens, output_tokens, message_end_timestamp_utc = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)
-                store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id,chat_title,new_conversation,selected_model_category)
+                assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)
+                store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id,chat_title,new_conversation,selected_model_category, message_stop_reason)
             except Exception as e:
                 logger.exception(e)
                 logger.error(f"Error calling bedrock model (912): {str(e)}")
@@ -392,7 +390,7 @@ def load_documents_from_existing_history(existing_history):
 def store_conversation_history_converse(session_id, selected_model_id, existing_history,
     converse_content_array, user_message, assistant_message, user_id,
     input_tokens, output_tokens, message_end_timestamp_utc,
-    message_received_timestamp_utc, message_id, title,new_conversation,selected_model_category):
+    message_received_timestamp_utc, message_id, title,new_conversation,selected_model_category,message_stop_reason):
     """Function to store conversation history in DDB or S3 in the converse format"""
     
     if not (user_message.strip() and assistant_message.strip()):
@@ -415,6 +413,7 @@ def store_conversation_history_converse(session_id, selected_model_id, existing_
         {
             'role': 'assistant',
             'content': [{'text': assistant_message}],
+            'message_stop_reason': message_stop_reason,
             'timestamp': message_end_timestamp_utc,
             'message_id': commons.generate_random_string()
         }

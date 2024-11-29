@@ -144,7 +144,7 @@ def process_websocket_message(event, force_null_kb_session_id):
             response = bedrock.invoke_agent(
                     agentAliasId=selected_agent_alias_id,
                     agentId=selected_agent_id,
-                    enableTrace=False,
+                    enableTrace=True,
                     endSession=False,
                     inputText=prompt,
                     sessionId=session_id

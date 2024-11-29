@@ -3,6 +3,7 @@ import React, {
 	useRef,
 	forwardRef,
 	useImperativeHandle,
+  useCallback,
 } from "react";
 import { Box, TextField, IconButton, Typography } from "@mui/material";
 import { FaPaperPlane, FaPaperclip, FaTimes } from "react-icons/fa";
@@ -30,7 +31,7 @@ export const getPlaceholderText = (selectedMode, selectedKbMode) => {
 	if (!selectedMode || !selectedMode.category) {
 		return "Select a Model, Agent, KnowledgeBase or PromptFlow in the Header";
 	}
-  if(selectedMode.category === "Bedrock Image Models"){
+	if (selectedMode.category === "Bedrock Image Models") {
 		return "Generate an Image of...";
 	}
 	return selectedMode.category === "Bedrock KnowledgeBases" && !selectedKbMode
@@ -91,53 +92,43 @@ const MessageInput = forwardRef(
 				fileInputRef.current.click();
 			}
 		};
-		const isImageFile = (file) => {
-			const imageTypes = [
-				"image/png",
-				"image/jpeg",
-				"image/jpg",
-				"image/gif",
-				"image/webp",
-			];
-			return imageTypes.includes(file.type);
-		};
-		const handleFiles = (files) => {
+		const isImageFile = useCallback((file) => {
+      const imageTypes = [
+        "image/png",
+        "image/jpeg",
+        "image/jpg",
+        "image/gif",
+        "image/webp",
+      ];
+      return imageTypes.includes(file.type);
+    }, []);
+
+		const handleFiles = async (files) => {
 			const newAttachments = [];
 
 			for (const file of files) {
+
 				if (attachments.length + newAttachments.length >= MAX_CONTENT_ITEMS) {
 					alert(
 						`You can only attach up to ${MAX_CONTENT_ITEMS} items in total.`,
 					);
 					break;
 				}
-				//does the file already exist?
+
 				if (
 					attachments.some((attachment) => attachment.name === file.name) ||
 					uploadedFileNames.includes(file.name)
 				) {
-					// File name already exists, alert the user
 					alert(
 						`A file named "${file.name}" has already been uploaded. Please rename the file and try again.`,
 					);
 					continue;
 				}
 
-				const fileExtension = file.name.split(".").pop().toLowerCase();
-				const isImage = ["png", "jpeg", "jpg", "gif", "webp"].includes(
-					fileExtension,
+				const isImage = isImageFile(file);
+				const isDocument = ALLOWED_DOCUMENT_TYPES.includes(
+					file.name.split(".").pop().toLowerCase(),
 				);
-				const isDocument = ALLOWED_DOCUMENT_TYPES.includes(fileExtension);
-
-				// Block docx files with the specific MIME type
-				if (
-					fileExtension === "docx" &&
-					file.type ===
-						"application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-				) {
-					alert(`File type not allowed: ${file.type}`);
-					continue;
-				}
 
 				if (isImage && !selectedMode.allow_input_image) {
 					alert("Image uploads are not allowed for this mode.");
@@ -156,9 +147,8 @@ const MessageInput = forwardRef(
 
 				if (isImage) {
 					if (
-						attachments.filter((a) => a.type.startsWith("image/")).length +
-							newAttachments.filter((a) => a.type.startsWith("image/"))
-								.length >=
+						attachments.filter((a) => isImageFile(a)).length +
+							newAttachments.filter((a) => isImageFile(a)).length >=
 						MAX_IMAGES
 					) {
 						alert(`You can only attach up to ${MAX_IMAGES} images.`);
@@ -170,30 +160,26 @@ const MessageInput = forwardRef(
 						continue;
 					}
 
-					const reader = new FileReader();
-					reader.onload = () => {
-						const img = new Image();
-						img.onload = () => {
-							URL.revokeObjectURL(img.src);
-							if (
-								img.width > MAX_IMAGE_DIMENSION ||
-								img.height > MAX_IMAGE_DIMENSION
-							) {
-								alert(
-									`Image dimensions must be no more than 8000x8000 pixels: ${file.name}`,
-								);
-								return;
-							}
-							newAttachments.push(file);
-						};
-						img.src = reader.result;
-					};
-					reader.readAsDataURL(file);
+					try {
+						const dimensions = await getImageDimensions(file);
+						if (
+							dimensions.width > MAX_IMAGE_DIMENSION ||
+							dimensions.height > MAX_IMAGE_DIMENSION
+						) {
+							alert(
+								`Image dimensions must be no more than 8000x8000 pixels: ${file.name}`,
+							);
+							continue;
+						}
+						newAttachments.push(file);
+					} catch (error) {
+						console.error("Error processing image:", error);
+						alert(`Error processing image: ${file.name}`);
+					}
 				} else {
 					if (
-						attachments.filter((a) => !a.type.startsWith("image/")).length +
-							newAttachments.filter((a) => !a.type.startsWith("image/"))
-								.length >=
+						attachments.filter((a) => !isImageFile(a)).length +
+							newAttachments.filter((a) => !isImageFile(a)).length >=
 						MAX_DOCUMENTS
 					) {
 						alert(`You can only attach up to ${MAX_DOCUMENTS} documents.`);
@@ -208,11 +194,24 @@ const MessageInput = forwardRef(
 					newAttachments.push(file);
 				}
 			}
+
 			setAttachments([...attachments, ...newAttachments]);
 			setUploadedFileNames([
 				...uploadedFileNames,
 				...newAttachments.map((file) => file.name),
 			]);
+		};
+
+		const getImageDimensions = (file) => {
+			return new Promise((resolve, reject) => {
+				const img = new Image();
+				img.onload = () => {
+					URL.revokeObjectURL(img.src);
+					resolve({ width: img.width, height: img.height });
+				};
+				img.onerror = reject;
+				img.src = URL.createObjectURL(file);
+			});
 		};
 
 		const handleFileChange = (event) => {
@@ -294,8 +293,7 @@ const MessageInput = forwardRef(
 			return (
 				disabled ||
 				!selectedMode ||
-				(selectedMode &&
-					selectedMode.category &&
+				(selectedMode?.category &&
 					selectedMode.category === "Bedrock KnowledgeBases" &&
 					!selectedKbMode)
 			);
@@ -422,7 +420,7 @@ const MessageInput = forwardRef(
 						style={{ display: "none" }}
 						onChange={handleFileChange}
 						multiple
-						accept={`${selectedMode?.allow_input_image ? "image/png,image/jpeg,image/gif,image/webp," : ""}${selectedMode?.allow_input_document ? ".pdf,.csv,.doc,.docx,.xls,.xlsx,.html,.txt,.md" : ""}`}
+						accept={`${selectedMode?.allow_input_image ? "image/png,image/jpeg,image/jpg,image/gif,image/webp," : ""}${selectedMode?.allow_input_document ? ".pdf,.csv,.doc,.docx,.xls,.xlsx,.html,.txt,.md" : ""}`}
 					/>
 					<IconButton
 						onClick={handleAttachmentClick}
