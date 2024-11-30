@@ -2,37 +2,24 @@ import React, { useEffect, useRef, forwardRef, memo } from 'react';
 import ChatMessage from './ChatMessage';
 import { Box } from '@mui/material';
 
-const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages, appSessionid, setAppSessionId, loadConversationHistory, onSend }, ref) => {
+const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages, appSessionid, loadConversationHistory,loadConversationList, onSend,requireConversationLoad,setRequireConversationLoad,setAppSessionId }, ref) => {
   const lastMessageRef = useRef(null);
-  const loadedSessionId = useRef(null);
 
   useEffect(() => {
-    if (selectedMode) {
-      let sessionId = user.username;
-      if (selectedMode.category === 'Bedrock Agents') {
-        sessionId = `${sessionId}-agents-${selectedMode.agentAliasId}`;
-      } else if (selectedMode.category === 'Bedrock KnowledgeBases') {
-        sessionId = `${sessionId}-kb-${selectedMode.knowledgeBaseId}`;
-      } else if (selectedMode.category === 'Bedrock Prompt Flows') {
-        sessionId = `${sessionId}-pflow-${selectedMode.id}`;
-      } else if (selectedMode.category === 'Bedrock Models') {
-        sessionId = `${sessionId}-model-${selectedMode.modelId}`;
-      } else if (selectedMode.category === 'Bedrock Image Models') {
-        sessionId = `${sessionId}-image-${selectedMode.modelId}`;
+      if (requireConversationLoad) {
+        // if appSessionid is not null and not empty
+        if (appSessionid && appSessionid !== '') {
+          const chatHistory = localStorage.getItem(`chatHistory-${appSessionid}`);
+          setMessages(chatHistory ? JSON.parse(chatHistory) : []);
+          loadConversationHistory(appSessionid);
+        }else{
+          setAppSessionId(
+            `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
+          );
+          loadConversationList()
+        }
+        setRequireConversationLoad(false);
       }
-      if (sessionId !== appSessionid)
-        setAppSessionId(sessionId);
-
-      // Check if sessionId is different from loadedSessionId
-      if (sessionId !== loadedSessionId.current) {
-        console.log(`Loading chat history for session: ${sessionId}`);
-        const chatHistory = localStorage.getItem(`chatHistory-${sessionId}`);
-        setMessages(chatHistory ? JSON.parse(chatHistory) : []);
-        // Update loadedSessionId with the new sessionId
-        loadedSessionId.current = sessionId;
-        loadConversationHistory(sessionId);
-      }
-    }
   }, [selectedMode, user, appSessionid]);
 
   return (

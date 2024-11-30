@@ -110,5 +110,25 @@ export const modelPrices = {
     "meta.llama3-1-405b-instruct-v1:0": {
       "pricePer1000InputTokens": 0.0048,
       "pricePer1000OutputTokens": 0.0064
-    }
+    },
+    "ai21.jamba-instruct-v1:0": { 
+        "pricePer1000InputTokens": 0.0005,
+        "pricePer1000OutputTokens": 0.0007
+    },
+    "ai21.jamba-1-5-large-v1:0": { 
+        "pricePer1000InputTokens": 0.002,
+        "pricePer1000OutputTokens": 0.008
+    },
+    "ai21.jamba-1-5-mini-v1:0": { 
+        "pricePer1000InputTokens": 0.0002,
+        "pricePer1000OutputTokens": 0.0004
+    },
+    "cohere.command-text-v14": { 
+        "pricePer1000InputTokens": 0.0015,
+        "pricePer1000OutputTokens": 0.002
+    },
+    "cohere.command-light-text-v14": { 
+        "pricePer1000InputTokens": 0.0003,
+        "pricePer1000OutputTokens": 0.0006
+    },
   };

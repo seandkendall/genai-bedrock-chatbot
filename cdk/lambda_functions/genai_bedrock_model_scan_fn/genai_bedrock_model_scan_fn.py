@@ -17,13 +17,12 @@ WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
 user_pool_id = os.environ['USER_POOL_ID']
 config_table_name = os.environ.get('CONFIG_DYNAMODB_TABLE')
-dynamodb = boto3.resource('dynamodb')
 bedrock = boto3.client('bedrock')
 bedrock_runtime = boto3.client('bedrock-runtime')
 cognito_client = boto3.client('cognito-idp')
 apigateway_management_api = boto3.client('apigatewaymanagementapi', 
                                          endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
-config_table = dynamodb.Table(config_table_name)
+config_table = boto3.resource('dynamodb').Table(config_table_name)
 user_cache = {}
 
 @metrics.log_metrics

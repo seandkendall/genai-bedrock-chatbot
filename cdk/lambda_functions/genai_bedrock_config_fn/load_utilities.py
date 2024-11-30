@@ -33,6 +33,8 @@ def load_knowledge_bases(bedrock_agent_client, table):
                 kb['is_active'] = ddb_config.get(kb_id, {}).get('access_granted', True)
                 kb['allow_input_image'] = ddb_config.get(kb_id, {}).get('IMAGE', False)
                 kb['allow_input_document'] = ddb_config.get(kb_id, {}).get('DOCUMENT', False)
+                kb['output_type'] = 'TEXT'
+                kb['category'] = 'Bedrock KnowledgeBases'
                 ret.append(kb)
 
         return {
@@ -75,6 +77,8 @@ def load_agents(bedrock_agent_client, table):
                 alias['is_active'] = ddb_config.get(alias['agentAliasId'], {}).get('access_granted', True)
                 alias['allow_input_image'] = ddb_config.get(alias['agentAliasId'], {}).get('IMAGE', False)
                 alias['allow_input_document'] = ddb_config.get(alias['agentAliasId'], {}).get('DOCUMENT', False)
+                alias['output_type'] = 'TEXT'
+                alias['category'] = 'Bedrock Agents'
                 if alias['agentAliasName'] != 'AgentTestAlias':
                     ret.append(alias)
 
@@ -114,6 +118,8 @@ def load_prompt_flows(bedrock_agent_client, table):
                 alias['is_active'] = ddb_config.get(alias['arn'], {}).get('access_granted', True)
                 alias['allow_input_image'] = ddb_config.get(alias['arn'], {}).get('IMAGE', False)
                 alias['allow_input_document'] = ddb_config.get(alias['arn'], {}).get('DOCUMENT', False)
+                alias['output_type'] = 'TEXT'
+                alias['category'] = 'Bedrock Prompt Flows'
                 if alias['name'] != 'TSTALIASID':
                     ret.append(alias)
 
@@ -177,6 +183,8 @@ def load_models(bedrock_client, table):
                 model['is_active'] = True
                 model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
                 model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
+                model['output_type'] = 'TEXT'
+                model['category'] = 'Bedrock Models'
                 available_text_models_return.append(model)
                 
         for model in available_image_models:
@@ -184,6 +192,8 @@ def load_models(bedrock_client, table):
                 model['is_active'] = True
                 model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
                 model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
+                model['output_type'] = 'IMAGE'
+                model['category'] = 'Bedrock Image Models'
                 available_image_models_return.append(model)
             
             

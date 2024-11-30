@@ -437,6 +437,7 @@ s3bucket=$(jq -r '.ChatbotWebsiteStack.s3bucket' ./outputs.json)
 userpoolid=$(jq -r '.ChatbotWebsiteStack.userpoolid' ./outputs.json)
 userpoolclientid=$(jq -r '.ChatbotWebsiteStack.userpoolclientid' ./outputs.json)
 awschatboturl=$(jq -r '.ChatbotWebsiteStack.AWSChatBotURL' ./outputs.json)
+cloudwatchlogslivetailurl=$(jq -r '.ChatbotWebsiteStack.CloudWatchLogsLiveTailURL' ./outputs.json)
 
 # Generate ./react-chatbot/src/variables.js
 mkdir -p ./react-chatbot/src/
@@ -526,6 +527,11 @@ aws dynamodb put-item \
 cd ..
 rm outputs.json
 cd ..
+echo -e " "
 echo -e "${GREEN_COLOR}Deployment complete! (Git Version $latest_commit)${DEFAULT_COLOR}"
+echo -e " "
 # tell user to visit the url: awschatboturl
+echo -e "${GREEN_COLOR}Tail the application logs here: ${cloudwatchlogslivetailurl}${DEFAULT_COLOR}"
+echo -e " "
 echo -e "${GREEN_COLOR}Visit the chatbot here: ${awschatboturl}${DEFAULT_COLOR}"
+

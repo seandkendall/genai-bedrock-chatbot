@@ -18,8 +18,7 @@ tracer = Tracer()
 
 
 # Initialize DynamoDB client
-dynamodb = boto3.resource('dynamodb')
-ddb_config_table = dynamodb.Table(os.environ['DYNAMODB_CONFIG_TABLE'])
+ddb_config_table = boto3.resource('dynamodb').Table(os.environ['DYNAMODB_CONFIG_TABLE'])
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
 schedule_name = os.environ['SCHEDULE_NAME']
 schedule_group_name = os.environ['SCHEDULE_GROUP_NAME']
@@ -121,7 +120,7 @@ def lambda_handler(event, context):
 @tracer.capture_method
 def load_config(user, config_type):
     """
-    Load configuration for a specific user and config type from DynamoDB.
+    Load configuration for a specific user and config type from DynamoDB
 
     This function attempts to retrieve a configuration from a DynamoDB table
     based on the provided user and config type. If found, it returns the
@@ -187,7 +186,7 @@ def load_config(user, config_type):
 @tracer.capture_method
 def save_config(user, config_type, config):
     """
-    Save or update a configuration for a specific user and config type in DynamoDB.
+    Save or update a configuration for a specific user and config type in DynamoDB
 
     This function is decorated with @tracer.capture_method for tracing purposes.
     It attempts to save a new configuration or update an existing one in a DynamoDB table.

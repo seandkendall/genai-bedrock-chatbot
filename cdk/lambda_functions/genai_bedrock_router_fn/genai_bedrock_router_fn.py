@@ -12,6 +12,7 @@ tracer = Tracer()
 lambda_client = boto3.client('lambda')
 cognito_client = boto3.client('cognito-idp')
 agents_function_name = os.environ['AGENTS_FUNCTION_NAME']
+conversations_list_function_name = os.environ['CONVERSATIONS_LIST_FUNCTION_NAME']
 bedrock_function_name = os.environ['BEDROCK_FUNCTION_NAME']
 user_pool_id = os.environ['USER_POOL_ID']
 region = os.environ['REGION']
@@ -52,12 +53,10 @@ def lambda_handler(event, context):
         allowed, not_allowed_message = (False, "Your Access Token has expired. Please log in again.") if e.response['Error']['Code'] == 'NotAuthorizedException' else (None, None)
 
     if allowed:
-        if selected_mode.get('category') == 'Bedrock Agents' or selected_mode.get('category') == 'Bedrock KnowledgeBases' or selected_mode.get('category') == 'Bedrock Prompt Flows':
-            # Invoke genai_bedrock_agents_client_fn
-            if message_type == 'load':
-                response_message = 'no_conversation_to_load'
-            if message_type != 'load' and message_type != 'clear_conversation':
-                lambda_client.invoke(FunctionName=agents_function_name, InvocationType='Event', Payload=json.dumps(event))
+        if message_type == 'load_conversation_list':
+            lambda_client.invoke(FunctionName=conversations_list_function_name, InvocationType='Event', Payload=json.dumps(event))
+        elif selected_mode.get('category') == 'Bedrock Agents' or selected_mode.get('category') == 'Bedrock KnowledgeBases' or selected_mode.get('category') == 'Bedrock Prompt Flows':
+            lambda_client.invoke(FunctionName=agents_function_name, InvocationType='Event', Payload=json.dumps(event))
             # Process the response from agents_client_function
         elif selected_mode.get('category') == 'Bedrock Models':
             # Invoke genai_bedrock_async_fn
