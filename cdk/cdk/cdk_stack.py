@@ -575,6 +575,29 @@ class ChatbotWebsiteStack(Stack):
             viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY
         )
         
+        # logs_url = "https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:live-tail$3FlogGroupArns$3D~(~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-GenAIBedrockConfigFunctionF3AC-9WbfqFdyLTdv*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-GenAIBedrockRouterFunction22EE-nOhUafDmPRFr*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-ImageGenerationFunction64C380B-mqVKcQUOzwV0*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-ModelScanFunction0FE96921-eUkzvBLPTA2y*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-genaibedrockagentsclientfn3E45-9x2jvfh4CyYI*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-genaibedrockfnasync7C01F7BC-JVSZZGqXQooH*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-genaibedrockfnconversations277-mrOWjbPnatK0*3a*2a)"
+        
+        # logs_resource = rest_api.root.add_resource("logs")
+        # http_integration = apigw.HttpIntegration(
+        #     logs_url,  # Replace with your actual URL
+        #     http_method="GET",  # Or whichever HTTP method you need
+        #     proxy=True,  # This makes it a proxy integration
+        #     options=apigw.IntegrationOptions(
+        #         request_parameters={
+        #             "integration.request.header.host": "method.request.header.host"
+        #         }
+        #     )
+        # )
+        # logs_resource.add_method(
+        #     "GET",  # Or whichever HTTP method you need
+        #     http_integration,
+        #     method_responses=[
+        #         apigw.MethodResponse(status_code="200"),
+        #         apigw.MethodResponse(status_code="400"),
+        #         apigw.MethodResponse(status_code="500")
+        #     ]
+        # )
+        
         # Create a Lambda integrations
         bedrock_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
             "BedrockFnIntegration", lambda_router_fn

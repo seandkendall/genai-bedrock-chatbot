@@ -192,11 +192,16 @@ def process_websocket_message(event):
         selected_mode = request_body.get('selectedMode', '')
         title_theme = request_body.get('titleGenTheme', '')
         title_gen_model = request_body.get('titleGenModel', '')
+        # if title_gen_model includes a '/' then split it and take the second part
+        if '/' in title_gen_model:
+            title_gen_model = title_gen_model.split('/')[1]
+        
         selected_model_id = selected_mode.get('modelId','')
         selected_model_category = selected_mode.get('category','')
         model_provider = selected_model_id.split('.')[0]
         message_id = request_body.get('message_id', None)
         message_received_timestamp_utc = request_body.get('timestamp', datetime.now(tz=timezone.utc).isoformat())
+        timestamp_local_timezone = request_body.get('timestamp_local_timezone')
         bedrock_request = None
         converse_content_array = []
         converse_content_with_s3_pointers = []
@@ -251,16 +256,28 @@ def process_websocket_message(event):
                     
                     title_prompt_request = [{'role': 'user','content': [{'text': title_prompt_string}]}]
                     try: 
-                        chat_title = get_title_from_message(title_prompt_request, selected_model_id, connection_id, message_id)
-                    except Exception as e:
+                        chat_title = get_title_from_message(title_prompt_request, title_gen_model if title_gen_model else selected_model_id, connection_id, message_id)
+                    except Exception:
                         chat_title = f'New Conversation: {hash(prompt) % 1000000:06x}'
                 new_conversation = bool(not original_existing_history or len(original_existing_history) == 0)
+                timezone_prompt = f'The Current Time in UTC is: {message_received_timestamp_utc}. Use the timezone of {timestamp_local_timezone} When making a reference to time. Always use the date format of: Month DD, YYYY HH24:mm:ss. only included the time if needed. '
+                if system_prompt:
+                    system_prompt = system_prompt + ' ' + timezone_prompt
+                else:
+                    system_prompt = timezone_prompt
+                
                 if system_prompt and selected_model_id not in SYSTEM_PROMPT_EXCLUDED_MODELS and model_provider != 'amazon':
                     system_prompt_array.append({'text': system_prompt})
                     response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
                                                         modelId=selected_model_id,
                                                         system=system_prompt_array,
                                                         additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{}))
+                    #uncomment for prompt debugging
+                    # commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                    #     'type': 'system_prompt_used',
+                    #     'system_prompt': system_prompt,
+                    #     'session_id':session_id,
+                    # });
                 else:
                     response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
                                                     modelId=selected_model_id,

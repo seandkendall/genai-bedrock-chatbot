@@ -58,7 +58,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                         'message_counter': counter
                     })
                 else:
-                    if current_time - start_time <= 20:  # First 20 seconds
+                    if current_time - start_time <= 60:  # First 60 seconds
                         # Send messages immediately
                         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                             'type': 'content_block_delta',

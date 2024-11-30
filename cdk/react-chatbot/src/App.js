@@ -256,14 +256,29 @@ const App = memo(({ signOut, user }) => {
 			if (
 				selectedMode &&
 				newMode &&
-				(selectedMode?.output_type !== newMode?.output_type ||
-					selectedMode?.category !== newMode?.category ||
-					selectedMode?.knowledgeBaseId !== newMode?.knowledgeBaseId ||
-					selectedMode?.knowledgeBaseId !== newMode?.knowledgeBaseId)
+				(selectedMode.output_type !== newMode.output_type ||
+					selectedMode.category !== newMode.category ||
+					selectedMode.knowledgeBaseId !== newMode.knowledgeBaseId)
 			) {
-				setPopupMessage(
-					`You were currently interacting with a model capable of outputting ${selectedMode?.output_type.charAt(0).toUpperCase() + selectedMode?.output_type.substring(1).toLowerCase()} and are now switching to an output type of ${newMode?.output_type.charAt(0).toUpperCase() + newMode?.output_type.substring(1).toLowerCase()}. I have created a new chat for you.`,
-				);
+				const selectedOutputType = selectedMode.output_type
+					? selectedMode.output_type.charAt(0).toUpperCase() +
+						selectedMode.output_type.slice(1).toLowerCase()
+					: "unknown";
+				const newOutputType = newMode.output_type
+					? newMode.output_type.charAt(0).toUpperCase() +
+						newMode.output_type.slice(1).toLowerCase()
+					: "unknown";
+        // if selectedOutputType is null or empty or equal to unknown
+        if (!selectedOutputType || selectedOutputType === "Unknown") {
+          setPopupMessage(
+            'I have created a new chat for you.',
+          );
+        }else{
+          setPopupMessage(
+            `You were currently interacting with a model capable of outputting ${selectedOutputType} and are now switching to an output type of ${newOutputType}. I have created a new chat for you.`,
+          );
+        }
+				
 				setPopupType("success");
 				setShowPopup(true);
 				setTimeout(() => setShowPopup(false), 3000);
@@ -361,13 +376,12 @@ const App = memo(({ signOut, user }) => {
 			const current_chunk = message.current_chunk || 1;
 			const last_message = message.last_message;
 			const messageChunk = convertRuleToHuman(JSON.parse(message.chunk));
-      // iterate through items in messageChunk. for each attribute that contains a message_stop_reason key, run handleMaxTokenMessage(current_message)
-      for (const item of messageChunk) {
-        if (item.message_stop_reason) {
-          handleMaxTokenMessage(item);
-        }
-      }
-      
+			// iterate through items in messageChunk. for each attribute that contains a message_stop_reason key, run handleMaxTokenMessage(current_message)
+			for (const item of messageChunk) {
+				if (item.message_stop_reason) {
+					handleMaxTokenMessage(item);
+				}
+			}
 
 			// Memoize the comparison result
 			const isMessageDifferent =
@@ -458,10 +472,18 @@ const App = memo(({ signOut, user }) => {
 
 		const { accessToken, idToken } = await getCurrentSession();
 		const message_timestamp = new Date().toISOString();
+    const timezone = Intl.DateTimeFormat('en-US', { 
+      timeZoneName: 'short',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    }).formatToParts(new Date())
+      .find(part => part.type === 'timeZoneName')
+      .value;
+    
 		const data = {
 			prompt: sanitizedMessage,
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
+      timestamp_local_timezone: timezone,
 			session_id: newAppSessionid ? newAppSessionid : appSessionid,
 			kb_session_id: kbSessionId,
 			selectedMode: selectedMode,
@@ -612,8 +634,8 @@ const App = memo(({ signOut, user }) => {
 				if (isRefreshing) {
 					setIsRefreshing(false);
 				}
-        updateMessages(message);
-        updateMessagesOnStop(message);
+				updateMessages(message);
+				updateMessagesOnStop(message);
 				setIsDisabled(false);
 				setIsLoading(false);
 				setTimeout(scrollToBottom, 0);
@@ -719,7 +741,7 @@ const App = memo(({ signOut, user }) => {
 	}, [lastMessage]);
 
 	const updateMessages = (message) => {
-    handleMaxTokenMessage(message);
+		handleMaxTokenMessage(message);
 		if (message?.delta?.text) {
 			setMessages((prevMessages) => {
 				const updatedMessages = [...(prevMessages ? prevMessages : [])];
@@ -745,31 +767,33 @@ const App = memo(({ signOut, user }) => {
 		}
 	};
 
-  function handleMaxTokenMessage(message){
-    if (message.message_stop_reason) {
-      let max_token_message;
-      if (message.message_stop_reason === "max_tokens") {
-        if (message?.amazon_bedrock_invocation_metrics?.outputTokenCount) {
-          max_token_message = `The response from this model has reached the maximum size. Max Size: ${message.amazon_bedrock_invocation_metrics.outputTokenCount} Tokens`;
-        } else {
-          max_token_message = "The response from this model has reached the maximum size.";
-        }
-        if (message.delta?.text) {
-          message.delta.text = `${message.delta.text} \n\r\n\r${max_token_message}`;
-        }else if (message.content){
-          message.content.push({text:`\n\r\n\r${max_token_message}`})
-        }else{
-          message.delta = {text: `\n\r\n\r${max_token_message}`};
-          message.content = [{'text':`\n\r\n\r${max_token_message}`}]
-        }
-      }
-    }
-  }
+	function handleMaxTokenMessage(message) {
+		if (message.message_stop_reason) {
+			let max_token_message;
+			if (message.message_stop_reason === "max_tokens") {
+				if (message?.amazon_bedrock_invocation_metrics?.outputTokenCount) {
+					max_token_message = `The response from this model has reached the maximum size. Max Size: ${message.amazon_bedrock_invocation_metrics.outputTokenCount} Tokens`;
+				} else {
+					max_token_message =
+						"The response from this model has reached the maximum size.";
+				}
+				if (message.delta?.text) {
+					message.delta.text = `${message.delta.text} \n\r\n\r${max_token_message}`;
+				} else if (message.content) {
+					message.content.push({ text: `\n\r\n\r${max_token_message}` });
+				} else {
+					message.delta = { text: `\n\r\n\r${max_token_message}` };
+					message.content = [{ text: `\n\r\n\r${max_token_message}` }];
+				}
+			}
+		}
+	}
 
 	function replaceKey(obj) {
 		if (Array.isArray(obj)) {
 			return obj.map((item) => replaceKey(item));
-		}if (typeof obj === "object" && obj !== null) {
+		}
+		if (typeof obj === "object" && obj !== null) {
 			return Object.fromEntries(
 				Object.entries(obj).map(([key, value]) => [
 					key === "amazon-bedrock-invocationMetrics"
@@ -786,10 +810,10 @@ const App = memo(({ signOut, user }) => {
 		setMessages((prevMessages) => {
 			const updatedMessages = [...(prevMessages ? prevMessages : [])];
 			const lastIndex = updatedMessages.length - 1;
-      const messageStopReplaced = replaceKey(messageStop);
+			const messageStopReplaced = replaceKey(messageStop);
 
 			const invocationMetrics =
-      messageStopReplaced?.amazon_bedrock_invocation_metrics || null; // Handle the case when 'amazon-bedrock-invocationMetrics' is not present
+				messageStopReplaced?.amazon_bedrock_invocation_metrics || null; // Handle the case when 'amazon-bedrock-invocationMetrics' is not present
 			const inputTokenCount = invocationMetrics
 				? invocationMetrics.inputTokenCount
 				: 0;
@@ -1104,7 +1128,7 @@ const App = memo(({ signOut, user }) => {
 								onSend={onSend}
 								requireConversationLoad={requireConversationLoad}
 								setRequireConversationLoad={setRequireConversationLoad}
-                setAppSessionId={setAppSessionId}
+								setAppSessionId={setAppSessionId}
 							/>
 						</div>
 						<MessageInput
