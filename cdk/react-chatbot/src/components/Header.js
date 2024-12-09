@@ -38,6 +38,7 @@ const Header = ({
   models,
   kbModels,
   imageModels,
+  videoModels,
   promptFlows,
   selectedKbMode,
   onSelectedKbMode,
@@ -132,6 +133,11 @@ const Header = ({
                     return `${item.modelName}`;
                   }
                   return `${item.providerName} ${item.modelName}`;
+                case 'Bedrock Video Models':
+                    if (isMobile) {
+                      return `${item.modelName}`;
+                    }
+                    return `${item.providerName} ${item.modelName}`;
                 case 'Bedrock KnowledgeBases':
                   return item.name;
                 case 'Bedrock Agents':
@@ -161,6 +167,9 @@ const Header = ({
           break;
         case 'Bedrock Image Models':
           selectedObject = imageModels.find((item) => item.mode_selector === modeSelector);
+          break;
+        case 'Bedrock Video Models':
+          selectedObject = videoModels.find((item) => item.mode_selector === modeSelector);
           break;
         case 'Bedrock KnowledgeBases':
           selectedObject = bedrockKnowledgeBases.find((item) => item.mode_selector === modeSelector);
@@ -243,6 +252,8 @@ const Header = ({
           return selectedMode.modelName;
         case 'Bedrock Image Models':
           return selectedMode.modelName;
+          case 'Bedrock Video Models':
+            return selectedMode.modelName;
         case 'Bedrock KnowledgeBases':
           return selectedMode.knowledgeBaseId;
         case 'Bedrock Agents':
@@ -261,6 +272,8 @@ const Header = ({
         case 'Bedrock Models':
           return `${selectedMode.modelName} (${selectedMode.modelId})`;
         case 'Bedrock Image Models':
+          return `${selectedMode.modelName} (${selectedMode.modelId})`;
+        case 'Bedrock Video Models':
           return `${selectedMode.modelName} (${selectedMode.modelId})`;
         case 'Bedrock KnowledgeBases':
           return selectedMode.knowledgeBaseId;
@@ -287,6 +300,11 @@ const Header = ({
         .filter(item => item.is_active === true || !('is_active' in item))
     },
     {
+      title: 'Bedrock Video Models',
+      data: (videoModels ? videoModels : JSON.parse(localStorage.getItem('local-video-models')))
+        .filter(item => item.is_active === true || !('is_active' in item))
+    },
+    {
       title: 'Bedrock KnowledgeBases',
       data: (bedrockKnowledgeBases ? bedrockKnowledgeBases : JSON.parse(localStorage.getItem('local-bedrock-knowledge-bases')))
         .filter(item => item.is_active === true || !('is_active' in item))
@@ -301,7 +319,7 @@ const Header = ({
       data: (promptFlows ? promptFlows : JSON.parse(localStorage.getItem('local-prompt-flows')))
         .filter(item => item.is_active === true || !('is_active' in item))
     }
-  ], [models, imageModels, bedrockKnowledgeBases, bedrockAgents, promptFlows]);
+  ], [models, imageModels,videoModels, bedrockKnowledgeBases, bedrockAgents, promptFlows]);
   
 
   const kbModelOptions = useMemo(() => [
@@ -425,7 +443,7 @@ const Header = ({
         </Toolbar>
         {showPopup && <Popup message={popupMessage} type={popupType} onClose={() => setShowPopup(false)} />}
       </AppBar>
-      {(modelsLoaded && (!models || models.length === 0) && (!imageModels || imageModels.length === 0)) && (
+      {(modelsLoaded && (!models || models.length === 0) && (!videoModels || videoModels.length === 0) && (!imageModels || imageModels.length === 0)) && (
         <Box
         sx={{
           width: '100%',
