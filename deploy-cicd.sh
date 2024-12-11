@@ -135,8 +135,8 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
-      - auto_deploy_branch=\$(git branch -r | grep -m1 'origin/feature_.*_autodeploy' | sed 's/.*origin\\///')
-      - if [ -n "\$auto_deploy_branch" ]; then echo "Found auto-deploy branch: \$auto_deploy_branch"; git checkout \$auto_deploy_branch; else echo "No auto-deploy branch found. Proceeding with default branch."; fi
+      - auto_deploy_branch=\$(git branch -r | grep -m1 'origin/feature_.*_autodeploy' | sed 's/.*origin\\///' || echo '')
+      - if [ -n "\$auto_deploy_branch" ]; then echo "Found auto-deploy branch: \$auto_deploy_branch" && git checkout \$auto_deploy_branch; else echo "No auto-deploy branch found. Proceeding with default branch."; fi
       - cd cdk
       - cdk --version
       - python3 -m venv .venv
@@ -163,6 +163,7 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
     --environment "{\"type\": \"ARM_CONTAINER\", \"image\": \"aws/codebuild/amazonlinux2-aarch64-standard:3.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
     --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role"
+
 sleep 1
 # wait for the project $CODEBUILD_PROJECT_NAME to be created
 TIMEOUT=60
