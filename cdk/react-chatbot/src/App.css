@@ -1,19 +1,28 @@
 /* General Styles */
+:root {
+  --sidebar-width: 250px;
+}
+
+html, body {
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  margin: 0;
-  padding: 0;
   background-color: #ffffff;
 }
 
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
 /* Header Styles */
@@ -27,7 +36,7 @@ body {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 100;
 }
 
 .header h1 {
@@ -66,7 +75,6 @@ body {
   transition: opacity 0.3s, visibility 0.3s;
 }
 
-/* Added positioning for the session ID popup */
 .header-title:hover .session-id {
   left: auto;
   right: 0;
@@ -105,19 +113,22 @@ body {
 /* Chat History Styles */
 .chat-history {
   flex: 1;
-  padding: 20px;
+  height: calc(100vh - var(--header-height));
+  padding: 10px;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
 
 .chat-message {
-  width: 99%;
-  max-width: 99%;
+  width: calc(100% - 20px);
+  max-width: calc(100% - 20px);
   margin-bottom: 10px;
   padding: 10px;
   border-radius: 10px;
   position: relative;
+  word-wrap: break-word;
 }
 
 .human {
@@ -159,12 +170,8 @@ body {
 }
 
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .copy-icon {
@@ -190,15 +197,9 @@ body {
   color: green;
 }
 
-
-
 .message-content {
   word-wrap: break-word;
-}
-
-/* Markdown Styles */
-.message-content :is(h1, h2, h3, h4, h5, h6) {
-  margin-top: 0;
+  white-space: pre-wrap;
 }
 
 /* Message Input Styles */
@@ -206,10 +207,12 @@ body {
   display: flex;
   align-items: center;
   padding: 10px 20px;
+  padding-right: 30px;
   background-color: #f2f2f7;
   position: sticky;
   bottom: 0;
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 90;
 }
 
 .input-box {
@@ -248,19 +251,32 @@ body {
   background-color: #0060c0;
 }
 
-/* Responsive Styles */
-@media (max-width: 768px) {
-  .header {
-    padding: 10px;
-  }
+/* Left Sidebar */
+.MuiList-root {
+  padding-top: 0 !important;
+}
 
-  .chat-history {
-    padding: 10px;
-  }
+.left-sidebar {
+  width: var(--sidebar-width);
+  height: calc(100vh - var(--header-height));
+  position: fixed;
+  top: var(--header-height);
+  left: 0;
+  background-color: #f4f4f4;
+  border-right: 1px solid #ddd;
+  overflow-y: auto;
+  z-index: 90;
+}
 
-  .message-input {
-    padding: 10px;
-  }
+.resizer {
+  width: 5px;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  right: -2.5px;
+  background-color: #ccc;
+  cursor: ew-resize;
+  z-index: 95;
 }
 
 /* Mode Toggle Switch Styles */
@@ -273,11 +289,11 @@ body {
 .toggle-label {
   font-size: 0.8rem;
   margin: 0 5px;
-  color: #fff; /* Change text color to white */
+  color: #fff;
 }
 
 .toggle-label.active {
-  color: #fff; /* Change active text color to white */
+  color: #fff;
   font-weight: bold;
 }
 
@@ -352,12 +368,6 @@ body {
   margin-right: 5px;
 }
 
-@media (max-width: 600px) {
-  .app {
-    flex-direction: column;
-  }
-}
-
 /* Sidebar List Item Styles */
 .left-sidebar .MuiListItem-root {
   cursor: pointer;
@@ -365,9 +375,37 @@ body {
 }
 
 .left-sidebar .MuiListItem-root:hover {
-  background-color: rgba(0, 0, 255, 0.1); /* Light blue on hover */
+  background-color: rgba(0, 0, 255, 0.1);
 }
 
 .left-sidebar .Mui-selected {
-  background-color: rgba(0, 255, 0, 0.3); /* Light green for selected */
+  background-color: rgba(0, 255, 0, 0.3);
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+  .header {
+    padding: 10px;
+  }
+
+  .chat-history {
+    padding: 10px;
+    max-width: calc(100% - 20px);
+    margin-left: 0;
+  }
+
+  .message-input {
+    padding: 10px;
+    margin-left: 0;
+  }
+
+  .left-sidebar {
+    width: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .app {
+    flex-direction: column;
+  }
 }

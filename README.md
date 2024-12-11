@@ -282,8 +282,10 @@ npm-check -u -g
 
 ## Useful Links
  - Bedrock Converse API Capabilities per model: [https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)
+ - Amazon Nova User Guide: [https://docs.aws.amazon.com/pdfs/nova/latest/userguide/nova-ug.pdf](https://docs.aws.amazon.com/pdfs/nova/latest/userguide/nova-ug.pdf)
  - Bedrock Runtime Documentation: (https://docs.aws.amazon.com/bedrock/latest/userguide/service_code_examples_bedrock-runtime.html)[https://docs.aws.amazon.com/bedrock/latest/userguide/service_code_examples_bedrock-runtime.html]
  - Bedrock Runtime Boto3 Documentation: (https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime.html)[https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime.html]
+
  
 
 ## Contributing

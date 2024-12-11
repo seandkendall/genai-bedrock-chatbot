@@ -26,13 +26,11 @@ def lambda_handler(event, context):
         file_type = request_body['fileType']
         # generate random 8 character alpha numeric value
         random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-        
-        
-
+        prefix = rf'{user_id}/{session_id}'
         # Generate a pre-signed URL for uploading
         presigned_post = s3_client.generate_presigned_post(
             Bucket=BUCKET_NAME,
-            Key=f"{user_id}/{session_id}/{random_string}-{file_name}",
+            Key=f"{prefix}/{random_string}-{file_name}",
             Fields={"Content-Type": file_type},
             Conditions=[
                 {"Content-Type": file_type}

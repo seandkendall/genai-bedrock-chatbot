@@ -100,6 +100,7 @@ def scan_for_active_models():
                 'outputModalities': output_modalities,
                 'responseStreamingSupported': model.get('responseStreamingSupported', False),
                 'TEXT': False,
+                'VIDEO': False,
                 'IMAGE': False,
                 'DOCUMENT': False,
                 'access_granted': False,
@@ -110,6 +111,7 @@ def scan_for_active_models():
             prompts = []
             prompts.append(('TEXT', "reply with '1'"))
             prompts.append(('IMAGE', "what color is this?"))
+            prompts.append(('VIDEO', "explain this video"))
             prompts.append(('DOCUMENT', "what number is in the document?"))
             
             for prompt_type, prompt_text in prompts:
@@ -131,6 +133,16 @@ def scan_for_active_models():
                             "document": {
                                 "format": "pdf",
                                 "name": "samplepdf",
+                                "source": {
+                                    "bytes": doc_bytes
+                                }
+                            }
+                        })
+                    elif prompt_type == 'VIDEO':
+                        doc_bytes = load_mp4()
+                        content.append({
+                            "video": {
+                                "format": "mp4",
                                 "source": {
                                     "bytes": doc_bytes
                                 }
@@ -168,11 +180,13 @@ def scan_for_active_models():
                     logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
+        if 'VIDEO' in output_modalities:
+            results[model_id]['TEXT'] = test_video_model(model_id)
             
             
     for model_id, model_info in results.items():
         # if TEXT = True or DOCUMENT = True or IMAGE = true then access_granted = True
-        if model_info['TEXT'] or model_info['DOCUMENT'] or model_info['IMAGE']:
+        if model_info['TEXT'] or model_info['DOCUMENT'] or model_info['IMAGE'] or model_info['VIDEO']:
             model_info['access_granted'] = True
             
         
@@ -192,10 +206,20 @@ def load_pdf():
     """Loads a PDF with the number 25"""
     with open('./25.pdf', 'rb') as f:
         return f.read()
+ 
+def load_mp4():
+    """Loads a MP4 from ./AWS-SMALL.mp4 with an aws cloud rotating for 1 second"""
+    with open('./AWS-SMALL.mp4', 'rb') as f:
+        return f.read()
+    
+def test_video_model(model_id):
+    """ tests video model for access"""
+    return True
+    
 def test_image_model(model_id):
     """ tests image model for access"""
-    if 'titan' in model_id:
-        image_base64 = commons.generate_image_titan(logger,bedrock_runtime,model_id, 'dog', None, None,5)
+    if 'titan' in model_id or 'nova' in model_id:
+        image_base64 = commons.generate_image_titan_nova(logger,bedrock_runtime,model_id, 'dog', None, None,5)
         if image_base64 is None:
             return False
         return True

@@ -18,6 +18,7 @@ user_pool_id = os.environ['USER_POOL_ID']
 region = os.environ['REGION']
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
 image_generation_function_name = os.environ['IMAGE_GENERATION_FUNCTION_NAME']
+video_generation_function_name = os.environ['VIDEO_GENERATION_FUNCTION_NAME']
 user_cache = {}
 
 """
@@ -63,14 +64,9 @@ def lambda_handler(event, context):
             lambda_client.invoke(FunctionName=bedrock_function_name, InvocationType='Event', Payload=json.dumps(event))
             # Process the response from lambda_fn_async
         elif selected_mode.get('category') == 'Bedrock Image Models':
-            # Invoke image generation function
-            if message_type == 'load':
-                response_message = 'no_conversation_to_load'
-            if message_type != 'load':
-                lambda_client.invoke(FunctionName=image_generation_function_name, InvocationType='Event', Payload=json.dumps(event))
-        elif selected_mode.get('category') == 'Bedrock Prompt Flows':
-            if message_type == 'load':
-                response_message = 'no_conversation_to_load'
+            lambda_client.invoke(FunctionName=image_generation_function_name, InvocationType='Event', Payload=json.dumps(event))
+        elif selected_mode.get('category') == 'Bedrock Video Models':
+            lambda_client.invoke(FunctionName=video_generation_function_name, InvocationType='Event', Payload=json.dumps(event))
         else:
             return {
                 'statusCode': 404,

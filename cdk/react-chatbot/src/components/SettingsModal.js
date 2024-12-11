@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Tooltip, Modal, Box, Typography, TextField, Button, Link, Switch, FormControl, IconButton, InputLabel, Select, MenuItem } from '@mui/material';
+import { Tooltip, Modal, Box, Typography,Divider, TextField, Button, Link, Switch, FormControl, IconButton, InputLabel, Select, MenuItem } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { FaInfoCircle } from 'react-icons/fa';
 import useWebSocket from 'react-use-websocket';
@@ -462,6 +462,18 @@ const SettingsModal = ({
                         </Tooltip>
                     </Box>
                 </Typography>
+                <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
+                    <Tooltip title="Chatbot Title" arrow>
+                        <TextField
+                            label="Chatbot Title"
+                            value={localState.chatbot_title}
+                            onChange={handleTitleChange}
+                            name="ChatbotTitle"
+                            fullWidth
+                            margin="normal"
+                        />
+                    </Tooltip>
+                </Typography>
                 <Tooltip title="Enter the price per 1000 input tokens" arrow>
                     <TextField
                         label="Price per 1000 Input Tokens"
@@ -490,28 +502,16 @@ const SettingsModal = ({
                         https://aws.amazon.com/bedrock/pricing/
                     </Link>
                 </Typography>
-
-                <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
-                    <Tooltip title="Chatbot Title" arrow>
-                        <TextField
-                            label="Chatbot Title"
-                            value={localState.chatbot_title}
-                            onChange={handleTitleChange}
-                            name="ChatbotTitle"
-                            fullWidth
-                            margin="normal"
-                        />
-                    </Tooltip>
-                </Typography>
-                <Typography variant="h6" component="h3">
-                     
-                     Select a model to be used to generate chat titles:
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="h6" style={{ marginTop: theme.spacing(1) }}>
+                     Conversation/Chat Title generation Settings:
                 </Typography>
                 <Select
                   id="conversation-mode-select"
                   labelId="conversation-mode-select-label"
                   value={localState.conversation_generation_mode ? localState.conversation_generation_mode  : 'DEFAULT'}
                   onChange={handleConvoGenModelChange}
+                  style={{ marginTop: theme.spacing(2) }}
                   fullWidth
                   label="Conversation Title Generation Model"
                 >
@@ -520,16 +520,11 @@ const SettingsModal = ({
                     </MenuItem>
                     {renderSelectOptions(selectOptions,50)}
                 </Select>
-
-                <Typography variant="h6" component="h3">
-                     
-                     Set a Theme for automatic Chat titles:
-                </Typography>
-
-                <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
-                    <Tooltip title="Chat Title Generation Theme" arrow>
+                
+                <Typography variant="body2" color="textSecondary" style={{ marginTop: theme.spacing(2) }}>
+                    <Tooltip title="Conversation/Chat Theme" arrow>
                         <TextField
-                            label="Chat Title Generation Theme"
+                            label="Conversation/Chat Theme"
                             value={localState.conversation_generation_theme}
                             onChange={handleConvoGenThemeChange}
                             name="ConversationGenerationTheme"
@@ -538,10 +533,8 @@ const SettingsModal = ({
                         />
                     </Tooltip>
                 </Typography>
-                <Typography variant="h6" component="h2">
-                     
 
-                </Typography>
+                <Divider sx={{ my: 2 }} />
 
                 {selectedMode && selectedMode.category === "Bedrock Models" && (
                     <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
@@ -601,7 +594,7 @@ const SettingsModal = ({
                         </Tooltip>
                     </Typography>
                 )}
-                {selectedMode && selectedMode.category && selectedMode.category.includes("Image") && selectedMode.modelId.includes('stable-diffusion-xl-v1') && (
+                {selectedMode?.category?.includes("Image") && selectedMode.modelId.includes('stable-diffusion-xl-v1') && (
                     <>
                         <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>Image Generation Settings:</Typography>
                         {selectedMode.modelId.includes('stable-diffusion-xl-v1') && (
@@ -631,7 +624,7 @@ const SettingsModal = ({
                                 onChange={handleHeightWidthChange}
                                 label="Height x Width"
                             >
-                                {(selectedMode && selectedMode.category && selectedMode.model && selectedMode.modelId && selectedMode.category.includes("Images") && selectedMode.modelId === 'amazon.titan-image-generator-v2:0' ? titanImageSizes : stabilityDiffusionSizes).map(size => (
+                                {(selectedMode?.category && selectedMode.model && selectedMode.modelId && selectedMode.category.includes("Images") && selectedMode.modelId === 'amazon.titan-image-generator-v2:0' ? titanImageSizes : stabilityDiffusionSizes).map(size => (
                                     <MenuItem key={size} value={size}>
                                         {formatSizeLabel(size)}
                                     </MenuItem>

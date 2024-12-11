@@ -15,10 +15,12 @@ const ChatMessage = memo(({
   content, 
   responseTime, 
   isStreaming, 
+  isVideoStreaming,
   timestamp, 
   outputTokenCount, 
   model, 
   isImage, 
+  isVideo,
   imageAlt, 
   prompt 
 }) => {
@@ -27,7 +29,7 @@ const ChatMessage = memo(({
     if (!outputTokenCount || outputTokenCount < 4096) return content;
     
     const contentslice = content.slice(-100).trim();
-    return `${content}\n\n---\n**This response was too large and may have been cut short. If you would like to see the rest of this response, ask me this:** \n\n\nI did not receive your full last response. please re-send me the remainder of the final response starting from the text: \n\n"${contentslice}"`;  }, []);
+    return `${content}\n\r\n\r---\n\r**This response was too large and may have been cut short. If you would like to see the rest of this response, ask me this:** \n\n\nI did not receive your full last response. please re-send me the remainder of the final response starting from the text: \n\r\n\r"${contentslice}"`;  }, []);
 
   const reformatFilename = useCallback((filename) => {
     if (!filename) return '';
@@ -92,6 +94,17 @@ const ChatMessage = memo(({
             alt={imageAlt || 'Generated image'}
             style={{ maxWidth: '100%', height: 'auto' }}
           />
+        </>
+      );
+    }
+    if (isVideo) {
+      return (
+        <>
+          <Typography>{`Generated Video of: ${prompt}`}</Typography>
+          {/* biome-ignore lint/a11y/useMediaCaption: <explanation> */}
+          <video controls>
+            <source src={messageContent} type="video/mp4" />
+          </video>
         </>
       );
     }
@@ -263,7 +276,7 @@ const ChatMessage = memo(({
         )}
       </>
     );
-  }, [isImage, messageContent, prompt, imageAlt, attachments, formatContent, outputTokenCount]);
+  }, [isImage,isVideo, messageContent, prompt, imageAlt, attachments, formatContent, outputTokenCount]);
   
   return (
     <Box

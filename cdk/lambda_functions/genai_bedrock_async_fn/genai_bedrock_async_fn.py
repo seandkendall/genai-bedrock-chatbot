@@ -16,7 +16,7 @@ from aws_lambda_powertools import Logger, Metrics, Tracer
 from llm_conversion_functions import (
     process_message_history_converse,
     process_bedrock_converse_response,
-    process_bedrock_converse_response_for_title
+    process_bedrock_converse_response_for_title,
 )
 logger = Logger(service="BedrockAsync")
 metrics = Metrics()
@@ -109,9 +109,9 @@ def process_websocket_message(event):
     if message_type == 'clear_conversation':
         # logger.info(f'Action: Clear Conversation {session_id}')
         # Delete the conversation history from DynamoDB
-        delete_s3_attachments_for_session(session_id,attachment_bucket,user_id) 
-        delete_s3_attachments_for_session(session_id,image_bucket,user_id)
-        delete_s3_attachments_for_session(session_id,conversation_history_bucket,user_id)
+        commons.delete_s3_attachments_for_session(session_id,attachment_bucket,user_id,None,s3_client, logger)
+        commons.delete_s3_attachments_for_session(session_id,image_bucket,user_id,None,s3_client, logger)
+        commons.delete_s3_attachments_for_session(session_id,conversation_history_bucket,user_id,None,s3_client, logger)
         conversations.delete_conversation_history(dynamodb,conversations_table_name,logger,session_id)
         return
     elif message_type == 'load':
@@ -260,7 +260,12 @@ def process_websocket_message(event):
                     except Exception:
                         chat_title = f'New Conversation: {hash(prompt) % 1000000:06x}'
                 new_conversation = bool(not original_existing_history or len(original_existing_history) == 0)
-                timezone_prompt = f'The Current Time in UTC is: {message_received_timestamp_utc}. Use the timezone of {timestamp_local_timezone} When making a reference to time. Always use the date format of: Month DD, YYYY HH24:mm:ss. only included the time if needed. '
+                timezone_prompt = f'The Current Time in UTC is: {message_received_timestamp_utc}. 
+                                    Use the timezone of {timestamp_local_timezone} When making a reference to time. 
+                                    ALWAYS use the date format of: Month DD, YYYY HH24:mm:ss. 
+                                    ONLY included the time if needed. 
+                                    NEVER reference this date randomly. 
+                                    use it to support high quality answers when the current date is NEEDED '
                 if system_prompt:
                     system_prompt = system_prompt + ' ' + timezone_prompt
                 else:
@@ -316,37 +321,7 @@ def get_title_from_message(messages: list, selected_model_id: str,connection_id:
     return chat_title['title']
 
     
-@tracer.capture_method
-def delete_s3_attachments_for_session(session_id: str,bucket: str,user_id:str):
-    """Function to delete conversation attachments from s3"""
-    deleted_objects = []
-    errors = []
-    prefix = rf'{user_id}/{session_id}'
-    
-    try:
-        # List objects with the specified prefix
-        paginator = s3_client.get_paginator('list_objects_v2')
-        pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
-        
-        for page in pages:
-            if 'Contents' in page:
-                for obj in page['Contents']:
-                    key = obj['Key']
-                    try:
-                        s3_client.delete_object(Bucket=bucket, Key=key)
-                        deleted_objects.append(f"s3://{bucket}/{key}")
-                    except Exception as e:
-                        logger.exception(e)
-                        errors.append(f"Error deleting s3://{bucket}/{key}: {str(e)}")
-    
-    except Exception as e:
-        logger.exception(e)
-        errors.append(f"Error listing objects in s3://{bucket}/{prefix}: {str(e)}")
-    
-    if errors:
-        logger.error(f"Encountered {len(errors)} errors:")
-        for error in errors:
-            logger.error(f"- {error}")
+
               
 @tracer.capture_method
 def download_s3_content(item, content_type):

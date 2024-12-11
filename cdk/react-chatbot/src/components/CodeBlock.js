@@ -15,7 +15,7 @@ const CodeBlock = memo(({ code, language }) => {
   };
 
   return (
-    <Box sx={{ position: 'relative' }}>
+    <Box sx={{ position: 'relative',maxWidth: 'calc(100% - 10px)',overflowX: 'hidden' }}>
       <SyntaxHighlighter
         language={language}
         style={atomOneDark}
@@ -23,7 +23,10 @@ const CodeBlock = memo(({ code, language }) => {
           backgroundColor: '#1e1e1e',
           padding: '0.5rem 1rem',
           borderRadius: '0.375rem',
-          whiteSpace: 'pre-wrap', // Add this line
+          whiteSpace: 'pre-wrap', 
+          overflowX: 'auto', /* Prevent horizontal overflow */
+          marginRight: '1px', /* Add right margin */
+          marginTop: '1px' /* Add right margin */
         }}
         wrapLines={true}
         showLineNumbers={true}

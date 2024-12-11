@@ -89,19 +89,85 @@ echo "Creating CodeBuild project..."
 source_config="{\"type\": \"GITHUB\", \"location\": \"$REPO_URL\""
 deploy_agents_example_option=$([ "$deploy_agents_example" = true ] && echo " --deploy-agents-example " || echo "")
 allowlist_option=$([ -n "$allowlist_pattern" ] && echo "--allowlist $allowlist_pattern" || echo "")
+
 if [ -n "$branch_name" ]; then
-    source_config="$source_config, \"gitCloneDepth\": 1, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: latest\n      nodejs: latest\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - git checkout $branch_name\n      - cd cdk\n      - cdk --version\n      - python3 -m venv .venv\n      - . .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option\""
+    # Use the specified branch
+    read -r -d '' buildspec <<EOF
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: latest
+      nodejs: latest
+    commands:
+      - python -m pip install --upgrade pip
+      - npm install -g aws-cdk
+      - pip install --upgrade awscli
+  pre_build:
+    commands:
+      - git checkout $branch_name
+      - cd cdk
+      - cdk --version
+      - python3 -m venv .venv
+      - . .venv/bin/activate
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+  build:
+    commands:
+      - cd ..
+      - chmod +x deploy.sh
+      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
+EOF
 else
-    source_config="$source_config, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: latest\n      nodejs: latest\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - cd cdk\n      - cdk --version\n      - python3 -m venv .venv\n      - . .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option\""
+    # Use auto-deploy branch detection
+    read -r -d '' buildspec <<EOF
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: latest
+      nodejs: latest
+    commands:
+      - python -m pip install --upgrade pip
+      - npm install -g aws-cdk
+      - pip install --upgrade awscli
+  pre_build:
+    commands:
+      - auto_deploy_branch=\$(git branch -r | grep -m1 'origin/feature_.*_autodeploy' | sed 's/.*origin\\///' || echo '')
+      - |
+        if [ -n "\$auto_deploy_branch" ]; then 
+          echo "Found auto-deploy branch: \$auto_deploy_branch" && git checkout \$auto_deploy_branch
+        else 
+          echo "No auto-deploy branch found. Checking out default branch." && git checkout main
+        fi
+      - cd cdk
+      - cdk --version
+      - python3 -m venv .venv
+      - . .venv/bin/activate
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+  build:
+    commands:
+      - cd ..
+      - chmod +x deploy.sh
+      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
+EOF
 fi
 
-source_config="$source_config}"
+# Escape the buildspec for JSON
+buildspec_escaped=$(echo "$buildspec" | jq -Rs .)
 
+# Add the buildspec to the source_config
+source_config="$source_config, \"buildspec\": $buildspec_escaped}"
+
+# Create the CodeBuild project
 aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --source "$source_config" \
     --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
     --environment "{\"type\": \"ARM_CONTAINER\", \"image\": \"aws/codebuild/amazonlinux2-aarch64-standard:3.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
-    --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role" 
+    --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role"
 
 sleep 1
 # wait for the project $CODEBUILD_PROJECT_NAME to be created
@@ -141,4 +207,3 @@ if [ "$build_success" = true ]; then
     echo "Build Started..."
     echo "View Build status here: https://console.aws.amazon.com/codesuite/codebuild/projects/genai-bedrock-chatbot-build/history"
 fi
-

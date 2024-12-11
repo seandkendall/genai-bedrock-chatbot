@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+ORIGINAL_ARGS=("$@")
+
 
 # Define colors
 has_colors() {
@@ -297,7 +299,10 @@ if [ -z "${VIRTUAL_ENV}" ]; then
         echo -e ""
         echo -e "${GREEN_COLOR}cd cdk"
         echo -e "${GREEN_COLOR}source .venv/bin/activate"
+        echo -e "${GREEN_COLOR}python -m pip install -r requirements.txt"
+        echo -e "${GREEN_COLOR}python -m pip install -r requirements-dev.txt"
         echo -e "${GREEN_COLOR}cd .."
+        echo -e "${GREEN_COLOR}./$(basename "$0") ${ORIGINAL_ARGS[*]}"
         echo -e ""
         echo -e "${DEFAULT_COLOR}Once this is complete, run the deploy command again"
     else
@@ -309,7 +314,9 @@ if [ -z "${VIRTUAL_ENV}" ]; then
         echo -e "${GREEN_COLOR}python3 -m venv .venv"
         echo -e "${GREEN_COLOR}source .venv/bin/activate"
         echo -e "${GREEN_COLOR}python3 -m pip install -r requirements.txt"
+        echo -e "${GREEN_COLOR}python3 -m pip install -r requirements-dev.txt"
         echo -e "${GREEN_COLOR}cd .."
+        echo -e "${GREEN_COLOR}./$(basename "$0") ${ORIGINAL_ARGS[*]}"
         echo -e ""
         echo -e "${DEFAULT_COLOR}Once this is complete, run the deploy command again"
     fi
@@ -531,7 +538,8 @@ echo -e " "
 echo -e "${GREEN_COLOR}Deployment complete! (Git Version $latest_commit)${DEFAULT_COLOR}"
 echo -e " "
 # tell user to visit the url: awschatboturl
-echo -e "${GREEN_COLOR}Tail the application logs here: ${cloudwatchlogslivetailurl}${DEFAULT_COLOR}"
+echo -e "${GREEN_COLOR}Tail the application logs here: "
+echo -e "${GREEN_COLOR}${cloudwatchlogslivetailurl}${DEFAULT_COLOR}"
 echo -e " "
 echo -e "${GREEN_COLOR}Visit the chatbot here: ${awschatboturl}${DEFAULT_COLOR}"
 

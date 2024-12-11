@@ -3,7 +3,7 @@ import React, {
 	useRef,
 	forwardRef,
 	useImperativeHandle,
-  useCallback,
+	useCallback,
 } from "react";
 import { Box, TextField, IconButton, Typography } from "@mui/material";
 import { FaPaperPlane, FaPaperclip, FaTimes } from "react-icons/fa";
@@ -15,6 +15,7 @@ const MAX_DOCUMENTS = 5;
 const MAX_IMAGE_SIZE = 3.75 * 1024 * 1024; // 3.75 MB
 const MAX_IMAGE_DIMENSION = 8000; // 8000 px
 const MAX_DOCUMENT_SIZE = 4.5 * 1024 * 1024; // 4.5 MB
+const MAX_VIDEO_SIZE = 1024 * 1024 * 1024; // 1 GB
 const ALLOWED_DOCUMENT_TYPES = [
 	"pdf",
 	"csv",
@@ -26,6 +27,18 @@ const ALLOWED_DOCUMENT_TYPES = [
 	"txt",
 	"md",
 ];
+const ALLOWED_VIDEO_TYPES = [
+  "mov",
+  "mkv",
+  "mp4",
+  "webm",
+  "flv",
+  "mpeg",
+  "mpg",
+  "wmv",
+  "3gp"
+];
+
 
 export const getPlaceholderText = (selectedMode, selectedKbMode) => {
 	if (!selectedMode || !selectedMode.category) {
@@ -33,6 +46,9 @@ export const getPlaceholderText = (selectedMode, selectedKbMode) => {
 	}
 	if (selectedMode.category === "Bedrock Image Models") {
 		return "Generate an Image of...";
+	}
+	if (selectedMode.category === "Bedrock Video Models") {
+		return "Generate an Video of...";
 	}
 	return selectedMode.category === "Bedrock KnowledgeBases" && !selectedKbMode
 		? "Select a Model for your KnowledgeBase in the Header"
@@ -93,21 +109,25 @@ const MessageInput = forwardRef(
 			}
 		};
 		const isImageFile = useCallback((file) => {
-      const imageTypes = [
-        "image/png",
-        "image/jpeg",
-        "image/jpg",
-        "image/gif",
-        "image/webp",
-      ];
-      return imageTypes.includes(file.type);
-    }, []);
+			const imageTypes = [
+				"image/png",
+				"image/jpeg",
+				"image/jpg",
+				"image/gif",
+				"image/webp",
+			];
+			return imageTypes.includes(file.type);
+		}, []);
+		// return true for video formats: MP4, MOV, MKV, WebM, FLV, MPEG, MPG, WMV, 3GP
+		const isVideoFile = useCallback((file) => {
+			const fileExtension = file.name.split('.').pop().toLowerCase();
+			return ALLOWED_VIDEO_TYPES.includes(fileExtension);
+		  }, []);
 
 		const handleFiles = async (files) => {
 			const newAttachments = [];
 
 			for (const file of files) {
-
 				if (attachments.length + newAttachments.length >= MAX_CONTENT_ITEMS) {
 					alert(
 						`You can only attach up to ${MAX_CONTENT_ITEMS} items in total.`,
@@ -126,6 +146,7 @@ const MessageInput = forwardRef(
 				}
 
 				const isImage = isImageFile(file);
+				const isVideo = isVideoFile(file);
 				const isDocument = ALLOWED_DOCUMENT_TYPES.includes(
 					file.name.split(".").pop().toLowerCase(),
 				);
@@ -135,12 +156,17 @@ const MessageInput = forwardRef(
 					continue;
 				}
 
+				if (isVideo && !selectedMode.allow_input_video) {
+					alert("Video uploads are not allowed for this mode.");
+					continue;
+				}
+
 				if (isDocument && !selectedMode.allow_input_document) {
 					alert("Document uploads are not allowed for this mode.");
 					continue;
 				}
 
-				if (!isImage && !isDocument) {
+				if (!isImage && !isDocument && !isVideo) {
 					alert(`File type not allowed: ${file.name}`);
 					continue;
 				}
@@ -176,6 +202,19 @@ const MessageInput = forwardRef(
 						console.error("Error processing image:", error);
 						alert(`Error processing image: ${file.name}`);
 					}
+				} else if(isVideo) {
+					// https://docs.aws.amazon.com/nova/latest/userguide/prompting-vision-limitations.html
+					if (attachments.filter((a) => isVideoFile(a)).length + newAttachments.filter((a) => isVideoFile(a)).length >= 1) {
+						alert("You can only attach one video file.");
+						continue;
+					  }
+			
+					  if (file.size > MAX_VIDEO_SIZE) {
+						alert(`Video size must be no more than 1 GB: ${file.name}`);
+						continue;
+					  }
+			
+					  newAttachments.push(file);
 				} else {
 					if (
 						attachments.filter((a) => !isImageFile(a)).length +
@@ -364,6 +403,8 @@ const MessageInput = forwardRef(
 									alignItems: "center",
 									backgroundColor: isImageFile(file)
 										? "lightgreen"
+										: isVideoFile(file)
+										? "lightyellow"
 										: "lightblue",
 									borderRadius: "16px",
 									padding: "4px 8px",
@@ -420,7 +461,7 @@ const MessageInput = forwardRef(
 						style={{ display: "none" }}
 						onChange={handleFileChange}
 						multiple
-						accept={`${selectedMode?.allow_input_image ? "image/png,image/jpeg,image/jpg,image/gif,image/webp," : ""}${selectedMode?.allow_input_document ? ".pdf,.csv,.doc,.docx,.xls,.xlsx,.html,.txt,.md" : ""}`}
+						accept={`${selectedMode?.allow_input_image ? "image/png,image/jpeg,image/jpg,image/gif,image/webp," : ""}${selectedMode?.allow_input_document ? ".pdf,.csv,.doc,.docx,.xls,.xlsx,.html,.txt,.md," : ""}${selectedMode?.allow_input_video ? "video/mp4,video/x-m4v,video/quicktime,video/x-matroska,video/webm,video/x-flv,video/mpeg,video/x-msvideo,video/3gpp," : ""}`}
 					/>
 					<IconButton
 						onClick={handleAttachmentClick}

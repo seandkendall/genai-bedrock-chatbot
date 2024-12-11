@@ -45,16 +45,23 @@ const theme = createTheme({
 Amplify.configure(amplifyConfig);
 
 const App = memo(({ signOut, user }) => {
+	const [firstLoad, setFirstLoad] = useState(true);
 	const [messages, setMessages] = useState([]);
-	const [currentConversationMessageTitle, setCurrentConversationMessageTitle] =
-		useState("");
 	const [uploadedFileNames, setUploadedFileNames] = useState([]);
-	const [conversationList, setConversationList] = useState([]);
+	const [conversationList, setConversationList] = useState(
+		localStorage.getItem("load_conversation_list")
+			? JSON.parse(localStorage.getItem("load_conversation_list"))
+			: [],
+	);
 	const [conversationListLoading, setConversationListLoading] = useState(false);
-	const [selectedChatId, setSelectedChatId] = useState("");
+	const [selectedChatId, setSelectedChatId] = useState(localStorage.getItem("selectedChatId") || "");
 	const [requireConversationLoad, setRequireConversationLoad] = useState(true);
 	const [isDisabled, setIsDisabled] = useState(false);
-	const [selectedMode, setSelectedMode] = useState(null);
+	const [selectedMode, setSelectedMode] = useState(
+		localStorage.getItem("selectedMode")
+			? JSON.parse(localStorage.getItem("selectedMode"))
+			: "",
+	);
 	const [selectedTitleGenerationMode, setSelectedTitleGenerationMode] =
 		useState(null);
 	const [selectedTitleGenerationTheme, setSelectedTitleGenerationTheme] =
@@ -77,15 +84,45 @@ const App = memo(({ signOut, user }) => {
 	const [reloadPromptConfig, setReloadPromptConfig] = useState(true);
 
 	// Lists of models, KBs, Agents, prompt flows
-	const [bedrockAgents, setBedrockAgents] = useState([]);
-	const [bedrockKnowledgeBases, setBedrockKnowledgeBases] = useState([]);
-	const [models, setModels] = useState([]);
-	const [imageModels, setImageModels] = useState([]);
-	const [kbModels, setKbModels] = useState([]);
-	const [promptFlows, setPromptFlows] = useState([]);
+	const [bedrockAgents, setBedrockAgents] = useState(
+		localStorage.getItem("local-bedrock-agents")
+			? JSON.parse(localStorage.getItem("local-bedrock-agents"))
+			: [],
+	); //local-bedrock-agents
+	const [bedrockKnowledgeBases, setBedrockKnowledgeBases] = useState(
+		localStorage.getItem("local-bedrock-knowledge-bases")
+			? JSON.parse(localStorage.getItem("local-bedrock-knowledge-bases"))
+			: [],
+	); //local-bedrock-knowledge-bases
+	const [models, setModels] = useState(
+		localStorage.getItem("local-models")
+			? JSON.parse(localStorage.getItem("local-models"))
+			: [],
+	); //local-models
+	const [imageModels, setImageModels] = useState(
+		localStorage.getItem("local-image-models")
+			? JSON.parse(localStorage.getItem("local-image-models"))
+			: [],
+	); //local-image-models
+	const [videoModels, setVideoModels] = useState(
+		localStorage.getItem("local-video-models")
+			? JSON.parse(localStorage.getItem("local-video-models"))
+			: [],
+	); //local-video-models
+	const [kbModels, setKbModels] = useState(
+		localStorage.getItem("local-kb-models")
+			? JSON.parse(localStorage.getItem("local-kb-models"))
+			: [],
+	); //local-kb-models
+	const [promptFlows, setPromptFlows] = useState(
+		localStorage.getItem("local-prompt-flows")
+			? JSON.parse(localStorage.getItem("local-prompt-flows"))
+			: [],
+	); //local-prompt-flows
 	const [modelsLoaded, setModelsLoaded] = useState(false);
+	const [expandedCategories, setExpandedCategories] = useState({});
 
-	const [appSessionid, setAppSessionId] = useState("");
+	const [appSessionid, setAppSessionId] = useState(localStorage.getItem("selectedChatId") || "");
 	const [kbSessionId, setKBSessionId] = useState("");
 	const [systemPromptUserOrSystem, setSystemPromptUserOrSystem] =
 		useState("system");
@@ -142,6 +179,10 @@ const App = memo(({ signOut, user }) => {
 			localStorage.setItem("local-image-models", JSON.stringify(imageModels));
 	}, [imageModels]);
 	useEffect(() => {
+		if (videoModels && videoModels.length > 0)
+			localStorage.setItem("local-video-models", JSON.stringify(videoModels));
+	}, [videoModels]);
+	useEffect(() => {
 		if (kbModels && kbModels.length > 0)
 			localStorage.setItem("local-kb-models", JSON.stringify(kbModels));
 	}, [kbModels]);
@@ -176,19 +217,14 @@ const App = memo(({ signOut, user }) => {
 		);
 	}, []);
 
+	const localSignOut = () => {
+		localStorage.clear();
+		signOut();
+	};
 	// Add this function to update the prices based on the selected model
 	const updatePricesFromModel = () => {
 		if (selectedMode?.modelId) {
 			const modelId = selectedMode?.modelId;
-
-			if (modelPrices[modelId]) {
-				console.log("Found price info for modelId:", modelPrices[modelId]);
-			} else {
-				console.log(
-					`No price info found for modelId: ${modelId}, using default values`,
-				);
-			}
-
 			const modelPriceInfo = modelPrices[modelId] || {
 				pricePer1000InputTokens: 0.003,
 				pricePer1000OutputTokens: 0.015,
@@ -196,9 +232,6 @@ const App = memo(({ signOut, user }) => {
 			setPricePer1000InputTokens(modelPriceInfo.pricePer1000InputTokens);
 			setPricePer1000OutputTokens(modelPriceInfo.pricePer1000OutputTokens);
 		} else {
-			console.log(
-				"No selectedMode, model, or modelId available, using default values",
-			);
 			const modelPriceInfo = {
 				pricePer1000InputTokens: 0.003,
 				pricePer1000OutputTokens: 0.015,
@@ -251,7 +284,6 @@ const App = memo(({ signOut, user }) => {
 	};
 
 	const handleModeChange = (newMode, chatSelectedByUser) => {
-		// if not chatSelectedByUser
 		if (!chatSelectedByUser) {
 			if (
 				selectedMode &&
@@ -268,17 +300,15 @@ const App = memo(({ signOut, user }) => {
 					? newMode.output_type.charAt(0).toUpperCase() +
 						newMode.output_type.slice(1).toLowerCase()
 					: "unknown";
-        // if selectedOutputType is null or empty or equal to unknown
-        if (!selectedOutputType || selectedOutputType === "Unknown") {
-          setPopupMessage(
-            'I have created a new chat for you.',
-          );
-        }else{
-          setPopupMessage(
-            `You were currently interacting with a model capable of outputting ${selectedOutputType} and are now switching to an output type of ${newOutputType}. I have created a new chat for you.`,
-          );
-        }
-				
+				// if selectedOutputType is null or empty or equal to unknown
+				if (!selectedOutputType || selectedOutputType === "Unknown") {
+					setPopupMessage("I have created a new chat for you.");
+				} else {
+					setPopupMessage(
+						`You were currently interacting with a model capable of outputting ${selectedOutputType} and are now switching to an output type of ${newOutputType}. I have created a new chat for you.`,
+					);
+				}
+
 				setPopupType("success");
 				setShowPopup(true);
 				setTimeout(() => setShowPopup(false), 3000);
@@ -324,7 +354,15 @@ const App = memo(({ signOut, user }) => {
 	};
 
 	const loadConversationList = async () => {
-		setConversationListLoading(true);
+		// if firstLoad is true and conversationList is not null empty
+		if (firstLoad && conversationList.length > 0) {
+			setFirstLoad(false);
+		} else {
+			if (firstLoad) {
+				setFirstLoad(false);
+			}
+			setConversationListLoading(true);
+		}
 		const { accessToken, idToken } = await getCurrentSession();
 		const data = {
 			type: "load_conversation_list",
@@ -371,6 +409,7 @@ const App = memo(({ signOut, user }) => {
 
 		try {
 			const message = JSON.parse(lastMessage.data);
+			const message_temp_cache = []
 			if (message.type !== "conversation_history") return;
 
 			const current_chunk = message.current_chunk || 1;
@@ -388,6 +427,7 @@ const App = memo(({ signOut, user }) => {
 				JSON.stringify(messageChunk) !== JSON.stringify(messages);
 
 			if (isMessageDifferent) {
+				message_temp_cache.push(...messageChunk);
 				setMessages((prevMessages) =>
 					current_chunk === 1
 						? messageChunk
@@ -398,6 +438,8 @@ const App = memo(({ signOut, user }) => {
 			if (last_message) {
 				setIsRefreshing(false);
 				setTimeout(scrollToBottom, 0);
+				localStorage.setItem(`chatHistory-${appSessionid}`,JSON.stringify(message_temp_cache),);
+				message_temp_cache.length = 0;
 			}
 		} catch (error) {
 			console.error("Error processing message:", error);
@@ -469,21 +511,25 @@ const App = memo(({ signOut, user }) => {
 			generateImage(sanitizedMessage, randomMessageId);
 			return;
 		}
+		if (selectedMode.category === "Bedrock Video Models") {
+			generateVideo(sanitizedMessage, randomMessageId);
+			return;
+		}
 
 		const { accessToken, idToken } = await getCurrentSession();
 		const message_timestamp = new Date().toISOString();
-    const timezone = Intl.DateTimeFormat('en-US', { 
-      timeZoneName: 'short',
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-    }).formatToParts(new Date())
-      .find(part => part.type === 'timeZoneName')
-      .value;
-    
+		const timezone = Intl.DateTimeFormat("en-US", {
+			timeZoneName: "short",
+			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+		})
+			.formatToParts(new Date())
+			.find((part) => part.type === "timeZoneName").value;
+
 		const data = {
 			prompt: sanitizedMessage,
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
-      timestamp_local_timezone: timezone,
+			timestamp_local_timezone: timezone,
 			session_id: newAppSessionid ? newAppSessionid : appSessionid,
 			kb_session_id: kbSessionId,
 			selectedMode: selectedMode,
@@ -529,6 +575,7 @@ const App = memo(({ signOut, user }) => {
 				role: "assistant",
 				content: "",
 				isStreaming: true,
+				isVideoStreaming: false,
 				timestamp: null,
 			},
 		]);
@@ -541,6 +588,14 @@ const App = memo(({ signOut, user }) => {
 
 	const generateImage = async (prompt, randomMessageId) => {
 		setIsLoading(true);
+		// if appsessionid is null then setappsessionid
+		let newAppSessionid;
+		if (!appSessionid) {
+			setRequireConversationLoad(false);
+			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
+			setAppSessionId(newAppSessionid);
+		}
+				
 
 		const { accessToken, idToken } = await getCurrentSession();
 		const message_timestamp = new Date().toISOString();
@@ -548,7 +603,7 @@ const App = memo(({ signOut, user }) => {
 			prompt: prompt,
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
-			session_id: appSessionid,
+			session_id: newAppSessionid ? newAppSessionid : appSessionid,
 			selectedMode: selectedMode,
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
@@ -559,7 +614,7 @@ const App = memo(({ signOut, user }) => {
 		const currentTime = new Date();
 		const messageWithTime = {
 			role: "user",
-			content: `Generating Image of: ${prompt}`,
+			content: `Generate an Image of: ${prompt}`,
 			message_id: randomMessageId,
 			timestamp: currentTime.toISOString(),
 		};
@@ -570,9 +625,61 @@ const App = memo(({ signOut, user }) => {
 				role: "assistant",
 				content: `Generating Image of: *${prompt}* with model: *${selectedMode.modelName}*. Please wait.. `,
 				isStreaming: true,
+				isVideoStreaming: false,
 				timestamp: null,
 				model: selectedMode.modelName,
 				isImage: false,
+				isVideo: false,
+				imageAlt: prompt,
+			},
+		]);
+
+		setTimeout(scrollToBottom, 0);
+
+		sendMessage(JSON.stringify(data));
+	};
+
+	const generateVideo = async (prompt, randomMessageId) => {
+		setIsLoading(true);
+		// if appsessionid is null then setappsessionid
+		let newAppSessionid;
+		if (!appSessionid) {
+			setRequireConversationLoad(false);
+			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
+			setAppSessionId(newAppSessionid);
+		}
+
+		const { accessToken, idToken } = await getCurrentSession();
+		const message_timestamp = new Date().toISOString();
+		const data = {
+			prompt: prompt,
+			message_id: randomMessageId,
+			timestamp: message_timestamp,
+			session_id: newAppSessionid ? newAppSessionid : appSessionid,
+			selectedMode: selectedMode,
+			idToken: `${idToken}`,
+			accessToken: `${accessToken}`,
+		};
+
+		const currentTime = new Date();
+		const messageWithTime = {
+			role: "user",
+			content: `Generate a Video of: ${prompt}.`,
+			message_id: randomMessageId,
+			timestamp: currentTime.toISOString(),
+		};
+		setMessages((prevMessages) => [
+			...(prevMessages ? prevMessages : []),
+			messageWithTime,
+			{
+				role: "assistant",
+				content: `Generating Video of: *${prompt}* with model: *${selectedMode.modelName}*. Please wait... \n\rThis could take 3 - 5 Minutes... `,
+				isStreaming: true,
+				isVideoStreaming: false,
+				timestamp: null,
+				model: selectedMode.modelName,
+				isImage: false,
+				isVideo: false,
 				imageAlt: prompt,
 			},
 		]);
@@ -617,7 +724,7 @@ const App = memo(({ signOut, user }) => {
 			) {
 				handleError(message);
 			} else if (message.type === "message_title") {
-				if (message.title) setCurrentConversationMessageTitle(message.title);
+				// Do nothing
 			} else if (message.type === "message_start") {
 				if (isRefreshing) {
 					setIsRefreshing(false);
@@ -642,6 +749,7 @@ const App = memo(({ signOut, user }) => {
 				if (message.new_conversation) {
 					loadConversationList();
 					setSelectedChatId(message.session_id);
+					localStorage.setItem("selectedChatId", message.session_id);
 				}
 			} else if (
 				message.type === "error" ||
@@ -655,6 +763,30 @@ const App = memo(({ signOut, user }) => {
 				setIsDisabled(false);
 				setIsLoading(false);
 				setTimeout(scrollToBottom, 0);
+			} else if (message.type === "video_generated") {
+				if (isRefreshing) {
+					setIsRefreshing(false);
+				}
+				setMessages((prevMessages) => {
+					const updatedMessages = [...(prevMessages ? prevMessages : [])];
+					const lastIndex = updatedMessages.length - 1;
+					updatedMessages[lastIndex] = {
+						...updatedMessages[lastIndex],
+						content: message.video_url,
+						prompt: message.prompt,
+						message_id: message.message_id,
+						isStreaming: false,
+						isVideoStreaming: true,
+						isImage: false,
+						isVideo: true,
+						model: message.modelId,
+						outputTokenCount: 0,
+						inputTokenCount: 0,
+						timestamp: message.timestamp,
+						raw_message: message,
+					};
+					return updatedMessages;
+				});
 			} else if (message.type === "image_generated") {
 				if (isRefreshing) {
 					setIsRefreshing(false);
@@ -668,7 +800,9 @@ const App = memo(({ signOut, user }) => {
 						prompt: message.prompt,
 						message_id: message.message_id,
 						isStreaming: false,
+						isVideoStreaming: false,
 						isImage: true,
+						isVideo: false,
 						model: message.modelId,
 						outputTokenCount: 0,
 						inputTokenCount: 0,
@@ -685,6 +819,10 @@ const App = memo(({ signOut, user }) => {
 					setImageModels(
 						filter_active_models(message.load_models.image_models),
 					);
+				if (message.load_models.video_models)
+					setVideoModels(
+						filter_active_models(message.load_models.video_models),
+					);
 				if (message.load_models.kb_models)
 					setKbModels(message.load_models.kb_models);
 				if (message.load_knowledge_bases?.knowledge_bases)
@@ -700,8 +838,18 @@ const App = memo(({ signOut, user }) => {
 				setModelsLoaded(true);
 			} else if (message.type === "conversation_history") {
 				// Do nothing, UseEffect will handle this
+				// to find this code, search for:
+				// if (message.type !== "conversation_history") return;
 			} else if (message.type === "load_conversation_list") {
 				setConversationList(message.conversation_list);
+				// save message.conversation_list in local storage
+				if (message.conversation_list) {
+					localStorage.setItem(
+						"load_conversation_list",
+						JSON.stringify(message.conversation_list),
+					);
+				}
+
 				setConversationListLoading(false);
 			} else if (message.type === "modelscan") {
 				triggerModelScanFinished();
@@ -712,7 +860,7 @@ const App = memo(({ signOut, user }) => {
 						setIsRefreshing(false);
 					} else if (messageString.includes("Access Token has expired")) {
 						try {
-							signOut();
+							localSignOut();
 						} catch (error) {
 							console.error("Error signing out: ", error);
 						}
@@ -847,6 +995,7 @@ const App = memo(({ signOut, user }) => {
 			updatedMessages[lastIndex] = {
 				...updatedMessages[lastIndex],
 				isStreaming: false,
+				isVideoStreaming: false,
 				timestamp: new Date().toISOString(),
 				model: usedModel,
 				outputTokenCount: outputTokenCount,
@@ -905,10 +1054,7 @@ const App = memo(({ signOut, user }) => {
 						},
 					);
 					//save conversation to local storage
-					localStorage.setItem(
-						`chatHistory-${appSessionid}`,
-						JSON.stringify(filteredMessages),
-					);
+					localStorage.setItem(`chatHistory-${appSessionid}`,JSON.stringify(filteredMessages),);
 				}
 			} else {
 				console.log("No messages to save to local storage");
@@ -919,18 +1065,9 @@ const App = memo(({ signOut, user }) => {
 	};
 
 	const scrollToBottom = () => {
-		const documentHeight = Math.max(
-			document.body.scrollHeight,
-			document.documentElement.scrollHeight,
-			document.body.offsetHeight,
-			document.documentElement.offsetHeight,
-			document.body.clientHeight,
-			document.documentElement.clientHeight,
-		);
-
 		window.scrollTo({
-			top: documentHeight,
-			behavior: "auto",
+			top: document.documentElement.scrollHeight,
+			behavior: "smooth",
 		});
 
 		setTimeout(() => {
@@ -960,6 +1097,7 @@ const App = memo(({ signOut, user }) => {
 		setAttachments([]);
 		setUploadedFileNames([]);
 		setSelectedChatId("");
+		localStorage.removeItem("selectedChatId")
 		setAppSessionId(
 			`session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
 		);
@@ -976,6 +1114,7 @@ const App = memo(({ signOut, user }) => {
 		if (selectedChatId === chatId) {
 			setAppSessionId("");
 			setSelectedChatId("");
+			localStorage.removeItem("selectedChatId")
 			setMessages([]);
 			setUploadedFileNames([]);
 			setAttachments([]);
@@ -990,6 +1129,10 @@ const App = memo(({ signOut, user }) => {
 				(conversation) => conversation.session_id !== chatId,
 			),
 		);
+		localStorage.setItem(
+			"load_conversation_list",
+			JSON.stringify(conversationList),
+		);
 	};
 
 	const handleMouseDown = (e) => {
@@ -1002,8 +1145,15 @@ const App = memo(({ signOut, user }) => {
 
 	const handleMouseMove = (e) => {
 		if (isDragging) {
-			const newWidth = e.clientX;
+			const newWidth = Math.max(
+				200,
+				Math.min(e.clientX, window.innerWidth - 200),
+			);
 			setSidebarWidth(newWidth);
+			document.documentElement.style.setProperty(
+				"--sidebar-width",
+				`${newWidth}px`,
+			);
 		}
 	};
 
@@ -1022,22 +1172,46 @@ const App = memo(({ signOut, user }) => {
 	}, [isDragging]);
 	// End of Code Supporting SideBar
 
-	const getModeObjectFromModelID = (selectedModelId) => {
+	const getModeObjectFromModelID = (category,selectedModelId) => {
 		let selectedObject = null;
-		selectedObject = models.find((item) => item.modelId === selectedModelId);
-		// if selectedObject is null then find by modelArn
-		if (!selectedObject) {
-			selectedObject = models.find((item) => item.modelArn === selectedModelId);
+		if (category === "Bedrock Models") {
+			selectedObject = models.find((item) => item.modelId === selectedModelId);
+			if (!selectedObject) {
+				selectedObject = models.find((item) => item.modelArn === selectedModelId);
+			}
+		} else if (category === "Bedrock Image Models") {
+			selectedObject = imageModels.find(
+				(item) => item.modelId === selectedModelId,
+			);
+			if (!selectedObject) {
+				selectedObject = imageModels.find(
+					(item) => item.modelArn === selectedModelId,
+				);
+			}
+		} else if (category === "Bedrock Video Models") {
+			selectedObject = videoModels.find(
+				(item) => item.modelId === selectedModelId,
+			);
+			if (!selectedObject) {
+				selectedObject = videoModels.find(
+					(item) => item.modelArn === selectedModelId,
+				);
+			}
+		} else if (category === "Bedrock Knowledge Bases") {
+			selectedObject = kbModels.find(
+				(item) => item.knowledgeBaseId === selectedModelId,
+			);
+		} else if (category === "Prompt Flows") {
+			selectedObject = promptFlows.find(
+				(item) => item.flowAliasId === selectedModelId,
+			);
+		} else if (category === "Bedrock Agents") {
+			selectedObject = bedrockAgents.find(
+				(item) => item.agentAliasId === selectedModelId,
+			);
 		}
 		return selectedObject;
 	};
-
-	// if (!appSessionid) {
-	// 	setRequireConversationLoad(true);
-	// 	setAppSessionId(
-	// 		`session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
-	// 	);
-	// }
 
 	return (
 		<ThemeProvider theme={theme}>
@@ -1049,7 +1223,7 @@ const App = memo(({ signOut, user }) => {
 					kbSessionId={kbSessionId}
 					setKBSessionId={setKBSessionId}
 					handleOpenSettingsModal={handleOpenSettingsModal}
-					signOut={signOut}
+					signOut={localSignOut}
 					selectedMode={selectedMode}
 					handleModeChange={handleModeChange}
 					showPopup={showPopup}
@@ -1066,6 +1240,7 @@ const App = memo(({ signOut, user }) => {
 					bedrockKnowledgeBases={bedrockKnowledgeBases}
 					models={models}
 					imageModels={imageModels}
+					videoModels={videoModels}
 					kbModels={kbModels}
 					promptFlows={promptFlows}
 					selectedKbMode={selectedKbMode}
@@ -1078,6 +1253,8 @@ const App = memo(({ signOut, user }) => {
 					modelsLoaded={modelsLoaded}
 					chatbotTitle={chatbotTitle}
 					isMobile={isMobile}
+					expandedCategories={expandedCategories}
+					setExpandedCategories={setExpandedCategories}
 				/>
 				<Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
 					<Box
@@ -1088,6 +1265,8 @@ const App = memo(({ signOut, user }) => {
 							borderRight: "1px solid",
 							borderColor: "divider",
 							overflow: "hidden",
+							overflowY: "auto",
+							position: "relative",
 						}}
 					>
 						<LeftSideBar
@@ -1105,7 +1284,10 @@ const App = memo(({ signOut, user }) => {
 							onSelectedKbMode={onSelectedKbMode}
 							kbModels={kbModels}
 							bedrockKnowledgeBases={bedrockKnowledgeBases}
+							setExpandedCategories={setExpandedCategories}
+							isDisabled={isDisabled}
 						/>
+						<div className="resizer" onMouseDown={handleMouseDown} />
 					</Box>
 					<Box
 						sx={{
@@ -1115,7 +1297,14 @@ const App = memo(({ signOut, user }) => {
 						}}
 						onMouseDown={handleMouseDown}
 					/>
-					<Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+					<Box
+						sx={{
+							flexGrow: 1,
+							display: "flex",
+							width: `calc(100% - ${sidebarWidth}px)`,
+							flexDirection: "column",
+						}}
+					>
 						<div className="chat-history" ref={chatHistoryRef}>
 							<ChatHistory
 								user={user}
@@ -1129,6 +1318,7 @@ const App = memo(({ signOut, user }) => {
 								requireConversationLoad={requireConversationLoad}
 								setRequireConversationLoad={setRequireConversationLoad}
 								setAppSessionId={setAppSessionId}
+								selectedChatId={selectedChatId}
 							/>
 						</div>
 						<MessageInput

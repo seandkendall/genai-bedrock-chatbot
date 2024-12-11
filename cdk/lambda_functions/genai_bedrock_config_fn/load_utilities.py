@@ -32,6 +32,7 @@ def load_knowledge_bases(bedrock_agent_client, table):
                 ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
                 kb['is_active'] = ddb_config.get(kb_id, {}).get('access_granted', True)
                 kb['allow_input_image'] = ddb_config.get(kb_id, {}).get('IMAGE', False)
+                kb['allow_input_video'] = ddb_config.get(kb_id, {}).get('VIDEO', False)
                 kb['allow_input_document'] = ddb_config.get(kb_id, {}).get('DOCUMENT', False)
                 kb['output_type'] = 'TEXT'
                 kb['category'] = 'Bedrock KnowledgeBases'
@@ -76,6 +77,7 @@ def load_agents(bedrock_agent_client, table):
                 ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
                 alias['is_active'] = ddb_config.get(alias['agentAliasId'], {}).get('access_granted', True)
                 alias['allow_input_image'] = ddb_config.get(alias['agentAliasId'], {}).get('IMAGE', False)
+                alias['allow_input_video'] = ddb_config.get(alias['agentAliasId'], {}).get('VIDEO', False)
                 alias['allow_input_document'] = ddb_config.get(alias['agentAliasId'], {}).get('DOCUMENT', False)
                 alias['output_type'] = 'TEXT'
                 alias['category'] = 'Bedrock Agents'
@@ -117,6 +119,7 @@ def load_prompt_flows(bedrock_agent_client, table):
                 ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
                 alias['is_active'] = ddb_config.get(alias['arn'], {}).get('access_granted', True)
                 alias['allow_input_image'] = ddb_config.get(alias['arn'], {}).get('IMAGE', False)
+                alias['allow_input_video'] = ddb_config.get(alias['arn'], {}).get('VIDEO', False)
                 alias['allow_input_document'] = ddb_config.get(alias['arn'], {}).get('DOCUMENT', False)
                 alias['output_type'] = 'TEXT'
                 alias['category'] = 'Bedrock Prompt Flows'
@@ -169,19 +172,36 @@ def load_models(bedrock_client, table):
             if ('Stability' in model['providerName'] or 'Amazon' in model['providerName']) and 'TEXT' in model['inputModalities'] and 'IMAGE' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE'
             
         ]
+        
+        video_models = [
+            {
+                'providerName': model['providerName'],
+                'modelName': model['modelName'],
+                'modelId': model['modelId'],
+                'modelArn': model['modelArn'],
+                'mode_selector': model['modelArn'],
+                'mode_selector_name': model['modelName'],
+            }
+            for model in response['modelSummaries']
+            if 'VIDEO' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE'
+            
+        ]
 
         # Process to keep only the latest version of each model
         available_text_models = keep_latest_versions(text_models)
         available_image_models = keep_latest_versions(image_models)
+        available_video_models = keep_latest_versions(video_models)
 
         available_text_models_return = []
         available_image_models_return = []
+        available_video_models_return = []
         # Update the models with DynamoDB config
         ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
         for model in available_text_models:
             if ddb_config.get(model['modelId'], {}).get('access_granted', True):
                 model['is_active'] = True
                 model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
+                model['allow_input_video'] = ddb_config.get(model['modelId'], {}).get('VIDEO', False)
                 model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
                 model['output_type'] = 'TEXT'
                 model['category'] = 'Bedrock Models'
@@ -191,10 +211,21 @@ def load_models(bedrock_client, table):
             if ddb_config.get(model['modelId'], {}).get('access_granted', True):
                 model['is_active'] = True
                 model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
+                model['allow_input_video'] = ddb_config.get(model['modelId'], {}).get('VIDEO', False)
                 model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
                 model['output_type'] = 'IMAGE'
                 model['category'] = 'Bedrock Image Models'
                 available_image_models_return.append(model)
+                
+        for model in available_video_models:
+            if ddb_config.get(model['modelId'], {}).get('access_granted', True):
+                model['is_active'] = True
+                model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
+                model['allow_input_video'] = ddb_config.get(model['modelId'], {}).get('VIDEO', False)
+                model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
+                model['output_type'] = 'VIDEO'
+                model['category'] = 'Bedrock Video Models'
+                available_video_models_return.append(model)
             
             
         
@@ -202,7 +233,7 @@ def load_models(bedrock_client, table):
         with open('./bedrock_supported_kb_models.json', 'r') as f:
             kb_models = json.load(f)
         
-        return {'type': 'load_models', 'text_models': available_text_models_return, 'image_models': available_image_models_return, 'kb_models': kb_models}
+        return {'type': 'load_models', 'text_models': available_text_models_return, 'video_models': available_video_models_return, 'image_models': available_image_models_return, 'kb_models': kb_models}
     except Exception as e:
         logger.exception(e)
         logger.error(f"Error loading models: {str(e)}")

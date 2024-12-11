@@ -230,7 +230,7 @@ def get_ddb_config(table,ddb_cache,ddb_cache_timestamp,cache_duration,logger):
         logger.error(f"Error getting DynamoDB config: {str(e)}")
         return {}
     
-def generate_image_titan(logger,bedrock,model_id, prompt, width, height, seed):
+def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, seed):
     """ Generates an image using titan """
     logger.info("Generating image using Titan Image Generator")
     # if not seed then set seed random
@@ -345,3 +345,40 @@ def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, heig
         
         response_body = json.loads(response['body'].read())
         return response_body['artifacts'][0]['base64'],True,None
+
+def delete_s3_attachments_for_session(session_id: str,bucket: str,user_id:str,additional_prefix:str, s3_client, logger):
+    """Function to delete conversation attachments from s3"""
+    logger.info(f"Deleting conversation attachments for session: {session_id} bucket: {bucket} user_id: {user_id}")
+    deleted_objects = []
+    errors = []
+    # if additional_prefix is not null
+    if additional_prefix:
+        prefix = rf'{additional_prefix}/{user_id}/{session_id}'
+    else:
+        prefix = rf'{user_id}/{session_id}'
+    
+    try:
+        # List objects with the specified prefix
+        paginator = s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+        
+        for page in pages:
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    key = obj['Key']
+                    try:
+                        s3_client.delete_object(Bucket=bucket, Key=key)
+                        logger.info(f"Deleted s3://{bucket}/{key}")
+                        deleted_objects.append(f"s3://{bucket}/{key}")
+                    except Exception as e:
+                        logger.exception(e)
+                        errors.append(f"Error deleting s3://{bucket}/{key}: {str(e)}")
+    
+    except Exception as e:
+        logger.exception(e)
+        errors.append(f"Error listing objects in s3://{bucket}/{prefix}: {str(e)}")
+    
+    if errors:
+        logger.error(f"Encountered {len(errors)} errors:")
+        for error in errors:
+            logger.error(f"- {error}")
