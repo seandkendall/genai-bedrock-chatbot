@@ -12,37 +12,19 @@ schedule="weekly"
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-    -d)
-        delete_flag=true
-        shift
-        ;;
-    --deploy-agents-example)
-        deploy_agents_example=true
-        shift
-        ;;
-    --branch)
-        branch_name="$2"
-        shift 2
-        ;;
-    --schedule)
-        schedule="$2"
-        shift 2
-        ;;
-    --allowlist)
-        allowlist_pattern="$2"
-        shift 2
-        ;;
-    *)
-        echo "Unknown argument: $1"
-        shift
-        ;;
+        -d) delete_flag=true; shift;;
+        --deploy-agents-example) deploy_agents_example=true; shift;;
+        --branch) branch_name="$2"; shift 2;;
+        --schedule) schedule="$2"; shift 2;;
+        --allowlist) allowlist_pattern="$2"; shift 2;;
+        *) echo "Unknown argument: $1"; shift;;
     esac
 done
 
 create_eventbridge_rule() {
     local schedule=$1
     local rule_name="$CODEBUILD_PROJECT_NAME-trigger"
-
+    
     # Create the EventBridge rule
     aws events put-rule \
         --name "$rule_name" \
@@ -60,7 +42,7 @@ delete_resources() {
     echo "Deleting existing resources..."
     aws events remove-targets --rule "$CODEBUILD_PROJECT_NAME-trigger" --ids "1"
     aws events delete-rule --name "$CODEBUILD_PROJECT_NAME-trigger"
-    aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME
+    aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 
     aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-base-policy"
     aws iam delete-role --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role"
 }
@@ -80,14 +62,14 @@ create_or_update_role() {
     # Check if the role exists
     if aws iam get-role --role-name "$role_name" 2>/dev/null; then
         echo "Updating existing role: $role_name"
-        aws iam update-assume-role-policy --role-name "$role_name" --policy-document "$assume_role_policy"
-        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document"
+        aws iam update-assume-role-policy --role-name "$role_name" --policy-document "$assume_role_policy" 
+        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     else
         echo "Creating new role: $role_name"
-        aws iam create-role --role-name "$role_name" --assume-role-policy-document "$assume_role_policy"
+        aws iam create-role --role-name "$role_name" --assume-role-policy-document "$assume_role_policy" 
         echo "Waiting for role creation..."
         aws iam wait role-exists --role-name "$role_name"
-        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document"
+        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
     fi
     sleep 5
 }
@@ -110,38 +92,7 @@ allowlist_option=$([ -n "$allowlist_pattern" ] && echo "--allowlist $allowlist_p
 if [ -n "$branch_name" ]; then
     source_config="$source_config, \"gitCloneDepth\": 1, \"buildspec\": \"version: 0.2\nphases:\n  install:\n    runtime-versions:\n      python: latest\n      nodejs: latest\n    commands:\n      - python -m pip install --upgrade pip\n      - npm install -g aws-cdk\n      - pip install --upgrade awscli\n  pre_build:\n    commands:\n      - git checkout $branch_name\n      - cd cdk\n      - cdk --version\n      - python3 -m venv .venv\n      - . .venv/bin/activate\n      - pip install --upgrade pip\n      - pip install -r requirements.txt\n  build:\n    commands:\n      - cd ..\n      - chmod +x deploy.sh\n      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option\""
 else
-    source_config="$source_config, \"buildspec\": \"version: 0.2
-phases:
-  install:
-    runtime-versions:
-      python: latest
-      nodejs: latest
-    commands:
-      - python -m pip install --upgrade pip
-      - npm install -g aws-cdk
-      - pip install --upgrade awscli
-  pre_build:
-    commands:
-      - auto_deploy_branch=\$(git branch -r | grep 'feature_.*_autodeploy' | head -n 1 | tr -d ' ' | sed 's/origin\\///')
-      - if [ -n \"\$auto_deploy_branch\" ]; then
-      -   echo \"Found auto-deploy branch: \$auto_deploy_branch\"
-      -   git checkout \$auto_deploy_branch
-      - else
-      -   echo \"No auto-deploy branch found. Proceeding with default branch.\"
-      - fi
-      - cd cdk
-      - cdk --version
-      - python3 -m venv .venv
-      - . .venv/bin/activate
-      - pip install --upgrade pip
-      - pip install -r requirements.txt
-  build:
-    commands:
-      - cd ..
-      - chmod +x deploy.sh
-      - ./deploy.sh \$deploy_agents_example_option --headless \$allowlist_option\"
-"
-
+    source_config="$source_config, \"buildspec\": \"version: 0.2\\n\\nphases:\\n  install:\\n    runtime-versions:\\n      python: latest\\n      nodejs: latest\\n    commands:\\n      - python -m pip install --upgrade pip\\n      - npm install -g aws-cdk\\n      - pip install --upgrade awscli\\n  pre_build:\\n    commands:\\n      - auto_deploy_branch=\\$(git branch -r | grep 'feature_.*_autodeploy' | head -n 1 | tr -d ' ' | sed 's/origin\\\\///')\\n      - if [ -n \\\"\\$auto_deploy_branch\\\" ]; then\\n      -   echo \\\"Found auto-deploy branch: \\$auto_deploy_branch\\\"\\n      -   git checkout \\$auto_deploy_branch\\n      - else\\n      -   echo \\\"No auto-deploy branch found. Proceeding with default branch.\\\"\\n      - fi\\n      - cd cdk\\n      - cdk --version\\n      - python3 -m venv .venv\\n      - . .venv/bin/activate\\n      - pip install --upgrade pip\\n      - pip install -r requirements.txt\\n  build:\\n    commands:\\n      - cd ..\\n      - chmod +x deploy.sh\\n      - ./deploy.sh \\$deploy_agents_example_option --headless \\$allowlist_option\""
 fi
 
 source_config="$source_config}"
@@ -150,7 +101,7 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --source "$source_config" \
     --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
     --environment "{\"type\": \"ARM_CONTAINER\", \"image\": \"aws/codebuild/amazonlinux2-aarch64-standard:3.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
-    --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role"
+    --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role" 
 
 sleep 1
 # wait for the project $CODEBUILD_PROJECT_NAME to be created
@@ -159,7 +110,8 @@ INTERVAL=2
 
 start_time=$(date +%s)
 end_time=$((start_time + TIMEOUT))
-build_success=false
+build_success=false 
+
 
 while [ $(date +%s) -lt $end_time ]; do
     echo "Checking for project '$CODEBUILD_PROJECT_NAME' "
@@ -189,3 +141,4 @@ if [ "$build_success" = true ]; then
     echo "Build Started..."
     echo "View Build status here: https://console.aws.amazon.com/codesuite/codebuild/projects/genai-bedrock-chatbot-build/history"
 fi
+
