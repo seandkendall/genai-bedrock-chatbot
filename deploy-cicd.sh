@@ -135,7 +135,7 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
-      - auto_deploy_branch=$(git branch -r | grep -m1 'origin/feature_.*_autodeploy' | sed 's/.*origin\///' || echo '')
+      - auto_deploy_branch=\$(git branch -r | grep -m1 'origin/feature_.*_autodeploy' | sed 's/.*origin\///' || echo '')
       - if [ -n "\$auto_deploy_branch" ]; then 
           echo "Found auto-deploy branch: \$auto_deploy_branch" && git checkout \$auto_deploy_branch; 
         else 
