@@ -14,6 +14,7 @@
         "is_active": true,
         "allow_input_image": false,
         "allow_input_document": false,
+        "allow_input_video": false,
         "output_type": "TEXT",
         "category": "Bedrock KnowledgeBases"
     },
@@ -32,6 +33,7 @@
         "is_active": true,
         "allow_input_image": true,
         "allow_input_document": true,
+        "allow_input_video": true,
         "output_type": "TEXT",
         "category": "Bedrock Models"
     }

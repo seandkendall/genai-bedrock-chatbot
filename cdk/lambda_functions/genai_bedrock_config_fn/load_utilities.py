@@ -217,7 +217,7 @@ def load_models(bedrock_client, table):
         ddb_config = commons.get_ddb_config(table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
         for model in available_text_models:
             model_identifier = model.get('originalModelArn', model['modelId'])
-            if ddb_config.get(model_identifier, {}).get('access_granted', True):
+            if ddb_config.get(model_identifier, {}).get('access_granted', False):
                 model['is_active'] = True
                 model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
                 model['allow_input_video'] = ddb_config.get(model['modelId'], {}).get('VIDEO', False)
@@ -228,7 +228,7 @@ def load_models(bedrock_client, table):
                 
         for model in available_image_models:
             model_identifier = model.get('originalModelArn', model['modelId'])
-            if ddb_config.get(model_identifier, {}).get('access_granted', True):
+            if ddb_config.get(model_identifier, {}).get('access_granted', False):
                 model['is_active'] = True
                 model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
                 model['allow_input_video'] = ddb_config.get(model['modelId'], {}).get('VIDEO', False)
@@ -239,7 +239,7 @@ def load_models(bedrock_client, table):
                 
         for model in available_video_models:
             model_identifier = model.get('originalModelArn', model['modelId'])
-            if ddb_config.get(model_identifier, {}).get('access_granted', True):
+            if ddb_config.get(model_identifier, {}).get('access_granted', False):
                 model['is_active'] = True
                 model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
                 model['allow_input_video'] = ddb_config.get(model['modelId'], {}).get('VIDEO', False)
