@@ -233,7 +233,7 @@ def get_ddb_config(table,ddb_cache,ddb_cache_timestamp,cache_duration,logger):
     
 def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, seed):
     """ Generates an image using titan """
-    logger.info("Generating image using Titan Image Generator")
+    logger.info("Generating image using Titan/Nova Image Generator")
     # if not seed then set seed random
     if not seed:
         seed = random.randint(0, 2147483646)
@@ -273,7 +273,8 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
     response_body = json.loads(response['body'].read())
     return response_body['images'][0], True, None
 
-def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed):
+def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed, delete_after_generate):
+    logger.info(f"Generating video using Nova Reel Video Generator with model: {model_id}")
     prefix = rf'{user_id}/{session_id}'
     model_input = {
         "taskType": "TEXT_VIDEO",
@@ -307,8 +308,11 @@ def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client
                 break
             time.sleep(SLEEP_TIME)
         if status == "Completed":
-            s3_client.copy_object(CopySource={'Bucket': video_bucket, 'Key': f"{s3_location_original}"}, Bucket=video_bucket, Key=f"{s3_location}")
-            s3_client.delete_object(Bucket=video_bucket, Key=f"{s3_location_original}")
+            if delete_after_generate:
+                s3_client.delete_object(Bucket=video_bucket, Key=f"{s3_location_original}")
+            else:    
+                s3_client.copy_object(CopySource={'Bucket': video_bucket, 'Key': f"{s3_location_original}"}, Bucket=video_bucket, Key=f"{s3_location}")
+                s3_client.delete_object(Bucket=video_bucket, Key=f"{s3_location_original}")
             cloudfront_url = f"https://{cloudfront_domain}/{s3_location}"
             return f"{cloudfront_url}", True, ""
         else:

@@ -216,7 +216,7 @@ def load_mp4():
     
 def test_video_model(model_id):
     """ tests video model for access"""
-    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain,6,0)
+    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain,6,0,True)
     return success_status
     
 def test_image_model(model_id):

@@ -61,7 +61,7 @@ def lambda_handler(event, context):
             return
         duration_seconds = 6
         seed = random.randint(0, 2147483648)
-        video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain,duration_seconds,seed)
+        video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain,duration_seconds,seed,False)
         
         needs_load_from_s3, chat_title_loaded, original_existing_history = conversations.query_existing_history(dynamodb, conversations_table_name, logger, session_id)
         existing_history = copy.deepcopy(original_existing_history)
