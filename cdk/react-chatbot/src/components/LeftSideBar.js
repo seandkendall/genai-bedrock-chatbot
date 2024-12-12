@@ -49,7 +49,6 @@ const LeftSideBar = ({ handleNewChat, handleDeleteChat, conversationList, conver
     if (isDisabled) {
       return;
     }
-    console.log('SDK: lets load for sessionId: ', sessionId, ' and modelId: ', selectedModelId, ' and category: ', category, ' and kb_session_id: ', kb_session_id, ' and selected_knowledgebase_id: ', selected_knowledgebase_id)
     setRequireConversationLoad(true)
     setSelectedChatId(sessionId);
     localStorage.setItem("selectedChatId", sessionId);

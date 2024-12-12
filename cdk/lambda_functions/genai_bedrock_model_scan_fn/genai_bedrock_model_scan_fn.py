@@ -184,18 +184,11 @@ def scan_for_active_models():
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
         if 'VIDEO' in output_modalities:
-            print('SDK TESTING VIDEO MODELS')
-            print(model_id)
             results[model_id]['TEXT'] = test_video_model(model_id)
             
-            
-    print('SDK 1: results:')
-    print(results)
-    print('SDK DONE')
     for model_id, model_info in results.items():
         # if TEXT = True or DOCUMENT = True or IMAGE = true then access_granted = True
         if model_info['TEXT'] or model_info['DOCUMENT'] or model_info['IMAGE'] or model_info['VIDEO']:
-            print('SDK --- SETTING TO TRUE')
             model_info['access_granted'] = True
             
         
@@ -223,28 +216,18 @@ def load_mp4():
     
 def test_video_model(model_id):
     """ tests video model for access"""
-    print('SDK 55: test_video_model')
-    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain,1,0)
-    print(f'SDK 2: video_url: {video_url}, success_status: {success_status}, error_message: {error_message}')
+    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain,6,0)
     return success_status
     
 def test_image_model(model_id):
     """ tests image model for access"""
     if 'titan' in model_id or 'nova' in model_id:
         image_base64,success_status,error_message = commons.generate_image_titan_nova(logger,bedrock_runtime,model_id, 'dog', None, None,5)
-        print('SDK 1: image_base64')
-        print(success_status)
-        print(error_message)
-        print(image_base64)
         if image_base64 is None:
             return False
         return True
     elif 'stability' in model_id:
         image_base64,success_status,error_message = commons.generate_image_stable_diffusion(logger,bedrock_runtime,model_id, 'dog', None, None,None,5,10)
-        print('SDK 2: image_base64')
-        print(success_status)
-        print(error_message)
-        print(image_base64)
         if image_base64 is None:
             return False
         return True

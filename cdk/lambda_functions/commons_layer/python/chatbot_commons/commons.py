@@ -260,8 +260,6 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
                 "imageGenerationConfig": image_gen_config
             })
         )
-        print('SDK: response')
-        print(response)
     except ClientError as e:
         error_message = e.response['Error']['Message']
         if e.response['Error']['Code'] == 'AccessDeniedException':
@@ -347,8 +345,6 @@ def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, heig
                     "seed": seed,
                 })
             )
-            print('SDK2: response')
-            print(response)
         except ClientError as e:
             error_message = e.response['Error']['Message']
             if e.response['Error']['Code'] == 'AccessDeniedException':
