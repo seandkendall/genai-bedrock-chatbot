@@ -514,6 +514,7 @@ class ChatbotWebsiteStack(Stack):
                 "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                 "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                 "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
+                "CLOUDFRONT_DOMAIN": cloudfront_distribution.distribution_domain_name,
                 "POWERTOOLS_SERVICE_NAME":"MODEL_SCAN_SERVICE",
                 "POWERTOOLS_METRICS_NAMESPACE": "BedrockChatbotModelScan"
             },

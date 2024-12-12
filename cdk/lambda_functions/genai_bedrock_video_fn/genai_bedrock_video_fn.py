@@ -19,6 +19,7 @@ WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 s3_client = boto3.client('s3')
 dynamodb = boto3.client('dynamodb')
 video_bucket = os.environ['S3_IMAGE_BUCKET_NAME']
+cloudfront_domain = os.environ['CLOUDFRONT_DOMAIN']
 conversations_table_name = os.environ['CONVERSATIONS_DYNAMODB_TABLE']
 conversations_table = boto3.resource('dynamodb').Table(conversations_table_name)
 conversation_history_bucket = os.environ['CONVERSATION_HISTORY_BUCKET']
@@ -59,7 +60,7 @@ def lambda_handler(event, context):
             conversations.load_and_send_conversation_history(session_id, connection_id, user_id, dynamodb,conversations_table_name,s3_client,conversation_history_bucket,logger, commons,apigateway_management_api)
             return
 
-        video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger)
+        video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain)
         
         needs_load_from_s3, chat_title_loaded, original_existing_history = conversations.query_existing_history(dynamodb, conversations_table_name, logger, session_id)
         existing_history = copy.deepcopy(original_existing_history)

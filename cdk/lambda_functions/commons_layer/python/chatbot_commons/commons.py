@@ -275,7 +275,7 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
     response_body = json.loads(response['body'].read())
     return response_body['images'][0], True, None
 
-def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger):
+def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain):
     prefix = rf'{user_id}/{session_id}'
     model_input = {
         "taskType": "TEXT_VIDEO",
@@ -311,7 +311,7 @@ def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client
         if status == "Completed":
             s3_client.copy_object(CopySource={'Bucket': video_bucket, 'Key': f"{s3_location_original}"}, Bucket=video_bucket, Key=f"{s3_location}")
             s3_client.delete_object(Bucket=video_bucket, Key=f"{s3_location_original}")
-            cloudfront_url = f"https://{os.environ['CLOUDFRONT_DOMAIN']}/{s3_location}"
+            cloudfront_url = f"https://{cloudfront_domain}/{s3_location}"
             return f"{cloudfront_url}", True, ""
         else:
             return "", False, f"Video generation failed with status: {status}"

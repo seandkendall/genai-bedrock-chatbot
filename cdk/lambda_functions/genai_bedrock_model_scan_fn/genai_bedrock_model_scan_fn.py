@@ -14,6 +14,7 @@ logger.setLevel(logging.INFO)
 tracer = Tracer()
 metrics = Metrics()
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
+cloudfront_domain = os.environ['CLOUDFRONT_DOMAIN']
 video_bucket = os.environ['S3_IMAGE_BUCKET_NAME']
 s3_client = boto3.client('s3')
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
@@ -222,7 +223,7 @@ def load_mp4():
     
 def test_video_model(model_id):
     """ tests video model for access"""
-    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger)
+    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain)
     print(f'SDK 2: video_url: {video_url}, success_status: {success_status}, error_message: {error_message}')
     return success_status
     
