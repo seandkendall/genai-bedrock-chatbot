@@ -275,16 +275,16 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
     response_body = json.loads(response['body'].read())
     return response_body['images'][0], True, None
 
-def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain):
+def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed):
     prefix = rf'{user_id}/{session_id}'
     model_input = {
         "taskType": "TEXT_VIDEO",
         "textToVideoParams": {"text": prompt},
         "videoGenerationConfig": {
-            "durationSeconds": 6,
+            "durationSeconds": duration_seconds,
             "fps": 24,
             "dimension": "1280x720",
-            "seed": random.randint(0, 2147483648)
+            "seed": seed
         }
     }
 

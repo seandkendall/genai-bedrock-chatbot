@@ -223,7 +223,8 @@ def load_mp4():
     
 def test_video_model(model_id):
     """ tests video model for access"""
-    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain)
+    print('SDK 55: test_video_model')
+    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain,1,0)
     print(f'SDK 2: video_url: {video_url}, success_status: {success_status}, error_message: {error_message}')
     return success_status
     

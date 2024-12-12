@@ -500,7 +500,7 @@ class ChatbotWebsiteStack(Stack):
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_model_scan_fn.lambda_handler",
             code=_lambda.Code.from_asset("lambda_functions/genai_bedrock_model_scan_fn/"),
-            timeout=Duration.seconds(300),
+            timeout=Duration.seconds(90),
             architecture=_lambda.Architecture.ARM_64 ,
             tracing=_lambda.Tracing.ACTIVE,
             memory_size=1024,
