@@ -260,12 +260,15 @@ def process_websocket_message(event):
                     except Exception:
                         chat_title = f'New Conversation: {hash(prompt) % 1000000:06x}'
                 new_conversation = bool(not original_existing_history or len(original_existing_history) == 0)
-                timezone_prompt = f'The Current Time in UTC is: {message_received_timestamp_utc}. 
-                                    Use the timezone of {timestamp_local_timezone} When making a reference to time. 
-                                    ALWAYS use the date format of: Month DD, YYYY HH24:mm:ss. 
-                                    ONLY included the time if needed. 
-                                    NEVER reference this date randomly. 
-                                    use it to support high quality answers when the current date is NEEDED '
+                timezone_prompt = (
+                    f"The Current Time in UTC is: {message_received_timestamp_utc}. "
+                    f"Use the timezone of {timestamp_local_timezone} when making a reference to time. "
+                    "ALWAYS use the date format of: Month DD, YYYY HH24:mm:ss. "
+                    "ONLY include the time if needed. "
+                    "NEVER reference this date randomly. "
+                    "Use it to support high quality answers when the current date is NEEDED."
+                )
+
                 if system_prompt:
                     system_prompt = system_prompt + ' ' + timezone_prompt
                 else:
@@ -292,7 +295,7 @@ def process_websocket_message(event):
                 store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id,chat_title,new_conversation,selected_model_category, message_stop_reason)
             except Exception as e:
                 logger.exception(e)
-                logger.error(f"Error calling bedrock model (912): {str(e)}")
+                logger.warn(f"Error calling bedrock model (912): {str(e)}")
                 if 'have access to the model with the specified model ID.' in str(e):
                     model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
                     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
