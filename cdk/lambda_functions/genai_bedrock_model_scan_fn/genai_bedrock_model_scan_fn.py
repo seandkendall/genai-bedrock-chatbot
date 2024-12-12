@@ -219,12 +219,20 @@ def test_video_model(model_id):
 def test_image_model(model_id):
     """ tests image model for access"""
     if 'titan' in model_id or 'nova' in model_id:
-        image_base64 = commons.generate_image_titan_nova(logger,bedrock_runtime,model_id, 'dog', None, None,5)
+        image_base64,success_status,error_message = commons.generate_image_titan_nova(logger,bedrock_runtime,model_id, 'dog', None, None,5)
+        print('SDK 1: image_base64')
+        print(success_status)
+        print(error_message)
+        print(image_base64)
         if image_base64 is None:
             return False
         return True
     elif 'stability' in model_id:
-        image_base64 = commons.generate_image_stable_diffusion(logger,bedrock_runtime,model_id, 'dog', None, None,None,5,10)
+        image_base64,success_status,error_message = commons.generate_image_stable_diffusion(logger,bedrock_runtime,model_id, 'dog', None, None,None,5,10)
+        print('SDK 2: image_base64')
+        print(success_status)
+        print(error_message)
+        print(image_base64)
         if image_base64 is None:
             return False
         return True
