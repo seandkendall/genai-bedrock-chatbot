@@ -186,9 +186,13 @@ def scan_for_active_models():
             results[model_id]['TEXT'] = test_video_model(model_id)
             
             
+    print('SDK 1: results:')
+    print(results)
+    print('SDK DONE')
     for model_id, model_info in results.items():
         # if TEXT = True or DOCUMENT = True or IMAGE = true then access_granted = True
         if model_info['TEXT'] or model_info['DOCUMENT'] or model_info['IMAGE'] or model_info['VIDEO']:
+            print('SDK --- SETTING TO TRUE')
             model_info['access_granted'] = True
             
         
