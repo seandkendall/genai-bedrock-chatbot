@@ -28,51 +28,6 @@ apigateway_management_api = boto3.client('apigatewaymanagementapi',
 
 SLEEP_TIME = 2
 
-def generate_video(prompt, model_id,user_id,session_id):
-    prefix = rf'{user_id}/{session_id}'
-    model_input = {
-        "taskType": "TEXT_VIDEO",
-        "textToVideoParams": {"text": prompt},
-        "videoGenerationConfig": {
-            "durationSeconds": 6,
-            "fps": 24,
-            "dimension": "1280x720",
-            "seed": random.randint(0, 2147483648)
-        }
-    }
-
-    try:
-        s3uri = f"s3://{video_bucket}/videos/{prefix}/"
-        invocation = bedrock_runtime.start_async_invoke(
-            modelId=model_id,
-            modelInput=model_input,
-            outputDataConfig={"s3OutputDataConfig": {"s3Uri": s3uri}}
-        )
-        invocation_arn = invocation["invocationArn"]
-        s3_prefix = invocation_arn.split('/')[-1]
-        s3_location_original = f"videos/{prefix}/{s3_prefix}/output.mp4"
-        s3_location = f"videos/{prefix}/{s3_prefix}/{s3_prefix}.mp4"
-
-        while True:
-            response = bedrock_runtime.get_async_invoke(
-                invocationArn=invocation_arn
-            )
-            status = response["status"]
-            if status != "InProgress":
-                break
-            time.sleep(SLEEP_TIME)
-        if status == "Completed":
-            s3_client.copy_object(CopySource={'Bucket': video_bucket, 'Key': f"{s3_location_original}"}, Bucket=video_bucket, Key=f"{s3_location}")
-            s3_client.delete_object(Bucket=video_bucket, Key=f"{s3_location_original}")
-            cloudfront_url = f"https://{os.environ['CLOUDFRONT_DOMAIN']}/{s3_location}"
-            return f"{cloudfront_url}", True, ""
-        else:
-            return "", False, f"Video generation failed with status: {status}"
-
-    except Exception as e:
-        logger.exception(e)
-        return "", False, str(e)
-
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
     """Lambda Handler Function"""
@@ -104,7 +59,7 @@ def lambda_handler(event, context):
             conversations.load_and_send_conversation_history(session_id, connection_id, user_id, dynamodb,conversations_table_name,s3_client,conversation_history_bucket,logger, commons,apigateway_management_api)
             return
 
-        video_url, success_status, error_message = generate_video(prompt, model_id,user_id,session_id)
+        video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger)
         
         needs_load_from_s3, chat_title_loaded, original_existing_history = conversations.query_existing_history(dynamodb, conversations_table_name, logger, session_id)
         existing_history = copy.deepcopy(original_existing_history)

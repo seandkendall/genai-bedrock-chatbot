@@ -1,5 +1,6 @@
 import json
 import decimal
+import time
 import random
 import string
 from datetime import datetime, timezone, timedelta
@@ -274,6 +275,51 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
     response_body = json.loads(response['body'].read())
     return response_body['images'][0], True, None
 
+def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger):
+    prefix = rf'{user_id}/{session_id}'
+    model_input = {
+        "taskType": "TEXT_VIDEO",
+        "textToVideoParams": {"text": prompt},
+        "videoGenerationConfig": {
+            "durationSeconds": 6,
+            "fps": 24,
+            "dimension": "1280x720",
+            "seed": random.randint(0, 2147483648)
+        }
+    }
+
+    try:
+        s3uri = f"s3://{video_bucket}/videos/{prefix}/"
+        invocation = bedrock_runtime.start_async_invoke(
+            modelId=model_id,
+            modelInput=model_input,
+            outputDataConfig={"s3OutputDataConfig": {"s3Uri": s3uri}}
+        )
+        invocation_arn = invocation["invocationArn"]
+        s3_prefix = invocation_arn.split('/')[-1]
+        s3_location_original = f"videos/{prefix}/{s3_prefix}/output.mp4"
+        s3_location = f"videos/{prefix}/{s3_prefix}/{s3_prefix}.mp4"
+
+        while True:
+            response = bedrock_runtime.get_async_invoke(
+                invocationArn=invocation_arn
+            )
+            status = response["status"]
+            if status != "InProgress":
+                break
+            time.sleep(SLEEP_TIME)
+        if status == "Completed":
+            s3_client.copy_object(CopySource={'Bucket': video_bucket, 'Key': f"{s3_location_original}"}, Bucket=video_bucket, Key=f"{s3_location}")
+            s3_client.delete_object(Bucket=video_bucket, Key=f"{s3_location_original}")
+            cloudfront_url = f"https://{os.environ['CLOUDFRONT_DOMAIN']}/{s3_location}"
+            return f"{cloudfront_url}", True, ""
+        else:
+            return "", False, f"Video generation failed with status: {status}"
+
+    except Exception as e:
+        logger.exception(e)
+        return "", False, str(e)
+    
 def generate_random_string(length=8):
     """Function to generate a random String of length 8"""
     characters = string.ascii_lowercase + string.digits

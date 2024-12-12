@@ -14,6 +14,8 @@ logger.setLevel(logging.INFO)
 tracer = Tracer()
 metrics = Metrics()
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
+video_bucket = os.environ['S3_IMAGE_BUCKET_NAME']
+s3_client = boto3.client('s3')
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
 user_pool_id = os.environ['USER_POOL_ID']
 config_table_name = os.environ.get('CONFIG_DYNAMODB_TABLE')
@@ -214,7 +216,8 @@ def load_mp4():
     
 def test_video_model(model_id):
     """ tests video model for access"""
-    return True
+    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger)
+    return success_status
     
 def test_image_model(model_id):
     """ tests image model for access"""
