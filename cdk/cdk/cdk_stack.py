@@ -321,7 +321,7 @@ class ChatbotWebsiteStack(Stack):
             timeout=Duration.seconds(900),
             architecture=_lambda.Architecture.ARM_64,
             tracing=_lambda.Tracing.ACTIVE,
-            memory_size=1024*5,
+            memory_size=3008,
             layers=[boto3_layer, commons_layer, conversations_layer,lambda_insights_layer],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={

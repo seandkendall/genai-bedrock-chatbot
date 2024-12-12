@@ -51,6 +51,11 @@ cd genai-bedrock-chatbot
 ./deploy-cicd.sh -d --allowlist @example.com,@example.ca --branch feature_branch
 ```
 
+**Option 5 (adding the -a flag):** Deploy from a 'main' or the latest feature branch on each deploy without the need to specify the branch name using a domain allow-list, but delete old CodeBuild resources first
+```bash
+./deploy-cicd.sh -a -d --allowlist @example.com,@example.ca --branch feature_branch
+```
+
 On any of these options, you can also specify a flag for `--schedule daily` if you would like to redeploy the latest changes daily, otherwise weekly releases will be auto-deployed
 
 

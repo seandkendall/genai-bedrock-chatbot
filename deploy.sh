@@ -1,6 +1,27 @@
 #!/usr/bin/env bash
 ORIGINAL_ARGS=("$@")
 
+display_help() {
+    echo "Usage: $0 [OPTIONS]"
+    echo
+    echo "Options:"
+    echo "  -h, --help                 Display this help message and exit"
+    echo "  -a, --app APP              Specify the app name"
+    echo "  -c, --context CONTEXT      Specify the context"
+    echo "  --debug                    Enable debug mode"
+    echo "  --profile PROFILE          Specify the AWS profile"
+    echo "  -t, --tags TAGS            Specify tags"
+    echo "  -f, --force                Force deployment"
+    echo "  -v, --verbose              Enable verbose output"
+    echo "  -r, --role-arn ROLE_ARN    Specify the role ARN"
+    echo "  --allowlist DOMAINS        Specify allowlist domains"
+    echo "  --deploy-agents-example    Deploy agents example"
+    echo "  --headless                 Run in headless mode"
+    echo "  --redeploy                 Force redeployment"
+    echo
+    echo "For more information, please refer to the documentation."
+}
+
 
 # Define colors
 has_colors() {
@@ -209,6 +230,10 @@ redeploy=false
 POSITIONAL_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -h|--help)
+            display_help
+            exit 0
+            ;;
         -a|--app) app_flag="--app $2"; shift 2;;
         -c|--context) context_flag="--context $2"; shift 2;;
         --debug) debug_flag="--debug"; shift;;
@@ -542,4 +567,3 @@ echo -e "${GREEN_COLOR}Tail the application logs here: "
 echo -e "${GREEN_COLOR}${cloudwatchlogslivetailurl}${DEFAULT_COLOR}"
 echo -e " "
 echo -e "${GREEN_COLOR}Visit the chatbot here: ${awschatboturl}${DEFAULT_COLOR}"
-
