@@ -183,6 +183,8 @@ def scan_for_active_models():
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
         if 'VIDEO' in output_modalities:
+            print('SDK TESTING VIDEO MODELS')
+            print(model_id)
             results[model_id]['TEXT'] = test_video_model(model_id)
             
             
@@ -221,6 +223,7 @@ def load_mp4():
 def test_video_model(model_id):
     """ tests video model for access"""
     video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger)
+    print(f'SDK 2: video_url: {video_url}, success_status: {success_status}, error_message: {error_message}')
     return success_status
     
 def test_image_model(model_id):
