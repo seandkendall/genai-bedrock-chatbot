@@ -520,6 +520,7 @@ class ChatbotWebsiteStack(Stack):
         )
         model_scan_function.apply_removal_policy(RemovalPolicy.DESTROY)
         websocket_api.grant_manage_connections(model_scan_function)
+        image_bucket.grant_read_write(model_scan_function)
         dynamodb_configurations_table.grant_read_write_data(model_scan_function)
         model_scan_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
         model_scan_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"))
