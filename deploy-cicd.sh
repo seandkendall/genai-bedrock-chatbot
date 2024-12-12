@@ -1,5 +1,24 @@
 #!/bin/bash
 export AWS_PAGER=""
+
+# Function to display help information
+display_help() {
+    echo "Usage: $0 [OPTIONS]"
+    echo
+    echo "Options:"
+    echo "  -h, --help                 Display this help message"
+    echo "  -d                         Delete existing resources"
+    echo "  -a                         Enable auto-deploy branch detection"
+    echo "  --deploy-agents-example    Deploy agents example"
+    echo "  --branch BRANCH_NAME       Specify a branch to use"
+    echo "  --schedule SCHEDULE        Set the deployment schedule (daily or weekly, default: weekly)"
+    echo "  --allowlist PATTERN        Set the allowlist pattern"
+    echo
+    echo "Example:"
+    echo "  $0 -a --schedule daily --allowlist 'mypattern*'"
+    exit 0
+}
+
 # GitHub repository URL
 REPO_URL="https://github.com/seandkendall/genai-bedrock-chatbot"
 
@@ -12,13 +31,14 @@ schedule="weekly"
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -h|--help) display_help;;
         -d) delete_flag=true; shift;;
         -a) auto_deploy_branch=true; shift;;
         --deploy-agents-example) deploy_agents_example=true; shift;;
         --branch) branch_name="$2"; shift 2;;
         --schedule) schedule="$2"; shift 2;;
         --allowlist) allowlist_pattern="$2"; shift 2;;
-        *) echo "Unknown argument: $1"; shift;;
+        *) echo "Unknown argument: $1"; display_help;;
     esac
 done
 
