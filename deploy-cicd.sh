@@ -13,6 +13,7 @@ schedule="weekly"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -d) delete_flag=true; shift;;
+        -a) auto_deploy_branch=true; shift;;
         --deploy-agents-example) deploy_agents_example=true; shift;;
         --branch) branch_name="$2"; shift 2;;
         --schedule) schedule="$2"; shift 2;;
@@ -119,7 +120,7 @@ phases:
       - chmod +x deploy.sh
       - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
 EOF
-else
+elif [ "$auto_deploy_branch" = true ]; then
     # Use auto-deploy branch detection
     read -r -d '' buildspec <<EOF
 version: 0.2
@@ -142,6 +143,34 @@ phases:
         else 
           echo "No auto-deploy branch found. Checking out default branch." && git checkout main
         fi
+      - cd cdk
+      - cdk --version
+      - python3 -m venv .venv
+      - . .venv/bin/activate
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+  build:
+    commands:
+      - cd ..
+      - chmod +x deploy.sh
+      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
+EOF
+else
+    # Use auto-deploy branch detection
+    read -r -d '' buildspec <<EOF
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: latest
+      nodejs: latest
+    commands:
+      - python -m pip install --upgrade pip
+      - npm install -g aws-cdk
+      - pip install --upgrade awscli
+  pre_build:
+    commands:
       - cd cdk
       - cdk --version
       - python3 -m venv .venv
