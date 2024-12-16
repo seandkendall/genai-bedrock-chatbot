@@ -596,6 +596,7 @@ class ChatbotWebsiteStack(Stack):
         # Create SQS Queues for each Lambda function
         send_message_queue = sqs.Queue(self, "SendMessageQueue")
         presigned_url_queue = sqs.Queue(self, "PresignedUrlQueue")
+        model_scan_request_queue = sqs.Queue(self, "ModelScanRequestQueue")
 
         # Create IAM Roles for API Gateway to send messages to SQS
         send_message_role = iam.Role(self, "SendMessageApiGatewayRole",
@@ -612,6 +613,14 @@ class ChatbotWebsiteStack(Stack):
         presigned_url_role.add_to_policy(iam.PolicyStatement(
             actions=["sqs:SendMessage"],
             resources=[presigned_url_queue.queue_arn]
+        ))
+        
+        model_scan_request_role = iam.Role(self, "ModelScanRequestApiGatewayRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com")
+        )
+        model_scan_request_role.add_to_policy(iam.PolicyStatement(
+            actions=["sqs:SendMessage"],
+            resources=[model_scan_request_queue.queue_arn]
         ))
 
         # Create a REST API
@@ -660,6 +669,34 @@ class ChatbotWebsiteStack(Stack):
            authorizer=cognito_authorizer,
            method_responses=[apigw.MethodResponse(status_code="200")])
 
+        # Configure API Gateway to send messages to Model Scan Request
+        model_scan_request_resource = rest_api.root.add_resource("model-scan-request")
+        model_scan_request_resource.add_method("POST", apigw.AwsIntegration(
+            service="sqs",
+            path=f"{self.account}/{model_scan_request_queue.queue_name}",
+            integration_http_method="POST",
+            options=apigw.IntegrationOptions(
+                credentials_role=model_scan_request_role,
+                passthrough_behavior=apigw.PassthroughBehavior.NEVER,
+                request_parameters={
+                    "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'"
+                },
+                request_templates={
+                    "application/json": "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
+                },
+                integration_responses=[
+                    apigw.IntegrationResponse(
+                        status_code="200",
+                        response_templates={
+                            "application/json": '{"done": true}'
+                        }
+                    )
+                ]
+            )
+        ), authorization_type=apigw.AuthorizationType.COGNITO,
+           authorizer=cognito_authorizer,
+           method_responses=[apigw.MethodResponse(status_code="200")])
+        
         # Configure API Gateway to send messages to the Presigned URL Queue
         presigned_url_resource = rest_api.root.add_resource("get-presigned-url")
         presigned_url_resource.add_method("POST", apigw.AwsIntegration(
@@ -692,6 +729,7 @@ class ChatbotWebsiteStack(Stack):
         lambda_router_function.add_event_source(lambda_event_sources.SqsEventSource(send_message_queue))
         
         presigned_url_function.add_event_source(lambda_event_sources.SqsEventSource(presigned_url_queue))
+        model_scan_request_function.add_event_source(lambda_event_sources.SqsEventSource(model_scan_request_queue))
         # END OF APIGW/REST to SQS to Lambda Code
         
         rest_api_origin = origins.RestApiOrigin(rest_api, origin_path='/')
@@ -708,9 +746,9 @@ class ChatbotWebsiteStack(Stack):
         config_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
             "ConfigFnIntegration", config_function
         )
-        model_scan_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
-            "ModelScanFnIntegration", model_scan_function
-        )
+        # model_scan_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
+        #     "ModelScanFnIntegration", model_scan_function
+        # )
 
 
         # Add routes and integrations to the WebSocket API
@@ -719,11 +757,11 @@ class ChatbotWebsiteStack(Stack):
             integration=config_fn_integration,
             return_response=True
         )
-        websocket_api.add_route(
-            "modelscan",
-            integration=model_scan_fn_integration,
-            return_response=False
-        )
+        # websocket_api.add_route(
+        #     "modelscan",
+        #     integration=model_scan_fn_integration,
+        #     return_response=False
+        # )
         websocket_api.add_route(
             "$default",
             integration=bedrock_fn_integration,

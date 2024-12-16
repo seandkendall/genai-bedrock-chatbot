@@ -347,11 +347,12 @@ const App = memo(({ signOut, user }) => {
 		try {
 			const { accessToken, idToken } = await getCurrentSession();
 			const data = {
-				action: "modelscan",
+				action: "model-scan-request",
 				idToken: `${idToken}`,
 				accessToken: `${accessToken}`,
 			};
-			sendMessage(JSON.stringify(data));
+			// sendMessage(JSON.stringify(data));
+			sendMessageViaRest(data)
 		} catch (error) {
 			console.error("Error refreshing models:", error);
 		}
