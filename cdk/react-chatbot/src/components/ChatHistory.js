@@ -15,9 +15,11 @@ const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages
           setAppSessionId(
             `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
           );
-          loadConversationList()
         }
-        setRequireConversationLoad(false);
+        if (requireConversationLoad){
+          loadConversationList()
+          setRequireConversationLoad(false);
+        }
       }
   }, [selectedMode, user, appSessionid,websocketConnectionId]);
   
