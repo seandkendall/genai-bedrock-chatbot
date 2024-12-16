@@ -594,9 +594,9 @@ class ChatbotWebsiteStack(Stack):
         
         # START OF APIGW/REST to SQS to Lambda Code
         # Create SQS Queues for each Lambda function
-        send_message_queue = sqs.Queue(self, "SendMessageQueue")
-        presigned_url_queue = sqs.Queue(self, "PresignedUrlQueue")
-        model_scan_request_queue = sqs.Queue(self, "ModelScanRequestQueue")
+        send_message_queue = sqs.Queue(self, "SendMessageQueue",visibility_timeout=Duration.seconds(900))
+        presigned_url_queue = sqs.Queue(self, "PresignedUrlQueue",visibility_timeout=Duration.seconds(60))
+        model_scan_request_queue = sqs.Queue(self, "ModelScanRequestQueue",visibility_timeout=Duration.seconds(900))
 
         # Create IAM Roles for API Gateway to send messages to SQS
         send_message_role = iam.Role(self, "SendMessageApiGatewayRole",
