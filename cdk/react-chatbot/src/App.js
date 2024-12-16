@@ -218,7 +218,6 @@ const App = memo(({ signOut, user }) => {
 	}, [bedrockKnowledgeBases]);
 
 	useEffect(() => {
-		// if websocketConnectionId is not null
 		if (websocketConnectionId) {
 			loadConfigSubaction(
 				"load_models,load_prompt_flows,load_knowledge_bases,load_agents",
@@ -339,8 +338,8 @@ const App = memo(({ signOut, user }) => {
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		// sendMessage(JSON.stringify(data));
-		sendMessageViaRest(data)
+		sendMessage(JSON.stringify(data));
+		// sendMessageViaRest(data)
 	};
 
 	const triggerModelScan = async () => {
