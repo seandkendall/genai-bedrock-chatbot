@@ -729,7 +729,7 @@ class ChatbotWebsiteStack(Stack):
         lambda_router_function.add_event_source(lambda_event_sources.SqsEventSource(send_message_queue))
         
         presigned_url_function.add_event_source(lambda_event_sources.SqsEventSource(presigned_url_queue))
-        model_scan_request_function.add_event_source(lambda_event_sources.SqsEventSource(model_scan_request_queue))
+        model_scan_function.add_event_source(lambda_event_sources.SqsEventSource(model_scan_request_queue))
         # END OF APIGW/REST to SQS to Lambda Code
         
         rest_api_origin = origins.RestApiOrigin(rest_api, origin_path='/')
