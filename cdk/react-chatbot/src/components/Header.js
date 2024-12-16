@@ -701,12 +701,6 @@ const Header = ({
 					/>
 				)}
 			</AppBar>
-			<Typography>
-				Models Loaded: {modelsLoaded ? "Yes" : "No"}
-				Models Length: {models ? models.length : 0}
-				VideoModels Length: {videoModels ? videoModels.length : 0}
-				ImageModels Length: {imageModels ? imageModels.length : 0}
-			</Typography>
 			{modelsLoaded &&
 				(!models || models.length === 0) &&
 				(!videoModels || videoModels.length === 0) &&
