@@ -352,7 +352,7 @@ const App = memo(({ signOut, user }) => {
 				accessToken: `${accessToken}`,
 			};
 			// sendMessage(JSON.stringify(data));
-			sendMessageViaRest(data)
+			sendMessageViaRest(data,"/rest/model-scan-request")
 		} catch (error) {
 			console.error("Error refreshing models:", error);
 		}
@@ -380,7 +380,7 @@ const App = memo(({ signOut, user }) => {
 			accessToken: `${accessToken}`,
 		};
 		// sendMessage(JSON.stringify(data));
-		sendMessageViaRest(data)
+		sendMessageViaRest(data,"/rest/send-message")
 	};
 
 	const loadConversationHistory = async (sessId) => {
@@ -397,7 +397,7 @@ const App = memo(({ signOut, user }) => {
 				accessToken: `${accessToken}`,
 			};
 			// sendMessage(JSON.stringify(data));
-			sendMessageViaRest(data)
+			sendMessageViaRest(data,"/rest/send-message")
 		}
 	};
 
@@ -413,7 +413,7 @@ const App = memo(({ signOut, user }) => {
 			accessToken: `${accessToken}`,
 		};
 		// sendMessage(JSON.stringify(data));
-		sendMessageViaRest(data)
+		sendMessageViaRest(data,"/rest/send-message")
 	};
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: only fire this when lastMessage changes
@@ -499,11 +499,11 @@ const App = memo(({ signOut, user }) => {
 		});
 	}
 
-	const sendMessageViaRest = async (data) => {
+	const sendMessageViaRest = async (data,endpoint) => {
 		try {
 			const { accessToken, idToken } = await getCurrentSession();
 			const response = await axios.post(
-				"/rest/send-message",
+				endpoint,
 				{
 					...data,
 					session_id: appSessionid,
@@ -620,7 +620,7 @@ const App = memo(({ signOut, user }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-		sendMessageViaRest(data)
+		sendMessageViaRest(data,"/rest/send-message")
 		// sendMessage(JSON.stringify(data));
 		setReloadPromptConfig(false);
 	};
@@ -676,7 +676,7 @@ const App = memo(({ signOut, user }) => {
 		setTimeout(scrollToBottom, 0);
 
 		// sendMessage(JSON.stringify(data));
-		sendMessageViaRest(data)
+		sendMessageViaRest(data,"/rest/send-message")
 	};
 
 	const generateVideo = async (prompt, randomMessageId) => {
@@ -727,7 +727,7 @@ const App = memo(({ signOut, user }) => {
 		setTimeout(scrollToBottom, 0);
 
 		// sendMessage(JSON.stringify(data));
-		sendMessageViaRest(data)
+		sendMessageViaRest(data,"/rest/send-message")
 	};
 
 	useEffect(() => {
@@ -1181,7 +1181,9 @@ const App = memo(({ signOut, user }) => {
 		);
 		localStorage.setItem(
 			"load_conversation_list",
-			JSON.stringify(conversationList),
+			JSON.stringify(conversationList.filter(
+				(conversation) => conversation.session_id !== chatId,
+			)),
 		);
 	};
 
