@@ -38,11 +38,10 @@ apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url
 @tracer.capture_lambda_handler
 def lambda_handler(event, context): 
     """Lambda Hander Function"""
-    request_body = json.loads(event['body'])
-    id_token = request_body.get('idToken', 'none')
+    id_token = event.get('idToken', 'none')
     decoded_token = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
     user_id = decoded_token['cognito:username']
-    connection_id = event['requestContext']['connectionId']
+    connection_id = event['connection_id']
     conversation_items = get_conversation_list_from_dynamodb_conversation_history_table(user_id)
     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'load_conversation_list',

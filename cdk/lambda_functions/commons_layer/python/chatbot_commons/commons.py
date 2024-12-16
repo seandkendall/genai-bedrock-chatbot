@@ -55,6 +55,14 @@ def send_websocket_message(logger, apigateway_management_api, connection_id, mes
             ConnectionId=connection_id,
             Data=json.dumps(message, cls=DecimalEncoder).encode()
         )
+    # handle PayloadTooLargeException
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'PayloadTooLargeException':
+            logger.error(f"WebSocket message too large (9012): {str(e)}")
+            logger.error(f"Message: {message}")
+            return
+        else:
+            raise
     except apigateway_management_api.exceptions.GoneException:
         logger.info(f"WebSocket connection is closed (connectionId: {connection_id})")
     except Exception as e:

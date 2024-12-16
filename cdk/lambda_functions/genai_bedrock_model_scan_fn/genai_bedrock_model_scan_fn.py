@@ -30,6 +30,7 @@ user_cache = {}
 
 @metrics.log_metrics
 def lambda_handler(event, context):
+    """Lambda Hander Function"""
     is_websocket_event = False
     
     if 'requestContext' in event:

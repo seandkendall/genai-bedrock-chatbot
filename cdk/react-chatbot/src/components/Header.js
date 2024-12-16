@@ -68,6 +68,7 @@ const Header = ({
 	isMobile,
 	expandedCategories,
 	setExpandedCategories,
+	region,
 }) => {
 	const [anchorEl, setAnchorEl] = React.useState(null);
 
@@ -378,6 +379,9 @@ const Header = ({
 	};
 
 	const formatTimer = (value) => {
+		if (value > 5000) {
+			return `${(value / 1000).toFixed(1)} s`;
+		}
 		return `${value} ms`;
 	};
 
@@ -524,6 +528,11 @@ const Header = ({
 									{user?.signInDetails?.loginId && (
 										<Typography>
 											You are Logged in as: {user?.signInDetails?.loginId}
+										</Typography>
+									)}
+									{region && (
+										<Typography>
+											Deployment Region: {region}
 										</Typography>
 									)}
 									<Typography>

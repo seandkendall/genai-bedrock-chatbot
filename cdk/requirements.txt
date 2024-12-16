@@ -1,6 +1,6 @@
-aws-cdk-lib>=2.131.0
+aws-cdk-lib>=2.173.0
 constructs>=10.0.0
-aws-solutions-constructs.aws-cloudfront-s3
-aws-cdk.aws-scheduler-alpha>=2.164.0a0
-aws-cdk.aws-scheduler-targets-alpha>=2.164.0a0
-aws-cdk.aws-lambda-python-alpha>=2.170.0a0
+aws-solutions-constructs.aws-cloudfront-s3>=2.74.0
+aws-cdk.aws-scheduler-alpha>=2.173.0a0
+aws-cdk.aws-scheduler-targets-alpha>=2.173.0a0
+aws-cdk.aws-lambda-python-alpha>=2.173.0a0

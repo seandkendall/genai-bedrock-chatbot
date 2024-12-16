@@ -151,7 +151,6 @@ start_docker_macos() {
         echo "Docker Desktop is already running."
     fi
 }
-
 # Get the current git repository URL
 repo_url=$(git config --get remote.origin.url)
 # Get the latest commit hash
@@ -347,7 +346,7 @@ if [ -z "${VIRTUAL_ENV}" ]; then
     fi
     exit 1
 fi
-npm install -g aws-cdk
+npm install
 user_pool_id=$(aws cognito-idp list-user-pools --max-results 60 --query 'UserPools[?contains(Name, `ChatbotUserPool`)].Id' --output text)
 if [ -n "$user_pool_id" ] && [ "$user_pool_id" != "None" ]; then
     cognitoDomain=$(aws cognito-idp describe-user-pool --user-pool-id "$user_pool_id" --query 'UserPool.Domain' --output text)

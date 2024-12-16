@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Tooltip, Modal, Box, Typography,Divider, TextField, Button, Link, Switch, FormControl, IconButton, InputLabel, Select, MenuItem } from '@mui/material';
+import { Tooltip, Modal, Box, Typography,Divider, TextField, Button, Link, Switch, FormControl, IconButton, InputLabel, Select, MenuItem,FormControlLabel,Checkbox } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { FaInfoCircle } from 'react-icons/fa';
 import useWebSocket from 'react-use-websocket';
@@ -32,6 +32,9 @@ const SettingsModal = ({
     selectedTitleGenerationTheme,
     setSelectedTitleGenerationTheme,
     models,
+    setRegion,
+    reactThemeMode, 
+    setReactThemeMode,
 }) => {
     const theme = useTheme();
     const [error, setError] = useState('');
@@ -42,6 +45,7 @@ const SettingsModal = ({
     const [localState, setLocalState] = useState({
         pricePer1000InputTokens,
         pricePer1000OutputTokens,
+        reactThemeMode: reactThemeMode,
         selectedMode,
         userSystemPrompt: '',
         systemSystemPrompt: '',
@@ -104,6 +108,15 @@ const SettingsModal = ({
             chatbot_title: newTitle,
         }));
     }, []);
+    
+    const handleDarkModeChange = useCallback((event) => {
+        const newDarkMode = event.target.checked;
+        setLocalState(prevState => ({
+            ...prevState,
+            reactThemeMode: newDarkMode ? 'dark' : 'light',
+        }));
+    }, []);
+    
     
     const handleConvoGenModelChange = useCallback((event) => {
         const newMode = event.target.value;
@@ -252,7 +265,11 @@ const SettingsModal = ({
                         }
                         if (response.conversation_generation_mode){
                             updateLocalState('conversation_generation_mode',response.conversation_generation_mode)
-                            localStorage.setItem('conversation_generation_mode', response.conversation_generation_mode)
+                            if(response.conversation_generation_mode === 'DEFAULT' ){
+                                localStorage.removeItem('conversation_generation_mode')
+                            }else{
+                                localStorage.setItem('conversation_generation_mode', response.conversation_generation_mode)
+                            }
                             setSelectedTitleGenerationMode(response.conversation_generation_mode)
                         }
                         if (response.conversation_generation_theme){
@@ -261,6 +278,7 @@ const SettingsModal = ({
                             setSelectedTitleGenerationTheme(response.conversation_generation_theme)
                         }
                         setEventBridgeScheduleEnabled(response.eventbridge_scheduler_enabled === true)
+                        setRegion(response.region || '')
                         setAllowList(response.allowlist || '')
                         
                     } else if (response.config_type === 'user') {
@@ -353,18 +371,27 @@ const SettingsModal = ({
         setError('');
         setPricePer1000InputTokens(localState.pricePer1000InputTokens);
         setPricePer1000OutputTokens(localState.pricePer1000OutputTokens);
-        
-        localStorage.setItem('chatbot_title', localState.chatbot_title)
-        setChatbotTitle(localState.chatbot_title);
-        document.title = localState.chatbot_title;
+        if(localState.reactThemeMode){
+            setReactThemeMode(localState.reactThemeMode);
+            localStorage.setItem('react_theme_mode', localState.reactThemeMode)
+        }
+        if(localState.chatbot_title){
+            localStorage.setItem('chatbot_title', localState.chatbot_title)
+            setChatbotTitle(localState.chatbot_title);
+            document.title = localState.chatbot_title;
+        }
 
         if(localState.conversation_generation_mode){
-            localStorage.setItem('conversation_generation_mode', localState.conversation_generation_mode)
+            if(localState.conversation_generation_mode === 'DEFAULT' ){
+                localStorage.removeItem('conversation_generation_mode')
+            }else{
+                localStorage.setItem('conversation_generation_mode', localState.conversation_generation_mode)
+            }
             setSelectedTitleGenerationMode(localState.conversation_generation_mode);
             handleConvoGenModelChangeOnSave(localState.conversation_generation_mode)
         }
 
-        if(localState.conversation_generation_mode){
+        if(localState.conversation_generation_theme){
             localStorage.setItem('conversation_generation_theme', localState.conversation_generation_theme)
             setSelectedTitleGenerationTheme(localState.conversation_generation_theme);
         }
@@ -410,9 +437,16 @@ const SettingsModal = ({
         left: '50%',
         transform: 'translate(-50%, -50%)',
         width: '80vw',
-        bgcolor: 'background.paper',
+        bgcolor: reactThemeMode === 'light' 
+                ? 'background.paper' 
+                : 'background.default',
+        color: reactThemeMode === 'light' 
+                ? 'text.primary' 
+                : 'text.secondary',
         border: '2px solid #000',
-        boxShadow: 24,
+        boxShadow: reactThemeMode === 'light' 
+                 ? '0px 0px 15px 3px rgba(0, 0, 0, 0.2)' 
+                 : '0px 0px 15px 3px rgba(255, 255, 255, 0.5)',
         maxHeight: '80vh',
         padding: theme.spacing(2),
         overflowY: 'auto',
@@ -452,7 +486,7 @@ const SettingsModal = ({
     return (
         <Modal open={showSettingsModal} onClose={onClose}>
             <Box sx={modalStyle}>
-                <Typography variant="h6" component="h2">
+                <Typography variant="h6" component="h2" color={reactThemeMode === 'light' ? 'text.primary' : 'text.secondary'}>
                     Settings
                 </Typography>
                 <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
@@ -462,6 +496,8 @@ const SettingsModal = ({
                         </Tooltip>
                     </Box>
                 </Typography>
+                {/* checked = reactThemeMode is equal to dark */}
+                <FormControlLabel control={<Checkbox checked={localState.reactThemeMode === 'dark'} onChange={handleDarkModeChange}  />} label="Enable Dark Mode" style={{ marginTop: theme.spacing(2) }} />
                 <Typography variant="h6" style={{ marginTop: theme.spacing(2) }}>
                     <Tooltip title="Chatbot Title" arrow>
                         <TextField
@@ -471,6 +507,9 @@ const SettingsModal = ({
                             name="ChatbotTitle"
                             fullWidth
                             margin="normal"
+                            color={reactThemeMode === 'light' 
+                                ? 'primary' 
+                                : 'secondary'}
                         />
                     </Tooltip>
                 </Typography>
@@ -482,6 +521,9 @@ const SettingsModal = ({
                         fullWidth
                         margin="normal"
                         type="number"
+                        color={reactThemeMode === 'light' 
+                            ? 'primary' 
+                            : 'secondary'}
                     />
                 </Tooltip>
 
@@ -493,6 +535,9 @@ const SettingsModal = ({
                         fullWidth
                         margin="normal"
                         type="number"
+                        color={reactThemeMode === 'light' 
+                            ? 'primary' 
+                            : 'secondary'}
                     />
                 </Tooltip>
 
@@ -530,6 +575,9 @@ const SettingsModal = ({
                             name="ConversationGenerationTheme"
                             fullWidth
                             margin="normal"
+                            color={reactThemeMode === 'light' 
+                                ? 'primary' 
+                                : 'secondary'}
                         />
                     </Tooltip>
                 </Typography>
@@ -578,6 +626,9 @@ const SettingsModal = ({
                                 name="systemSystemPrompt"
                                 fullWidth
                                 margin="normal"
+                                color={reactThemeMode === 'light' 
+                                    ? 'primary' 
+                                    : 'secondary'}
                                 style={{ display: localState.systemPromptType !== 'user' ? 'block' : 'none' }}
                             />
                             <TextField
@@ -589,6 +640,9 @@ const SettingsModal = ({
                                 name="userSystemPrompt"
                                 fullWidth
                                 margin="normal"
+                                color={reactThemeMode === 'light' 
+                                    ? 'primary' 
+                                    : 'secondary'}
                                 style={{ display: localState.systemPromptType === 'user' ? 'block' : 'none' }}
                             />
                         </Tooltip>

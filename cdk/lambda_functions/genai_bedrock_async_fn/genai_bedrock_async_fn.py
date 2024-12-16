@@ -22,7 +22,6 @@ logger = Logger(service="BedrockAsync")
 metrics = Metrics()
 tracer = Tracer()
 
-
 # Initialize DynamoDB client
 dynamodb = boto3.client('dynamodb')
 config_table_name = os.environ.get('DYNAMODB_TABLE_CONFIG')
@@ -63,15 +62,10 @@ apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url
 system_prompt = ''
 
 @tracer.capture_lambda_handler
-def lambda_handler(event, context):   
+def lambda_handler(event, context):  
     """Lambda Hander Function"""
-    # logger.info("Executing Bedrock Async Function")
     try:
-        # Check if the event is a WebSocket event
-        if event['requestContext']['eventType'] == 'MESSAGE':
-            # Handle WebSocket message
-            process_websocket_message(event)
-
+        process_websocket_message(event)
         return {'statusCode': 200}
 
     except Exception as e:    
@@ -80,20 +74,17 @@ def lambda_handler(event, context):
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
 @tracer.capture_method
-def process_websocket_message(event):
+def process_websocket_message(request_body):
     """Function to process a websocket message"""
     global system_prompt
-    # Extract the request body and session ID from the WebSocket event
-    request_body = json.loads(event['body'])
-    id_token = request_body.get('idToken', 'none')
-    decoded_token = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
-    user_id = decoded_token['cognito:username']
-    tracer.put_annotation(key="UserID", value=user_id)
-    message_type = request_body.get('type', '')
-    tracer.put_annotation(key="MessageType", value=message_type)
+    access_token = request_body.get('access_token', {})
     session_id = request_body.get('session_id', 'XYZ')
+    connection_id = request_body.get('connection_id', 'ZYX')
+    user_id = access_token['payload']['sub']
+    message_type = request_body.get('type', '')
     tracer.put_annotation(key="SessionID", value=session_id)
-    connection_id = event['requestContext']['connectionId']
+    tracer.put_annotation(key="UserID", value=user_id)
+    tracer.put_annotation(key="MessageType", value=message_type)
     tracer.put_annotation(key="ConnectionID", value=connection_id)
     # Check if the WebSocket connection is open
     try:
@@ -189,10 +180,11 @@ def process_websocket_message(event):
         tracer.put_annotation(key="PromptUserOrSystem", value=system_prompt_user_or_system)
         if not system_prompt or reload_prompt_config:
             system_prompt = load_system_prompt_config(system_prompt_user_or_system,user_id)
-        selected_mode = request_body.get('selectedMode', '')
+        selected_mode = request_body.get('selected_mode', {})
         title_theme = request_body.get('titleGenTheme', '')
         title_gen_model = request_body.get('titleGenModel', '')
-        # if title_gen_model includes a '/' then split it and take the second part
+        if title_gen_model == 'DEFAULT' or not title_gen_model:
+            title_gen_model = ''
         if '/' in title_gen_model:
             title_gen_model = title_gen_model.split('/')[1]
         
@@ -208,7 +200,6 @@ def process_websocket_message(event):
         if prompt:
             converse_content_array.append({'text': prompt})
             converse_content_with_s3_pointers.append({'text': prompt})
-        
         for attachment in processed_attachments:
             if attachment['type'].startswith('image/'):
                 converse_content_array.append({'image':{'format': attachment['type'].split('/')[1],
@@ -230,7 +221,6 @@ def process_websocket_message(event):
                                                             's3source': {'s3bucket': attachment['s3bucket'], 's3key': attachment['s3key']}
                                                             }
                                                 })
-
         message_content = process_message_history_converse(existing_history) + [{
                 'role': 'user',
                 'content': converse_content_array,
@@ -294,7 +284,8 @@ def process_websocket_message(event):
                 assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)
                 store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id,chat_title,new_conversation,selected_model_category, message_stop_reason)
             except Exception as e:
-                logger.exception(e)
+                if 'ThrottlingException' not in str(e):
+                    logger.exception(e)
                 logger.warn(f"Error calling bedrock model (912): {str(e)}")
                 if 'have access to the model with the specified model ID.' in str(e):
                     model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
@@ -433,13 +424,16 @@ def store_conversation_history_converse(session_id, selected_model_id, existing_
             # Update DynamoDB to indicate S3 storage
             dynamodb.update_item(
                 TableName=conversations_table_name,
-                Key={'session_id': session_id},
+                Key={
+                    'session_id': {'S': session_id} 
+                },
                 UpdateExpression="SET conversation_history_in_s3=:true, last_modified_date = :current_time",
                 ExpressionAttributeValues={
-                    ':true': True,
+                    ':true': {'BOOL': True}, 
                     ':current_time': {'N': current_timestamp}
                 }
             )
+
         else:
             # Store in DynamoDB
             logger.info(f"Storing TITLE for conversation history in DynamoDB: {title}")

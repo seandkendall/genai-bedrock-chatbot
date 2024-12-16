@@ -1,6 +1,7 @@
 from aws_cdk import ( # type: ignore
     Stack, Duration, CfnOutput,Fn,
     aws_s3 as s3,
+    aws_sqs as sqs,
     aws_lambda as _lambda,
     aws_lambda_python_alpha as lambda_python,
     aws_s3_deployment as s3deploy,
@@ -18,6 +19,7 @@ from aws_cdk import ( # type: ignore
     aws_events as events,
     aws_scheduler_alpha as scheduler,
     aws_scheduler_targets_alpha as scheduler_targets,
+    aws_lambda_event_sources as lambda_event_sources,
 )
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -272,6 +274,7 @@ class ChatbotWebsiteStack(Stack):
             self_sign_up_enabled=True,
             sign_in_aliases={"email": True},  # Enable sign-in with email
             auto_verify={"email": True},  # Auto-verify email addresses
+            feature_plan=cognito.FeaturePlan.ESSENTIALS,
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
             removal_policy=RemovalPolicy.DESTROY,
             password_policy=cognito.PasswordPolicy(  # Configure password policy
@@ -551,6 +554,7 @@ class ChatbotWebsiteStack(Stack):
                                           "ALLOWLIST_DOMAIN": allowlist_domain_string,
                                           "IMAGE_GENERATION_FUNCTION_NAME": image_generation_function.function_name,
                                           "VIDEO_GENERATION_FUNCTION_NAME": video_generation_function.function_name,
+                                          "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                                           "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                                           "POWERTOOLS_SERVICE_NAME":"BEDROCK_ROUTER",
                                         }
@@ -587,7 +591,61 @@ class ChatbotWebsiteStack(Stack):
             actions=["s3:PutObject"],
             resources=[attachment_bucket.arn_for_objects("*")],
         ))
+        # BEGINING OF OLD CODE
+        # rest_api = apigw.RestApi(self, "ChatbotRestApi",
+        #     description="RESTAPI for KendallChatbot",
+        #     deploy_options=apigw.StageOptions(stage_name="rest"),
+        #     default_cors_preflight_options=apigw.CorsOptions(
+        #         allow_origins=apigw.Cors.ALL_ORIGINS,
+        #         allow_methods=apigw.Cors.ALL_METHODS
+        #     )
+        # )
+        # # Create a Cognito authorizer
+        # cognito_authorizer = apigw.CognitoUserPoolsAuthorizer(
+        #     self, "CognitoAuthorizer",
+        #     cognito_user_pools=[user_pool],
+        #     identity_source="method.request.header.Authorization"
+        # )
+        # send_message_resource = rest_api.root.add_resource("send-message")
+        # send_message_resource.add_method("POST", apigw.LambdaIntegration(lambda_router_function),
+        #                                   authorization_type=apigw.AuthorizationType.COGNITO,
+        #                                   authorizer=cognito_authorizer)
+        # presigned_url_resource = rest_api.root.add_resource("get-presigned-url")
+        # presigned_url_resource.add_method("POST", apigw.LambdaIntegration(presigned_url_function),
+        #                                   authorization_type=apigw.AuthorizationType.COGNITO,
+        #                                   authorizer=cognito_authorizer)
+        
+        # # Add the REST API as an origin to the CloudFront distribution
+        # rest_api_origin = origins.RestApiOrigin(rest_api, origin_path='/')
+        # cloudfront_distribution.add_behavior("/rest/*", rest_api_origin,
+        #     allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
+        #     viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY
+        # )
+        # END OF OLD CODE
+        
+        # START OF NEW CODE
+        # Create SQS Queues for each Lambda function
+        send_message_queue = sqs.Queue(self, "SendMessageQueue")
+        presigned_url_queue = sqs.Queue(self, "PresignedUrlQueue")
 
+        # Create IAM Roles for API Gateway to send messages to SQS
+        send_message_role = iam.Role(self, "SendMessageApiGatewayRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com")
+        )
+        send_message_role.add_to_policy(iam.PolicyStatement(
+            actions=["sqs:SendMessage"],
+            resources=[send_message_queue.queue_arn]
+        ))
+
+        presigned_url_role = iam.Role(self, "PresignedUrlApiGatewayRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com")
+        )
+        presigned_url_role.add_to_policy(iam.PolicyStatement(
+            actions=["sqs:SendMessage"],
+            resources=[presigned_url_queue.queue_arn]
+        ))
+
+        # Create a REST API
         rest_api = apigw.RestApi(self, "ChatbotRestApi",
             description="RESTAPI for KendallChatbot",
             deploy_options=apigw.StageOptions(stage_name="rest"),
@@ -596,48 +654,83 @@ class ChatbotWebsiteStack(Stack):
                 allow_methods=apigw.Cors.ALL_METHODS
             )
         )
-        # Add a resource and method for the pre-signed URL endpoint
-        presigned_url_resource = rest_api.root.add_resource("get-presigned-url")
-        presigned_url_integration = apigw.LambdaIntegration(presigned_url_function)
-        # Create a Cognito authorizer
+
+        # Create Cognito authorizer
         cognito_authorizer = apigw.CognitoUserPoolsAuthorizer(
             self, "CognitoAuthorizer",
             cognito_user_pools=[user_pool],
             identity_source="method.request.header.Authorization"
         )
-        presigned_url_resource.add_method("POST", presigned_url_integration,
-                                          authorization_type=apigw.AuthorizationType.COGNITO,
-                                          authorizer=cognito_authorizer)
+
+        # Configure API Gateway to send messages to the Send Message Queue
+        send_message_resource = rest_api.root.add_resource("send-message")
+        send_message_resource.add_method("POST", apigw.AwsIntegration(
+            service="sqs",
+            path=f"{self.account}/{send_message_queue.queue_name}",
+            integration_http_method="POST",
+            options=apigw.IntegrationOptions(
+                credentials_role=send_message_role,
+                passthrough_behavior=apigw.PassthroughBehavior.NEVER,
+                request_parameters={
+                    "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'"
+                },
+                request_templates={
+                    # $context.requestOverride.header.header_name	
+                    "application/json": "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
+                },
+                integration_responses=[
+                    apigw.IntegrationResponse(
+                        status_code="200",
+                        response_templates={
+                            "application/json": '{"done": true}'
+                        }
+                    )
+                ]
+            )
+        ), authorization_type=apigw.AuthorizationType.COGNITO,
+           authorizer=cognito_authorizer,
+           method_responses=[apigw.MethodResponse(status_code="200")])
+
+        # Configure API Gateway to send messages to the Presigned URL Queue
+        presigned_url_resource = rest_api.root.add_resource("get-presigned-url")
+        presigned_url_resource.add_method("POST", apigw.AwsIntegration(
+            service="sqs",
+            path=f"{self.account}/{presigned_url_queue.queue_name}",
+            integration_http_method="POST",
+            options=apigw.IntegrationOptions(
+                credentials_role=presigned_url_role,
+                passthrough_behavior=apigw.PassthroughBehavior.NEVER,
+                request_parameters={
+                    "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'"
+                },
+                request_templates={
+                    "application/json": "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
+                },
+                integration_responses=[
+                    apigw.IntegrationResponse(
+                        status_code="200",
+                        response_templates={
+                            "application/json": '{"done": true}'
+                        }
+                    )
+                ]
+            )
+        ), authorization_type=apigw.AuthorizationType.COGNITO,
+           authorizer=cognito_authorizer,
+           method_responses=[apigw.MethodResponse(status_code="200")])
+
+        # Create Lambda functions and add SQS event sources
+        lambda_router_function.add_event_source(lambda_event_sources.SqsEventSource(send_message_queue))
         
-        # Add the REST API as an origin to the CloudFront distribution
+        presigned_url_function.add_event_source(lambda_event_sources.SqsEventSource(presigned_url_queue))
+        # END OF NEW CODE
+        
         rest_api_origin = origins.RestApiOrigin(rest_api, origin_path='/')
         cloudfront_distribution.add_behavior("/rest/*", rest_api_origin,
             allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
             viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY
         )
         
-        # logs_url = "https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:live-tail$3FlogGroupArns$3D~(~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-GenAIBedrockConfigFunctionF3AC-9WbfqFdyLTdv*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-GenAIBedrockRouterFunction22EE-nOhUafDmPRFr*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-ImageGenerationFunction64C380B-mqVKcQUOzwV0*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-ModelScanFunction0FE96921-eUkzvBLPTA2y*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-genaibedrockagentsclientfn3E45-9x2jvfh4CyYI*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-genaibedrockfnasync7C01F7BC-JVSZZGqXQooH*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-genaibedrockfnconversations277-mrOWjbPnatK0*3a*2a)"
-        
-        # logs_resource = rest_api.root.add_resource("logs")
-        # http_integration = apigw.HttpIntegration(
-        #     logs_url,  # Replace with your actual URL
-        #     http_method="GET",  # Or whichever HTTP method you need
-        #     proxy=True,  # This makes it a proxy integration
-        #     options=apigw.IntegrationOptions(
-        #         request_parameters={
-        #             "integration.request.header.host": "method.request.header.host"
-        #         }
-        #     )
-        # )
-        # logs_resource.add_method(
-        #     "GET",  # Or whichever HTTP method you need
-        #     http_integration,
-        #     method_responses=[
-        #         apigw.MethodResponse(status_code="200"),
-        #         apigw.MethodResponse(status_code="400"),
-        #         apigw.MethodResponse(status_code="500")
-        #     ]
-        # )
         
         # Create a Lambda integrations
         bedrock_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
@@ -733,6 +826,7 @@ class ChatbotWebsiteStack(Stack):
             resources=["*"],
         ))
         
+
         # List of Lambda functions
         lambda_functions = [
             image_generation_function,

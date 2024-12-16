@@ -7,6 +7,7 @@ import React, {
 	lazy,
 	Suspense,
 } from "react";
+import axios from "axios";
 import DOMPurify from "dompurify";
 import Header from "./components/Header";
 import ChatHistory from "./components/ChatHistory";
@@ -36,15 +37,12 @@ async function getCurrentSession() {
 	}
 }
 
-const theme = createTheme({
-	palette: {
-		mode: "light",
-	},
-});
-
 Amplify.configure(amplifyConfig);
 
 const App = memo(({ signOut, user }) => {
+	const [region, setRegion] = useState('');
+	const [websocketConnectionId, setWebsocketConnectionId] = useState(null);
+	const [reactThemeMode, setReactThemeMode] = useState(localStorage.getItem("react_theme_mode") || 'light');
 	const [firstLoad, setFirstLoad] = useState(true);
 	const [messages, setMessages] = useState([]);
 	const [uploadedFileNames, setUploadedFileNames] = useState([]);
@@ -141,20 +139,28 @@ const App = memo(({ signOut, user }) => {
 		useState("Loading Models");
 	const [attachments, setAttachments] = useState([]);
 	const [allowlist, setAllowList] = useState(null);
+	
+	const lastMessageRef = useRef(null);
 	const messageInputRef = useRef(null);
 
 	const [sidebarWidth, setSidebarWidth] = useState(250);
 	const [isDragging, setIsDragging] = useState(false);
 	const isMobile = useMediaQuery("(max-width:600px)");
 
+
 	// Use the useWebSocket hook to manage the WebSocket connection
 	// eslint-disable-next-line
-	const { sendMessage, lastMessage, readyState } = useWebSocket(websocketUrl, {
+	const { sendMessage, lastMessage, readyState, getWebSocket } = useWebSocket(websocketUrl, {
 		shouldReconnect: (closeEvent) => true,
 		reconnectAttempts: Number.POSITIVE_INFINITY, // Keep trying to reconnect
 		reconnectInterval: (attemptNumber) =>
 			Math.min(1000 * 2 ** attemptNumber, 30000), // Exponential backoff up to 30 seconds
 	});
+	useEffect(() => {
+		if (readyState === WebSocket.OPEN) {
+			sendMessage(JSON.stringify({ type: "ping" }));
+		}
+	  }, [readyState, getWebSocket]);
 
 	useEffect(() => {
 		const interval = setInterval(() => {
@@ -212,10 +218,14 @@ const App = memo(({ signOut, user }) => {
 	}, [bedrockKnowledgeBases]);
 
 	useEffect(() => {
-		loadConfigSubaction(
-			"load_models,load_prompt_flows,load_knowledge_bases,load_agents",
-		);
-	}, []);
+		// if websocketConnectionId is not null
+		if (websocketConnectionId) {
+			loadConfigSubaction(
+				"load_models,load_prompt_flows,load_knowledge_bases,load_agents",
+			);
+		}
+			
+	}, [websocketConnectionId]);
 
 	const localSignOut = () => {
 		localStorage.clear();
@@ -329,7 +339,8 @@ const App = memo(({ signOut, user }) => {
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		sendMessage(JSON.stringify(data));
+		// sendMessage(JSON.stringify(data));
+		sendMessageViaRest(data)
 	};
 
 	const triggerModelScan = async () => {
@@ -342,7 +353,8 @@ const App = memo(({ signOut, user }) => {
 				idToken: `${idToken}`,
 				accessToken: `${accessToken}`,
 			};
-			sendMessage(JSON.stringify(data));
+			// sendMessage(JSON.stringify(data));
+			sendMessageViaRest(data)
 		} catch (error) {
 			console.error("Error refreshing models:", error);
 		}
@@ -369,7 +381,8 @@ const App = memo(({ signOut, user }) => {
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		sendMessage(JSON.stringify(data));
+		// sendMessage(JSON.stringify(data));
+		sendMessageViaRest(data)
 	};
 
 	const loadConversationHistory = async (sessId) => {
@@ -381,11 +394,12 @@ const App = memo(({ signOut, user }) => {
 				type: "load",
 				session_id: sessId ? sessId : appSessionid,
 				kb_session_id: kbSessionId,
-				selectedMode: selectedMode,
+				selected_mode: selectedMode,
 				idToken: `${idToken}`,
 				accessToken: `${accessToken}`,
 			};
-			sendMessage(JSON.stringify(data));
+			// sendMessage(JSON.stringify(data));
+			sendMessageViaRest(data)
 		}
 	};
 
@@ -396,11 +410,12 @@ const App = memo(({ signOut, user }) => {
 			type: "clear_conversation",
 			session_id: session_id,
 			kb_session_id: kbSessionId,
-			selectedMode: selectedMode,
+			selected_mode: selectedMode,
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		sendMessage(JSON.stringify(data));
+		// sendMessage(JSON.stringify(data));
+		sendMessageViaRest(data)
 	};
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: only fire this when lastMessage changes
@@ -486,6 +501,31 @@ const App = memo(({ signOut, user }) => {
 		});
 	}
 
+	const sendMessageViaRest = async (data) => {
+		try {
+			const { accessToken, idToken } = await getCurrentSession();
+			const response = await axios.post(
+				"/rest/send-message",
+				{
+					...data,
+					session_id: appSessionid,
+					connection_id: websocketConnectionId,
+					access_token: accessToken,
+				},
+				{
+					headers: {
+						Authorization: `Bearer ${idToken}`,
+						"Content-Type": "application/json",
+					},
+				},
+			);
+			// const { url, fields } = response.data;
+		} catch (error) {
+			console.error("Error sending message:", error);
+			throw error;
+		}
+	};
+
 	const onSend = async (message, attachments, retryPreviousMessage) => {
 		// if appsessionid is null then setappsessionid
 		let newAppSessionid;
@@ -527,12 +567,13 @@ const App = memo(({ signOut, user }) => {
 
 		const data = {
 			prompt: sanitizedMessage,
+			type: "chat",
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
 			timestamp_local_timezone: timezone,
 			session_id: newAppSessionid ? newAppSessionid : appSessionid,
 			kb_session_id: kbSessionId,
-			selectedMode: selectedMode,
+			selected_mode: selectedMode,
 			titleGenModel: selectedTitleGenerationMode,
 			titleGenTheme: selectedTitleGenerationTheme,
 			idToken: `${idToken}`,
@@ -581,8 +622,8 @@ const App = memo(({ signOut, user }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-
-		sendMessage(JSON.stringify(data));
+		sendMessageViaRest(data)
+		// sendMessage(JSON.stringify(data));
 		setReloadPromptConfig(false);
 	};
 
@@ -604,7 +645,7 @@ const App = memo(({ signOut, user }) => {
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
 			session_id: newAppSessionid ? newAppSessionid : appSessionid,
-			selectedMode: selectedMode,
+			selected_mode: selectedMode,
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 			stylePreset: stylePreset,
@@ -636,7 +677,8 @@ const App = memo(({ signOut, user }) => {
 
 		setTimeout(scrollToBottom, 0);
 
-		sendMessage(JSON.stringify(data));
+		// sendMessage(JSON.stringify(data));
+		sendMessageViaRest(data)
 	};
 
 	const generateVideo = async (prompt, randomMessageId) => {
@@ -656,7 +698,7 @@ const App = memo(({ signOut, user }) => {
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
 			session_id: newAppSessionid ? newAppSessionid : appSessionid,
-			selectedMode: selectedMode,
+			selected_mode: selectedMode,
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
@@ -686,7 +728,8 @@ const App = memo(({ signOut, user }) => {
 
 		setTimeout(scrollToBottom, 0);
 
-		sendMessage(JSON.stringify(data));
+		// sendMessage(JSON.stringify(data));
+		sendMessageViaRest(data)
 	};
 
 	useEffect(() => {
@@ -856,7 +899,12 @@ const App = memo(({ signOut, user }) => {
 			} else {
 				if (typeof message === "object" && message !== null) {
 					const messageString = JSON.stringify(message);
-					if (messageString.includes("no_conversation_to_load")) {
+					if (messageString.includes("pong")) {
+						// log current time and connectionId
+						// console.log(`pong received at ${new Date().toISOString()} with connection_id: ${message?.connection_id}`)
+						message.connection_id &&
+								setWebsocketConnectionId(message.connection_id);
+					} else if (messageString.includes("no_conversation_to_load")) {
 						setIsRefreshing(false);
 					} else if (messageString.includes("Access Token has expired")) {
 						try {
@@ -872,8 +920,6 @@ const App = memo(({ signOut, user }) => {
 				} else if (typeof message === "string") {
 					if (message.includes("no_conversation_to_load")) {
 						setIsRefreshing(false);
-					} else if (message.includes("pong")) {
-						// do nothing
 					} else if (!message.includes("Message Received")) {
 						if (isRefreshing) setIsRefreshing(false);
 						console.log("Uncaught String Message 2:");
@@ -919,8 +965,14 @@ const App = memo(({ signOut, user }) => {
 		if (message.message_stop_reason) {
 			let max_token_message;
 			if (message.message_stop_reason === "max_tokens") {
+				const needs_code_end = message.needs_code_end
 				if (message?.amazon_bedrock_invocation_metrics?.outputTokenCount) {
-					max_token_message = `The response from this model has reached the maximum size. Max Size: ${message.amazon_bedrock_invocation_metrics.outputTokenCount} Tokens`;
+					// if needs_code_end is true, then prepend ``` to max_token_message
+					if (needs_code_end) {
+						max_token_message = `\`\`\`\n\rThe response from this model has reached the maximum size. Max Size: ${message.amazon_bedrock_invocation_metrics.outputTokenCount} Tokens.`;
+					}else{
+						max_token_message = ` The response from this model has reached the maximum size. Max Size: ${message.amazon_bedrock_invocation_metrics.outputTokenCount} Tokens`;
+					}
 				} else {
 					max_token_message =
 						"The response from this model has reached the maximum size.";
@@ -1213,8 +1265,14 @@ const App = memo(({ signOut, user }) => {
 		return selectedObject;
 	};
 
+	const reactThemePropviderTheme = createTheme({
+		palette: {
+			mode: reactThemeMode,
+		},
+	});
+
 	return (
-		<ThemeProvider theme={theme}>
+		<ThemeProvider theme={reactThemePropviderTheme}>
 			<CssBaseline />
 			<div className="app">
 				<Header
@@ -1255,6 +1313,7 @@ const App = memo(({ signOut, user }) => {
 					isMobile={isMobile}
 					expandedCategories={expandedCategories}
 					setExpandedCategories={setExpandedCategories}
+					region={region}
 				/>
 				<Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
 					<Box
@@ -1286,6 +1345,7 @@ const App = memo(({ signOut, user }) => {
 							bedrockKnowledgeBases={bedrockKnowledgeBases}
 							setExpandedCategories={setExpandedCategories}
 							isDisabled={isDisabled}
+							reactThemeMode={reactThemeMode}
 						/>
 						<div className="resizer" onMouseDown={handleMouseDown} />
 					</Box>
@@ -1319,6 +1379,8 @@ const App = memo(({ signOut, user }) => {
 								setRequireConversationLoad={setRequireConversationLoad}
 								setAppSessionId={setAppSessionId}
 								selectedChatId={selectedChatId}
+								reactThemeMode={reactThemeMode}
+								websocketConnectionId={websocketConnectionId}
 							/>
 						</div>
 						<MessageInput
@@ -1337,6 +1399,7 @@ const App = memo(({ signOut, user }) => {
 							ref={messageInputRef}
 							uploadedFileNames={uploadedFileNames}
 							setUploadedFileNames={setUploadedFileNames}
+							reactThemeMode={reactThemeMode}
 						/>
 					</Box>
 				</Box>
@@ -1378,6 +1441,9 @@ const App = memo(({ signOut, user }) => {
 						selectedTitleGenerationTheme={selectedTitleGenerationTheme}
 						setSelectedTitleGenerationTheme={setSelectedTitleGenerationTheme}
 						models={models}
+						setRegion={setRegion}
+						reactThemeMode={reactThemeMode}
+						setReactThemeMode={setReactThemeMode}
 					/>
 				</Suspense>
 			</div>

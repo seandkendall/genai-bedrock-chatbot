@@ -87,6 +87,7 @@ const MessageInput = forwardRef(
 			setIsRefreshingMessage,
 			uploadedFileNames,
 			setUploadedFileNames,
+			reactThemeMode,
 		},
 		ref,
 	) => {
@@ -401,6 +402,7 @@ const MessageInput = forwardRef(
 								sx={{
 									display: "flex",
 									alignItems: "center",
+									// MediumSlateBlue
 									backgroundColor: isImageFile(file)
 										? "lightgreen"
 										: isVideoFile(file)

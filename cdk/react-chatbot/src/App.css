@@ -14,7 +14,15 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #ffffff;
+  background-color: var(--light-bg);
+  color: var(--light-text);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: var(--dark-bg);
+    color: var(--dark-text);
+  }
 }
 
 .app {
@@ -31,12 +39,19 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 10px 20px;
-  background-color: #001529;
-  color: #ffffff;
+  background-color: var(--light-header-bg);
+  color: var(--light-header-text);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
   z-index: 100;
+}
+
+@media (prefers-color-scheme: dark) {
+  .header {
+    background-color: var(--dark-header-bg);
+    color: var(--dark-header-text);
+  }
 }
 
 .header h1 {
@@ -133,13 +148,24 @@ body {
 
 .human {
   align-self: flex-end;
-  background-color: #e0e0e0;
+  background-color: var(--light-chat-human-bg);
 }
 
 .assistant {
   align-self: flex-start;
-  background-color: #f2f2f7;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  background-color: var(--light-chat-assistant-bg);
+  box-shadow: 0 1px 2px var(--light-chat-assistant-shadow);
+}
+
+@media (prefers-color-scheme: dark) {
+  .human {
+    background-color: var(--dark-chat-human-bg);
+  }
+
+  .assistant {
+    background-color: var(--dark-chat-assistant-bg);
+    box-shadow: 0 1px 2px var(--dark-chat-assistant-shadow);
+  }
 }
 
 .message-header {
@@ -208,11 +234,17 @@ body {
   align-items: center;
   padding: 10px 20px;
   padding-right: 30px;
-  background-color: #f2f2f7;
+  background-color: var(--light-input-bg);
   position: sticky;
   bottom: 0;
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
   z-index: 90;
+}
+
+@media (prefers-color-scheme: dark) {
+  .message-input {
+    background-color: var(--dark-input-bg);
+  }
 }
 
 .input-box {
@@ -236,7 +268,7 @@ body {
 .send-btn {
   margin-left: 10px;
   padding: 10px;
-  background-color: #007aff;
+  background-color: var(--light-btn-bg);
   color: #ffffff;
   border: none;
   border-radius: 50%;
@@ -248,7 +280,17 @@ body {
 }
 
 .send-btn:hover {
-  background-color: #0060c0;
+  background-color: var(--light-btn-hover-bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  .send-btn {
+    background-color: var(--dark-btn-bg);
+  }
+
+  .send-btn:hover {
+    background-color: var(--dark-btn-hover-bg);
+  }
 }
 
 /* Left Sidebar */
@@ -262,10 +304,17 @@ body {
   position: fixed;
   top: var(--header-height);
   left: 0;
-  background-color: #f4f4f4;
-  border-right: 1px solid #ddd;
+  background-color: var(--light-sidebar-bg);
+  border-right: 1px solid var(--light-sidebar-border);
   overflow-y: auto;
   z-index: 90;
+}
+
+@media (prefers-color-scheme: dark) {
+  .left-sidebar {
+    background-color: var(--dark-sidebar-bg);
+    border-right: 1px solid var(--dark-sidebar-border);
+  }
 }
 
 .resizer {
@@ -372,14 +421,6 @@ body {
 .left-sidebar .MuiListItem-root {
   cursor: pointer;
   transition: background-color 0.3s ease;
-}
-
-.left-sidebar .MuiListItem-root:hover {
-  background-color: rgba(0, 0, 255, 0.1);
-}
-
-.left-sidebar .Mui-selected {
-  background-color: rgba(0, 255, 0, 0.3);
 }
 
 /* Responsive Styles */

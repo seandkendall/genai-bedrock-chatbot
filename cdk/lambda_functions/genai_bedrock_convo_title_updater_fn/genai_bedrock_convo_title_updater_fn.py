@@ -46,3 +46,51 @@ def lambda_handler(event, context):
     get_conversation_list_from_dynamodb_conversation_history_bucket(user_id)
 
     return {'statusCode': 200}
+
+@tracer.capture_method
+def get_conversation_list_from_dynamodb_conversation_history_bucket(user_id):
+    """Function to get conversation list from DynamoDB, sorted by last_modified_date desc."""
+    try:
+        response = conversations_table.query(
+            IndexName='user_id-index',
+            KeyConditionExpression=Key('user_id').eq(user_id),
+            ProjectionExpression="#session_id, #selected_model_id, #last_modified_date, #title",
+            ExpressionAttributeNames={
+                "#session_id": "session_id",
+                "#title":"title",
+                "#selected_model_id": "selected_model_id",
+                "#last_modified_date": "last_modified_date",
+            },
+            ScanIndexForward=False
+        )
+        # Return an empty list if no items are found
+        return response.get('Items', [])
+    except Exception as e:
+        logger.exception(e)
+        logger.error("Error querying DynamoDB (7266)")
+        return []
+
+@tracer.capture_method
+def process_websocket_message(event):
+    """Function to process a websocket message"""
+    # Extract the request body and session ID from the WebSocket event
+    request_body = json.loads(event['body'])
+    id_token = request_body.get('idToken', 'none')
+    decoded_token = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
+    user_id = decoded_token['cognito:username']
+    message_type = request_body.get('type', '')
+    tracer.put_annotation(key="MessageType", value=message_type)
+    session_id = request_body.get('session_id', 'XYZ')
+    tracer.put_annotation(key="SessionID", value=session_id)
+    connection_id = event['requestContext']['connectionId']
+    tracer.put_annotation(key="ConnectionID", value=connection_id)
+    # Check if the WebSocket connection is open
+    try:
+        connection = apigateway_management_api.get_connection(ConnectionId=connection_id)
+        connection_state = connection.get('ConnectionStatus', 'OPEN')
+        if connection_state != 'OPEN':
+            logger.info(f"WebSocket connection is not open (state: {connection_state})")
+            return
+    except apigateway_management_api.exceptions.GoneException:
+        logger.error(f"WebSocket connection is closed (connectionId: {connection_id})")
+        return

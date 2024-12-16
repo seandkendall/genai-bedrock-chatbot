@@ -33,24 +33,26 @@ SLEEP_TIME = 2
 def lambda_handler(event, context):
     """Lambda Handler Function"""
     try:
-        request_body = json.loads(event['body'])
-        prompt = request_body.get('prompt', '')
-        id_token = request_body.get('idToken', 'none')
-        decoded_token = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
-        user_id = decoded_token['cognito:username']
-        selected_mode = request_body.get('selectedMode', 'none')
+        access_token = event.get('access_token', {})
+        session_id = event.get('session_id', 'XYZ')
+        connection_id = event.get('connection_id', 'ZYX')
+        user_id = access_token['payload']['sub']
+        message_type = event.get('type', '')
+        selected_mode = event.get('selected_mode', {})
         selected_model_category = selected_mode.get('category')
-        message_type = request_body.get('type', '')
-        session_id = request_body.get('session_id', 'XYZ')
-        model_id = selected_mode.get('modelId', 'amazon.nova-reel-v1:0')
-        
+        prompt = event.get('prompt', '')
+        model_id = selected_mode.get('modelId','amazon.nova-reel-v1:0')
+        # if prompt length is < 3 then prepend text 'image of '
         if len(prompt) < 3:
-            prompt = 'Video of ' + prompt
-        
+            prompt = 'image of ' + prompt
         chat_title = prompt[:16] if len(prompt) > 16 else prompt
-        connection_id = event['requestContext']['connectionId']
-        message_id = request_body.get('message_id', None)
-        message_received_timestamp_utc = request_body.get('timestamp', datetime.now(timezone.utc).isoformat())
+        
+        style_preset = event.get('stylePreset', 'photographic')
+        height_width = event.get('heightWidth', '1024x1024')
+        height, width = map(int, height_width.split('x'))
+        message_id = event.get('message_id', None)
+        message_received_timestamp_utc = event.get('timestamp', datetime.now(timezone.utc).isoformat())
+        
         if message_type == 'clear_conversation':
             commons.delete_s3_attachments_for_session(session_id,video_bucket,user_id,'videos',s3_client, logger)
             conversations.delete_conversation_history(dynamodb,conversations_table_name,logger,session_id)

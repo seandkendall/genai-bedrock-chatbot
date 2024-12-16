@@ -41,6 +41,7 @@ load_agents_response = None
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
+    """Lambda Hander Function"""
     # logger.info("Executing Bedrock Config Function")
     try:
         # Parse request body
