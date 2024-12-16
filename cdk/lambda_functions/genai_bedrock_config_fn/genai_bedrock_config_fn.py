@@ -96,19 +96,13 @@ def lambda_handler(event, context):
                         response = action_map[action]()
                         globals()[response_var] = response
                         return_obj[action] = response
-            print('SDK return_obj')
-            print(return_obj)
-            print('SDK return_obj DONE')
             if return_obj:
-                print('SDK IN LOOP')
                 return_obj['type'] = 'load_response'
                 return_obj['modelscan'] = modelscan
                 return {
                     'statusCode': 200,
                     'body': json.dumps(return_obj, default=datetime_to_iso)
                 }
-            else:
-                print('SDK WRONG LOOP!')
         else:
             return {
                 'statusCode': 400,

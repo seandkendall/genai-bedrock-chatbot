@@ -591,39 +591,8 @@ class ChatbotWebsiteStack(Stack):
             actions=["s3:PutObject"],
             resources=[attachment_bucket.arn_for_objects("*")],
         ))
-        # BEGINING OF OLD CODE
-        # rest_api = apigw.RestApi(self, "ChatbotRestApi",
-        #     description="RESTAPI for KendallChatbot",
-        #     deploy_options=apigw.StageOptions(stage_name="rest"),
-        #     default_cors_preflight_options=apigw.CorsOptions(
-        #         allow_origins=apigw.Cors.ALL_ORIGINS,
-        #         allow_methods=apigw.Cors.ALL_METHODS
-        #     )
-        # )
-        # # Create a Cognito authorizer
-        # cognito_authorizer = apigw.CognitoUserPoolsAuthorizer(
-        #     self, "CognitoAuthorizer",
-        #     cognito_user_pools=[user_pool],
-        #     identity_source="method.request.header.Authorization"
-        # )
-        # send_message_resource = rest_api.root.add_resource("send-message")
-        # send_message_resource.add_method("POST", apigw.LambdaIntegration(lambda_router_function),
-        #                                   authorization_type=apigw.AuthorizationType.COGNITO,
-        #                                   authorizer=cognito_authorizer)
-        # presigned_url_resource = rest_api.root.add_resource("get-presigned-url")
-        # presigned_url_resource.add_method("POST", apigw.LambdaIntegration(presigned_url_function),
-        #                                   authorization_type=apigw.AuthorizationType.COGNITO,
-        #                                   authorizer=cognito_authorizer)
         
-        # # Add the REST API as an origin to the CloudFront distribution
-        # rest_api_origin = origins.RestApiOrigin(rest_api, origin_path='/')
-        # cloudfront_distribution.add_behavior("/rest/*", rest_api_origin,
-        #     allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
-        #     viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY
-        # )
-        # END OF OLD CODE
-        
-        # START OF NEW CODE
+        # START OF APIGW/REST to SQS to Lambda Code
         # Create SQS Queues for each Lambda function
         send_message_queue = sqs.Queue(self, "SendMessageQueue")
         presigned_url_queue = sqs.Queue(self, "PresignedUrlQueue")
@@ -723,7 +692,7 @@ class ChatbotWebsiteStack(Stack):
         lambda_router_function.add_event_source(lambda_event_sources.SqsEventSource(send_message_queue))
         
         presigned_url_function.add_event_source(lambda_event_sources.SqsEventSource(presigned_url_queue))
-        # END OF NEW CODE
+        # END OF APIGW/REST to SQS to Lambda Code
         
         rest_api_origin = origins.RestApiOrigin(rest_api, origin_path='/')
         cloudfront_distribution.add_behavior("/rest/*", rest_api_origin,

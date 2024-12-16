@@ -339,7 +339,6 @@ const App = memo(({ signOut, user }) => {
 			accessToken: `${accessToken}`,
 		};
 		sendMessage(JSON.stringify(data));
-		// sendMessageViaRest(data)
 	};
 
 	const triggerModelScan = async () => {
@@ -352,8 +351,7 @@ const App = memo(({ signOut, user }) => {
 				idToken: `${idToken}`,
 				accessToken: `${accessToken}`,
 			};
-			// sendMessage(JSON.stringify(data));
-			sendMessageViaRest(data)
+			sendMessage(JSON.stringify(data));
 		} catch (error) {
 			console.error("Error refreshing models:", error);
 		}
