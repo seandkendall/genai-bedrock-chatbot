@@ -15,6 +15,8 @@ cognito_client = boto3.client('cognito-idp')
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
+    print('SDK PRESIGNEDURL event')
+    print(event)
     """Lambda Hander Function"""
     try:
         # Parse the request body
