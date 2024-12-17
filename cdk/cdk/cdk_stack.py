@@ -699,36 +699,40 @@ class ChatbotWebsiteStack(Stack):
         
         # Configure API Gateway to send messages to the Presigned URL Queue
         presigned_url_resource = rest_api.root.add_resource("get-presigned-url")
-        presigned_url_resource.add_method("POST", apigw.AwsIntegration(
-            service="sqs",
-            path=f"{self.account}/{presigned_url_queue.queue_name}",
-            integration_http_method="POST",
-            options=apigw.IntegrationOptions(
-                credentials_role=presigned_url_role,
-                passthrough_behavior=apigw.PassthroughBehavior.NEVER,
-                request_parameters={
-                    "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'"
-                },
-                request_templates={
-                    "application/json": "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
-                },
-                integration_responses=[
-                    apigw.IntegrationResponse(
-                        status_code="200",
-                        response_templates={
-                            "application/json": '{"done": true}'
-                        }
-                    )
-                ]
-            )
-        ), authorization_type=apigw.AuthorizationType.COGNITO,
-           authorizer=cognito_authorizer,
-           method_responses=[apigw.MethodResponse(status_code="200")])
+        presigned_url_integration = apigw.LambdaIntegration(presigned_url_function)
+        presigned_url_resource.add_method("POST", presigned_url_integration,
+                                          authorization_type=apigw.AuthorizationType.COGNITO,
+                                          authorizer=cognito_authorizer)
+        # presigned_url_resource.add_method("POST", apigw.AwsIntegration(
+        #     service="sqs",
+        #     path=f"{self.account}/{presigned_url_queue.queue_name}",
+        #     integration_http_method="POST",
+        #     options=apigw.IntegrationOptions(
+        #         credentials_role=presigned_url_role,
+        #         passthrough_behavior=apigw.PassthroughBehavior.NEVER,
+        #         request_parameters={
+        #             "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'"
+        #         },
+        #         request_templates={
+        #             "application/json": "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
+        #         },
+        #         integration_responses=[
+        #             apigw.IntegrationResponse(
+        #                 status_code="200",
+        #                 response_templates={
+        #                     "application/json": '{"done": true}'
+        #                 }
+        #             )
+        #         ]
+        #     )
+        # ), authorization_type=apigw.AuthorizationType.COGNITO,
+        #    authorizer=cognito_authorizer,
+        #    method_responses=[apigw.MethodResponse(status_code="200")])
 
         # Create Lambda functions and add SQS event sources
         lambda_router_function.add_event_source(lambda_event_sources.SqsEventSource(send_message_queue))
         
-        presigned_url_function.add_event_source(lambda_event_sources.SqsEventSource(presigned_url_queue))
+        # SDK REMOVEDpresigned_url_function.add_event_source(lambda_event_sources.SqsEventSource(presigned_url_queue))
         model_scan_function.add_event_source(lambda_event_sources.SqsEventSource(model_scan_request_queue))
         # END OF APIGW/REST to SQS to Lambda Code
         
