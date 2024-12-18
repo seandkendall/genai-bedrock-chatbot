@@ -1,5 +1,24 @@
 #!/bin/bash
 export AWS_PAGER=""
+
+# Function to display help information
+display_help() {
+    echo "Usage: $0 [OPTIONS]"
+    echo
+    echo "Options:"
+    echo "  -h, --help                 Display this help message"
+    echo "  -d                         Delete existing resources"
+    echo "  -a                         Enable auto-deploy branch detection"
+    echo "  --deploy-agents-example    Deploy agents example"
+    echo "  --branch BRANCH_NAME       Specify a branch to use"
+    echo "  --schedule SCHEDULE        Set the deployment schedule (daily or weekly, default: weekly)"
+    echo "  --allowlist PATTERN        Set the allowlist pattern"
+    echo
+    echo "Example:"
+    echo "  $0 -a --schedule daily --allowlist 'mypattern*'"
+    exit 0
+}
+
 # GitHub repository URL
 REPO_URL="https://github.com/seandkendall/genai-bedrock-chatbot"
 
@@ -12,12 +31,14 @@ schedule="weekly"
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -h|--help) display_help;;
         -d) delete_flag=true; shift;;
+        -a) auto_deploy_branch=true; shift;;
         --deploy-agents-example) deploy_agents_example=true; shift;;
         --branch) branch_name="$2"; shift 2;;
         --schedule) schedule="$2"; shift 2;;
         --allowlist) allowlist_pattern="$2"; shift 2;;
-        *) echo "Unknown argument: $1"; shift;;
+        *) echo "Unknown argument: $1"; display_help;;
     esac
 done
 
@@ -119,7 +140,7 @@ phases:
       - chmod +x deploy.sh
       - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
 EOF
-else
+elif [ "$auto_deploy_branch" = true ]; then
     # Use auto-deploy branch detection
     read -r -d '' buildspec <<EOF
 version: 0.2
@@ -142,6 +163,34 @@ phases:
         else 
           echo "No auto-deploy branch found. Checking out default branch." && git checkout main
         fi
+      - cd cdk
+      - cdk --version
+      - python3 -m venv .venv
+      - . .venv/bin/activate
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+  build:
+    commands:
+      - cd ..
+      - chmod +x deploy.sh
+      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
+EOF
+else
+    # Use auto-deploy branch detection
+    read -r -d '' buildspec <<EOF
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: latest
+      nodejs: latest
+    commands:
+      - python -m pip install --upgrade pip
+      - npm install -g aws-cdk
+      - pip install --upgrade awscli
+  pre_build:
+    commands:
       - cd cdk
       - cdk --version
       - python3 -m venv .venv
