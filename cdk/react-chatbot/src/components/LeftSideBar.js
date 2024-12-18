@@ -25,7 +25,7 @@ const getCategoryIdentifier = (category) => {
 		case "Bedrock Image Models":
 			return { text: "IMG", color: "#FA8072" }; // Salmon
 		case "Bedrock Video Models":
-			return { text: "VID", color: "#000000" }; // Black
+			return { text: "VID", color: "#9C27B0" }; // Purple
 		default:
 			return { text: "", color: "#9E9E9E" }; // Grey
 	}
@@ -217,13 +217,6 @@ const LeftSideBar = ({
 									handleDeleteChat(conversation.session_id);
 								}
 							}}
-							// sx={{
-							// 	ml: 1,
-							// 	color:
-							// 		reactThemeMode === "light"
-							// 			? "action.active"
-							// 			: "action.selected",
-							// }}
 							disabled={isDisabled}
 						>
 							<DeleteIcon />

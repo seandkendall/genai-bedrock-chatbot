@@ -32,9 +32,6 @@ user_cache = {}
 def lambda_handler(event, context):
     """Lambda Hander Function"""
     is_websocket_event = False
-    print('SDK MODEL SCAN EVENT:')
-    print(event)
-    
     if 'requestContext' in event:
         is_websocket_event = True
         request_context = event['requestContext']

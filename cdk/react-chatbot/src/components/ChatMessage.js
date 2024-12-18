@@ -80,6 +80,12 @@ const ChatMessage = memo(
 							s3Key: reformatFilename(item.document.s3source.s3key),
 						});
 					}
+          if (item.video?.s3source?.s3key) {
+						acc.push({
+							type: "video",
+							s3Key: reformatFilename(item.video.s3source.s3key),
+						});
+					}
 					return acc;
 				}, []);
 
@@ -305,16 +311,13 @@ const ChatMessage = memo(
 								<Chip
 									key={index}
 									label={attachment.s3Key}
-									color={attachment.type === "image" ? "primary" : "success"}
-									sx={{
-										borderColor:
-											reactThemeMode === "light"
-												? hasError
-													? "red.main"
-													: "divider"
-												: "grey.600", 
-										ml: 1,
-									}}
+                  color={
+                    attachment.type === "image" ? "primary" :
+                    attachment.type === "video" ? "secondary" :
+                    attachment.type === "document" ? "warning" :
+                    "success"
+                    }	
+									sx={{ml: 1}}
 									size="small"
 								/>
 							))}

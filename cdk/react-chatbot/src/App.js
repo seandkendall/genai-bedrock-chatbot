@@ -495,6 +495,8 @@ const App = memo(({ signOut, user }) => {
 		return attachments.map((attachment) => {
 			if (attachment.type.startsWith("image"))
 				return { image: { s3source: { s3key: attachment.url } } };
+			if (attachment.type.startsWith("video"))
+				return { video: { s3source: { s3key: attachment.url } } };
 			return { document: { s3source: { s3key: attachment.url } } };
 		});
 	}

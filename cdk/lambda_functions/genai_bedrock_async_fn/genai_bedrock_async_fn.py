@@ -140,26 +140,30 @@ def process_websocket_message(request_body):
         processed_attachments = []
         for attachment in attachments:
             file_type = attachment['type'].split('/')[-1].lower()
-            if not attachment['type'].startswith('image/') and file_type not in ALLOWED_DOCUMENT_TYPES:
+            if not attachment['type'].startswith('image/') and not attachment['type'].startswith('video/') and file_type not in ALLOWED_DOCUMENT_TYPES:
                 commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'error',
-                    'error': f'Invalid file type: {file_type}. Allowed types are images and {", ".join(ALLOWED_DOCUMENT_TYPES)}.'
+                    'error': f'Invalid file type: {file_type}. Allowed types are images, videos and {", ".join(ALLOWED_DOCUMENT_TYPES)}.'
                 })
                 return {'statusCode': 400}
 
             # Download file from S3
-            try:
+            if attachment['type'].startswith('video/'):
                 file_key = attachment['url'].split('/')[-1]
-                response = s3_client.get_object(Bucket=os.environ['ATTACHMENT_BUCKET'], Key=f'{user_id}/{session_id}/{file_key}')
-                file_content = response['Body'].read()
-            except Exception as e:
-                logger.exception(e)
-                logger.error(f"Error downloading file from S3: {str(e)}")
-                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                    'type': 'error',
-                    'error': f'Error processing attachment: {attachment["name"]}'
-                })
-                return {'statusCode': 500}
+                file_content = None
+            else:
+                try:
+                    file_key = attachment['url'].split('/')[-1]
+                    response = s3_client.get_object(Bucket=os.environ['ATTACHMENT_BUCKET'], Key=f'{user_id}/{session_id}/{file_key}')
+                    file_content = response['Body'].read()
+                except Exception as e:
+                    logger.exception(e)
+                    logger.error(f"Error downloading file from S3: {str(e)}")
+                    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                        'type': 'error',
+                        'error': f'Error processing attachment: {attachment["name"]}'
+                    })
+                    return {'statusCode': 500}
 
             processed_attachments.append({
                 'type': attachment['type'],
@@ -207,6 +211,21 @@ def process_websocket_message(request_body):
                                                         }
                                                 })
                 converse_content_with_s3_pointers.append({'image':{'format': attachment['type'].split('/')[1],
+                                                        's3source': {'s3bucket': attachment['s3bucket'], 's3key': attachment['s3key']}
+                                                        }
+                                                })
+            elif attachment['type'].startswith('video/'):
+                video_format = attachment['type'].split('/')[1]
+                if video_format == '3pg':
+                    video_format = 'three_gp'
+                
+                converse_content_array.append({'video':{'format': video_format,
+                                                        'source': {'s3Location': {
+                                                                    'uri': f"s3://{attachment['s3bucket']}/{attachment['s3key']}"
+                                                                }}
+                                                        }
+                                                })
+                converse_content_with_s3_pointers.append({'video':{'format': video_format,
                                                         's3source': {'s3bucket': attachment['s3bucket'], 's3key': attachment['s3key']}
                                                         }
                                                 })
@@ -363,7 +382,9 @@ def load_documents_from_existing_history(existing_history):
         for content_item in item['content']:
             modified_content_item = {}
             for key, value in content_item.items():
-                if key in ['text']:
+                if key in ['video']:
+                    modified_content_item[key] = convert_video_s3_source_to_bedrock_format(value)
+                elif key in ['text']:
                     modified_content_item[key] = value
                 elif key in ['document', 'image']:
                     modified_content_item[key] = value
@@ -506,3 +527,24 @@ def sanitize_filename(filename: str) -> str:
     sanitized_filename = sanitized_filename.strip()
     
     return sanitized_filename
+
+def convert_video_s3_source_to_bedrock_format(input_json):
+    # Extract the necessary information from the input dictionary
+    videoformat = input_json['format']
+    s3bucket = input_json['s3source']['s3bucket']
+    s3key = input_json['s3source']['s3key']
+
+    # Construct the S3 URI
+    s3_uri = f"s3://{s3bucket}/{s3key}"
+
+    # Create the new dictionary structure
+    output_dict = {
+        'format': videoformat,
+        'source': {
+            's3Location': {
+                'uri': s3_uri
+            }
+        }
+    }
+
+    return output_dict
