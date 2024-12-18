@@ -33,24 +33,24 @@ bedrock_agent_client = boto3.client(service_name='bedrock-agent')
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
+    """Lambda Hander Function"""
     force_null_kb_session_id = False
     while True:
         try:    
-            # Check if the event is a WebSocket event
-            if event['requestContext']['eventType'] == 'MESSAGE':
-                # Handle WebSocket message
-                process_websocket_message(event, force_null_kb_session_id)
-
+            process_websocket_message(event, force_null_kb_session_id)
             return {'statusCode': 200}
-
         except Exception as e:
-            logger.exception(e)
-            logger.error("Error 7460: " + str(e))
+            # if str(e) does not contain ThrottlingException, then log exception
+            if 'ThrottlingException' not in str(e):
+                logger.exception(e)
+                logger.error("Error 7460: " + str(e))
+            else:
+                logger.warn("ThrottlingException: " + str(e))
             if 'Session with Id' in str(e) and 'is not valid. Please check and try again' in str(e):
                 logger.error("Removing Session ID and trying again")
                 force_null_kb_session_id = True
             else:
-                connection_id = event['requestContext']['connectionId']
+                connection_id = event.get('connection_id', 'ZYX')
                 commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'error',
                     'code':'7460',
@@ -59,24 +59,26 @@ def lambda_handler(event, context):
                 return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
 @tracer.capture_method
-def process_websocket_message(event, force_null_kb_session_id):
-    request_body = json.loads(event['body'])
-    message_type = request_body.get('type', '')
-    id_token = request_body.get('idToken', 'none')
-    decoded_token = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
-    user_id = decoded_token['cognito:username']
-    selected_mode = request_body.get('selectedMode', 'none')
-    selected_model_category = selected_mode.get('category')
+def process_websocket_message(request_body, force_null_kb_session_id):
+    access_token = request_body.get('access_token', {})
     session_id = request_body.get('session_id', 'XYZ')
-    tracer.put_annotation(key="SessionID", value=session_id)
+    connection_id = request_body.get('connection_id', 'ZYX')
+    user_id = access_token['payload']['sub']
+    message_type = request_body.get('type', '')
+    selected_mode = request_body.get('selected_mode', {})
+    selected_model_category = selected_mode.get('category')
     if force_null_kb_session_id:
         kb_session_id = 'null'
     else:
         kb_session_id =  request_body.get('kb_session_id', '')
-    tracer.put_annotation(key="KBSessionID", value=kb_session_id)
     if(kb_session_id == 'undefined'):
         kb_session_id = ''
-    connection_id = event['requestContext']['connectionId']
+        
+    tracer.put_annotation(key="SessionID", value=session_id)
+    tracer.put_annotation(key="UserID", value=user_id)
+    tracer.put_annotation(key="MessageType", value=message_type)
+    tracer.put_annotation(key="ConnectionID", value=connection_id)
+    tracer.put_annotation(key="KBSessionID", value=kb_session_id)
 
     # Check if the WebSocket connection is open
     try:

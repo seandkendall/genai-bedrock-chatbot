@@ -1,6 +1,7 @@
 from aws_cdk import ( # type: ignore
     Stack, Duration, CfnOutput,Fn,
     aws_s3 as s3,
+    aws_sqs as sqs,
     aws_lambda as _lambda,
     aws_lambda_python_alpha as lambda_python,
     aws_s3_deployment as s3deploy,
@@ -18,6 +19,7 @@ from aws_cdk import ( # type: ignore
     aws_events as events,
     aws_scheduler_alpha as scheduler,
     aws_scheduler_targets_alpha as scheduler_targets,
+    aws_lambda_event_sources as lambda_event_sources,
 )
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -62,21 +64,21 @@ class ChatbotWebsiteStack(Stack):
         boto3_layer = lambda_python.PythonLayerVersion(
             self, "Boto3Layer",
             entry="lambda_functions/python_layer",
-            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12,_lambda.Runtime.PYTHON_3_13],
             compatible_architectures=[_lambda.Architecture.ARM_64],
             description="Boto3 library with  PyJWT django pytz requests used for arm64/3.12"
         )
         commons_layer = _lambda.LayerVersion(
             self, "KendallChatCommons",
             code=_lambda.Code.from_asset("lambda_functions/commons_layer"),
-            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12,_lambda.Runtime.PYTHON_3_13],
             compatible_architectures=[_lambda.Architecture.ARM_64],
             description="KendallChat Commons: Making all the code more simple and reusable"
         )
         conversations_layer = _lambda.LayerVersion(
             self, "KendallChatConversations",
             code=_lambda.Code.from_asset("lambda_functions/conversations_layer"),
-            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12,_lambda.Runtime.PYTHON_3_13],
             compatible_architectures=[_lambda.Architecture.ARM_64],
             description="KendallChat Conversations: Making all the code more simple and reusable in relation to loading and deleting conversations"
         )
@@ -210,6 +212,13 @@ class ChatbotWebsiteStack(Stack):
             cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
             origin_request_policy=cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
         )
+        cloudfront_distribution.add_behavior(
+            path_pattern="/videos/*",
+            origin=image_origin,
+            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+            origin_request_policy=cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
+        )
         
         # Create DynamoDB table for bedrock_usage with a user_id (partition key string), input_tokens (number) and output_tokens(number)
         dynamodb_bedrock_usage_table = dynamodb.Table(self, "bedrock_usage_table",
@@ -265,6 +274,7 @@ class ChatbotWebsiteStack(Stack):
             self_sign_up_enabled=True,
             sign_in_aliases={"email": True},  # Enable sign-in with email
             auto_verify={"email": True},  # Auto-verify email addresses
+            feature_plan=cognito.FeaturePlan.ESSENTIALS,
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
             removal_policy=RemovalPolicy.DESTROY,
             password_policy=cognito.PasswordPolicy(  # Configure password policy
@@ -280,7 +290,7 @@ class ChatbotWebsiteStack(Stack):
         
         # Create the Lambda function for image generation
         image_generation_function = _lambda.Function(self, "ImageGenerationFunction",
-            runtime=_lambda.Runtime.PYTHON_3_12,
+            runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_image_fn.lambda_handler",
             code=_lambda.Code.from_asset("lambda_functions/genai_bedrock_image_fn/"),
             timeout=Duration.seconds(300),
@@ -295,6 +305,7 @@ class ChatbotWebsiteStack(Stack):
                 "CLOUDFRONT_DOMAIN": cloudfront_distribution.distribution_domain_name,
                 "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                 "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
+                "CONVERSATION_HISTORY_BUCKET": conversation_history_bucket.bucket_name,
                 "POWERTOOLS_SERVICE_NAME":"IMAGE_GENERATION_SERVICE",
             },
         )
@@ -304,10 +315,38 @@ class ChatbotWebsiteStack(Stack):
         image_generation_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
         image_generation_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"))
         dynamodb_conversations_table.grant_full_access(image_generation_function)
+        
+        # Create the Lambda function for video generation
+        video_generation_function = _lambda.Function(self, "VideoGenerationFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="genai_bedrock_video_fn.lambda_handler",
+            code=_lambda.Code.from_asset("lambda_functions/genai_bedrock_video_fn/"),
+            timeout=Duration.seconds(900),
+            architecture=_lambda.Architecture.ARM_64,
+            tracing=_lambda.Tracing.ACTIVE,
+            memory_size=3008,
+            layers=[boto3_layer, commons_layer, conversations_layer,lambda_insights_layer],
+            log_retention=logs.RetentionDays.FIVE_DAYS,
+            environment={
+                "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
+                "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
+                "CLOUDFRONT_DOMAIN": cloudfront_distribution.distribution_domain_name,
+                "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
+                "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
+                "CONVERSATION_HISTORY_BUCKET": conversation_history_bucket.bucket_name,
+                "POWERTOOLS_SERVICE_NAME":"VIDEO_GENERATION_SERVICE",
+            },
+        )
+        video_generation_function.apply_removal_policy(RemovalPolicy.DESTROY)
+        websocket_api.grant_manage_connections(video_generation_function)
+        image_bucket.grant_read_write(video_generation_function)
+        video_generation_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
+        video_generation_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"))
+        dynamodb_conversations_table.grant_full_access(video_generation_function)
 
         config_function = _lambda.Function(
             self, "GenAIBedrockConfigFunction",
-            runtime=_lambda.Runtime.PYTHON_3_12,
+            runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_config_fn.lambda_handler",
             code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_config_fn/"),
             timeout=Duration.seconds(30),
@@ -340,7 +379,7 @@ class ChatbotWebsiteStack(Stack):
 
         # Create the "genai_bedrock_agents_client_fn" Lambda function
         agents_client_function = _lambda.Function(self, "genai_bedrock_agents_client_fn",
-                                     runtime=_lambda.Runtime.PYTHON_3_12,
+                                     runtime=_lambda.Runtime.PYTHON_3_13,
                                      handler="genai_bedrock_agents_client_fn.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_agents_client_fn/"),
                                      timeout=Duration.seconds(900),
@@ -372,7 +411,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the "genai_bedrock_incidents_agents_fn" Lambda function
         if deploy_example_incidents_agent:
             incidents_agents_function = _lambda.Function(self, "genai_bedrock_incidents_agents_fn",
-                                        runtime=_lambda.Runtime.PYTHON_3_12,
+                                        runtime=_lambda.Runtime.PYTHON_3_13,
                                         handler="genai_bedrock_incidents_agents_fn.lambda_handler",
                                         code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_incidents_agents_fn/"),
                                         timeout=Duration.seconds(120),
@@ -396,8 +435,8 @@ class ChatbotWebsiteStack(Stack):
             )
 
         # Create the "genai_bedrock_fn_async" Lambda function
-        lambda_fn_async = _lambda.Function(self, "genai_bedrock_fn_async",
-                                     runtime=_lambda.Runtime.PYTHON_3_12,
+        lambda_async_function = _lambda.Function(self, "genai_bedrock_fn_async",
+                                     runtime=_lambda.Runtime.PYTHON_3_13,
                                      handler="genai_bedrock_async_fn.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_async_fn/"),
                                      timeout=Duration.seconds(900),
@@ -419,21 +458,21 @@ class ChatbotWebsiteStack(Stack):
                                           "POWERTOOLS_SERVICE_NAME":"BEDROCK_ASYNC_SERVICE",
                                      }
                                      )
-        lambda_fn_async.apply_removal_policy(RemovalPolicy.DESTROY)
-        websocket_api.grant_manage_connections(lambda_fn_async)
-        lambda_fn_async.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
-        lambda_fn_async.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"))
-        lambda_fn_async.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSQSFullAccess"))
-        dynamodb_conversations_table.grant_full_access(lambda_fn_async)
-        dynamodb_configurations_table.grant_full_access(lambda_fn_async)
-        conversation_history_bucket.grant_read_write(lambda_fn_async)
-        dynamodb_bedrock_usage_table.grant_full_access(lambda_fn_async)
-        attachment_bucket.grant_read_write(lambda_fn_async)
-        image_bucket.grant_read_write(lambda_fn_async)
+        lambda_async_function.apply_removal_policy(RemovalPolicy.DESTROY)
+        websocket_api.grant_manage_connections(lambda_async_function)
+        lambda_async_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
+        lambda_async_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"))
+        lambda_async_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSQSFullAccess"))
+        dynamodb_conversations_table.grant_full_access(lambda_async_function)
+        dynamodb_configurations_table.grant_full_access(lambda_async_function)
+        conversation_history_bucket.grant_read_write(lambda_async_function)
+        dynamodb_bedrock_usage_table.grant_full_access(lambda_async_function)
+        attachment_bucket.grant_read_write(lambda_async_function)
+        image_bucket.grant_read_write(lambda_async_function)
         
         # Create the "genai_bedrock_fn_conversations" Lambda function
-        lambda_conversations_fn = _lambda.Function(self, "genai_bedrock_fn_conversations",
-                                     runtime=_lambda.Runtime.PYTHON_3_12,
+        lambda_conversations_function = _lambda.Function(self, "genai_bedrock_fn_conversations",
+                                     runtime=_lambda.Runtime.PYTHON_3_13,
                                      handler="genai_bedrock_conversations_fn.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_conversations_fn/"),
                                      timeout=Duration.seconds(30),
@@ -455,16 +494,16 @@ class ChatbotWebsiteStack(Stack):
                                           "POWERTOOLS_SERVICE_NAME":"BEDROCK_CONVERSATIONS_SERVICE",
                                      }
                                      )
-        lambda_conversations_fn.apply_removal_policy(RemovalPolicy.DESTROY)
-        websocket_api.grant_manage_connections(lambda_conversations_fn)
-        dynamodb_conversations_table.grant_full_access(lambda_conversations_fn)
+        lambda_conversations_function.apply_removal_policy(RemovalPolicy.DESTROY)
+        websocket_api.grant_manage_connections(lambda_conversations_function)
+        dynamodb_conversations_table.grant_full_access(lambda_conversations_function)
 
         # Create the Lambda function for Scanning through LLM Models
         model_scan_function = _lambda.Function(self, "ModelScanFunction",
-            runtime=_lambda.Runtime.PYTHON_3_12,
+            runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_model_scan_fn.lambda_handler",
             code=_lambda.Code.from_asset("lambda_functions/genai_bedrock_model_scan_fn/"),
-            timeout=Duration.seconds(300),
+            timeout=Duration.seconds(900),
             architecture=_lambda.Architecture.ARM_64 ,
             tracing=_lambda.Tracing.ACTIVE,
             memory_size=1024,
@@ -477,12 +516,15 @@ class ChatbotWebsiteStack(Stack):
                 "ALLOWLIST_DOMAIN": allowlist_domain_string,
                 "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                 "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
+                "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
+                "CLOUDFRONT_DOMAIN": cloudfront_distribution.distribution_domain_name,
                 "POWERTOOLS_SERVICE_NAME":"MODEL_SCAN_SERVICE",
                 "POWERTOOLS_METRICS_NAMESPACE": "BedrockChatbotModelScan"
             },
         )
         model_scan_function.apply_removal_policy(RemovalPolicy.DESTROY)
         websocket_api.grant_manage_connections(model_scan_function)
+        image_bucket.grant_read_write(model_scan_function)
         dynamodb_configurations_table.grant_read_write_data(model_scan_function)
         model_scan_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
         model_scan_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"))
@@ -493,8 +535,8 @@ class ChatbotWebsiteStack(Stack):
             resources=["*"]
         ))
         # Create the "genai_bedrock_fn" Lambda function
-        lambda_router_fn = _lambda.Function(self, "GenAIBedrockRouterFunction",
-                                     runtime=_lambda.Runtime.PYTHON_3_12,
+        lambda_router_function = _lambda.Function(self, "GenAIBedrockRouterFunction",
+                                     runtime=_lambda.Runtime.PYTHON_3_13,
                                      handler="genai_bedrock_router_fn.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_router_fn/"),
                                      timeout=Duration.seconds(20),
@@ -507,25 +549,28 @@ class ChatbotWebsiteStack(Stack):
                                           "USER_POOL_ID": user_pool.user_pool_id,
                                           "REGION": region,
                                           "AGENTS_FUNCTION_NAME": agents_client_function.function_name,
-                                          "CONVERSATIONS_LIST_FUNCTION_NAME": lambda_conversations_fn.function_name,
-                                          "BEDROCK_FUNCTION_NAME": lambda_fn_async.function_name,
+                                          "CONVERSATIONS_LIST_FUNCTION_NAME": lambda_conversations_function.function_name,
+                                          "BEDROCK_FUNCTION_NAME": lambda_async_function.function_name,
                                           "ALLOWLIST_DOMAIN": allowlist_domain_string,
                                           "IMAGE_GENERATION_FUNCTION_NAME": image_generation_function.function_name,
+                                          "VIDEO_GENERATION_FUNCTION_NAME": video_generation_function.function_name,
+                                          "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                                           "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                                           "POWERTOOLS_SERVICE_NAME":"BEDROCK_ROUTER",
                                         }
                                      )
-        lambda_router_fn.apply_removal_policy(RemovalPolicy.DESTROY)
-        dynamodb_conversations_table.grant_full_access(lambda_router_fn)
-        lambda_fn_async.grant_invoke(lambda_router_fn)
-        agents_client_function.grant_invoke(lambda_router_fn)
-        image_generation_function.grant_invoke(lambda_router_fn)
-        lambda_conversations_fn.grant_invoke(lambda_router_fn)
+        lambda_router_function.apply_removal_policy(RemovalPolicy.DESTROY)
+        dynamodb_conversations_table.grant_full_access(lambda_router_function)
+        lambda_async_function.grant_invoke(lambda_router_function)
+        agents_client_function.grant_invoke(lambda_router_function)
+        image_generation_function.grant_invoke(lambda_router_function)
+        video_generation_function.grant_invoke(lambda_router_function)
+        lambda_conversations_function.grant_invoke(lambda_router_function)
         if deploy_example_incidents_agent:
             dynamodb_incidents_table.grant_full_access(agents_client_function)
         
         presigned_url_function = _lambda.Function(self, "PreSignedUrlFunction",
-                                    runtime=_lambda.Runtime.PYTHON_3_12,
+                                    runtime=_lambda.Runtime.PYTHON_3_13,
                                     handler="genai_bedrock_presigned_fn.lambda_handler",
                                     code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_presigned_fn"),
                                     timeout=Duration.seconds(20),
@@ -546,7 +591,39 @@ class ChatbotWebsiteStack(Stack):
             actions=["s3:PutObject"],
             resources=[attachment_bucket.arn_for_objects("*")],
         ))
+        
+        # START OF APIGW/REST to SQS to Lambda Code
+        # Create SQS Queues for each Lambda function
+        send_message_queue = sqs.Queue(self, "SendMessageQueue",visibility_timeout=Duration.seconds(900))
+        presigned_url_queue = sqs.Queue(self, "PresignedUrlQueue",visibility_timeout=Duration.seconds(60))
+        model_scan_request_queue = sqs.Queue(self, "ModelScanRequestQueue",visibility_timeout=Duration.seconds(900))
 
+        # Create IAM Roles for API Gateway to send messages to SQS
+        send_message_role = iam.Role(self, "SendMessageApiGatewayRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com")
+        )
+        send_message_role.add_to_policy(iam.PolicyStatement(
+            actions=["sqs:SendMessage"],
+            resources=[send_message_queue.queue_arn]
+        ))
+
+        presigned_url_role = iam.Role(self, "PresignedUrlApiGatewayRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com")
+        )
+        presigned_url_role.add_to_policy(iam.PolicyStatement(
+            actions=["sqs:SendMessage"],
+            resources=[presigned_url_queue.queue_arn]
+        ))
+        
+        model_scan_request_role = iam.Role(self, "ModelScanRequestApiGatewayRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com")
+        )
+        model_scan_request_role.add_to_policy(iam.PolicyStatement(
+            actions=["sqs:SendMessage"],
+            resources=[model_scan_request_queue.queue_arn]
+        ))
+
+        # Create a REST API
         rest_api = apigw.RestApi(self, "ChatbotRestApi",
             description="RESTAPI for KendallChatbot",
             deploy_options=apigw.StageOptions(stage_name="rest"),
@@ -555,59 +632,101 @@ class ChatbotWebsiteStack(Stack):
                 allow_methods=apigw.Cors.ALL_METHODS
             )
         )
-        # Add a resource and method for the pre-signed URL endpoint
-        presigned_url_resource = rest_api.root.add_resource("get-presigned-url")
-        presigned_url_integration = apigw.LambdaIntegration(presigned_url_function)
-        # Create a Cognito authorizer
+
+        # Create Cognito authorizer
         cognito_authorizer = apigw.CognitoUserPoolsAuthorizer(
             self, "CognitoAuthorizer",
             cognito_user_pools=[user_pool],
             identity_source="method.request.header.Authorization"
         )
+
+        # Configure API Gateway to send messages to the Send Message Queue
+        send_message_resource = rest_api.root.add_resource("send-message")
+        send_message_resource.add_method("POST", apigw.AwsIntegration(
+            service="sqs",
+            path=f"{self.account}/{send_message_queue.queue_name}",
+            integration_http_method="POST",
+            options=apigw.IntegrationOptions(
+                credentials_role=send_message_role,
+                passthrough_behavior=apigw.PassthroughBehavior.NEVER,
+                request_parameters={
+                    "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'"
+                },
+                request_templates={
+                    # $context.requestOverride.header.header_name	
+                    "application/json": "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
+                },
+                integration_responses=[
+                    apigw.IntegrationResponse(
+                        status_code="200",
+                        response_templates={
+                            "application/json": '{"done": true}'
+                        }
+                    )
+                ]
+            )
+        ), authorization_type=apigw.AuthorizationType.COGNITO,
+           authorizer=cognito_authorizer,
+           method_responses=[apigw.MethodResponse(status_code="200")])
+
+        # Configure API Gateway to send messages to Model Scan Request
+        model_scan_request_resource = rest_api.root.add_resource("model-scan-request")
+        model_scan_request_resource.add_method("POST", apigw.AwsIntegration(
+            service="sqs",
+            path=f"{self.account}/{model_scan_request_queue.queue_name}",
+            integration_http_method="POST",
+            options=apigw.IntegrationOptions(
+                credentials_role=model_scan_request_role,
+                passthrough_behavior=apigw.PassthroughBehavior.NEVER,
+                request_parameters={
+                    "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'"
+                },
+                request_templates={
+                    "application/json": "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
+                },
+                integration_responses=[
+                    apigw.IntegrationResponse(
+                        status_code="200",
+                        response_templates={
+                            "application/json": '{"done": true}'
+                        }
+                    )
+                ]
+            )
+        ), authorization_type=apigw.AuthorizationType.COGNITO,
+           authorizer=cognito_authorizer,
+           method_responses=[apigw.MethodResponse(status_code="200")])
+        
+        # Configure API Gateway to send messages to the Presigned URL Queue
+        presigned_url_resource = rest_api.root.add_resource("get-presigned-url")
+        presigned_url_integration = apigw.LambdaIntegration(presigned_url_function)
         presigned_url_resource.add_method("POST", presigned_url_integration,
                                           authorization_type=apigw.AuthorizationType.COGNITO,
                                           authorizer=cognito_authorizer)
+
+        # Create Lambda functions and add SQS event sources
+        lambda_router_function.add_event_source(lambda_event_sources.SqsEventSource(send_message_queue))
         
-        # Add the REST API as an origin to the CloudFront distribution
+        model_scan_function.add_event_source(lambda_event_sources.SqsEventSource(model_scan_request_queue))
+        # END OF APIGW/REST to SQS to Lambda Code
+        
         rest_api_origin = origins.RestApiOrigin(rest_api, origin_path='/')
         cloudfront_distribution.add_behavior("/rest/*", rest_api_origin,
             allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
             viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY
         )
         
-        # logs_url = "https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:live-tail$3FlogGroupArns$3D~(~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-GenAIBedrockConfigFunctionF3AC-9WbfqFdyLTdv*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-GenAIBedrockRouterFunction22EE-nOhUafDmPRFr*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-ImageGenerationFunction64C380B-mqVKcQUOzwV0*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-ModelScanFunction0FE96921-eUkzvBLPTA2y*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-genaibedrockagentsclientfn3E45-9x2jvfh4CyYI*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-genaibedrockfnasync7C01F7BC-JVSZZGqXQooH*3a*2a,~'arn*3aaws*3alogs*3aus-east-1*3a913245669585*3alog-group*3a/aws/lambda/ChatbotWebsiteStack-genaibedrockfnconversations277-mrOWjbPnatK0*3a*2a)"
-        
-        # logs_resource = rest_api.root.add_resource("logs")
-        # http_integration = apigw.HttpIntegration(
-        #     logs_url,  # Replace with your actual URL
-        #     http_method="GET",  # Or whichever HTTP method you need
-        #     proxy=True,  # This makes it a proxy integration
-        #     options=apigw.IntegrationOptions(
-        #         request_parameters={
-        #             "integration.request.header.host": "method.request.header.host"
-        #         }
-        #     )
-        # )
-        # logs_resource.add_method(
-        #     "GET",  # Or whichever HTTP method you need
-        #     http_integration,
-        #     method_responses=[
-        #         apigw.MethodResponse(status_code="200"),
-        #         apigw.MethodResponse(status_code="400"),
-        #         apigw.MethodResponse(status_code="500")
-        #     ]
-        # )
         
         # Create a Lambda integrations
         bedrock_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
-            "BedrockFnIntegration", lambda_router_fn
+            "BedrockFnIntegration", lambda_router_function
         )
         config_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
             "ConfigFnIntegration", config_function
         )
-        model_scan_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
-            "ModelScanFnIntegration", model_scan_function
-        )
+        # model_scan_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
+        #     "ModelScanFnIntegration", model_scan_function
+        # )
 
 
         # Add routes and integrations to the WebSocket API
@@ -616,11 +735,11 @@ class ChatbotWebsiteStack(Stack):
             integration=config_fn_integration,
             return_response=True
         )
-        websocket_api.add_route(
-            "modelscan",
-            integration=model_scan_fn_integration,
-            return_response=False
-        )
+        # websocket_api.add_route(
+        #     "modelscan",
+        #     integration=model_scan_fn_integration,
+        #     return_response=False
+        # )
         websocket_api.add_route(
             "$default",
             integration=bedrock_fn_integration,
@@ -692,15 +811,18 @@ class ChatbotWebsiteStack(Stack):
             resources=["*"],
         ))
         
+
         # List of Lambda functions
         lambda_functions = [
-            config_function,
-            lambda_router_fn,
             image_generation_function,
-            model_scan_function,
+            video_generation_function,
+            config_function,
             agents_client_function,
-            lambda_fn_async,
-            lambda_conversations_fn
+            lambda_async_function,
+            lambda_conversations_function,
+            model_scan_function,
+            lambda_router_function,
+            presigned_url_function
         ]
 
         # Construct the log group ARNs for all Lambda functions

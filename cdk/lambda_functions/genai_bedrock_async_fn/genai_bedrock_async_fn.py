@@ -16,12 +16,11 @@ from aws_lambda_powertools import Logger, Metrics, Tracer
 from llm_conversion_functions import (
     process_message_history_converse,
     process_bedrock_converse_response,
-    process_bedrock_converse_response_for_title
+    process_bedrock_converse_response_for_title,
 )
 logger = Logger(service="BedrockAsync")
 metrics = Metrics()
 tracer = Tracer()
-
 
 # Initialize DynamoDB client
 dynamodb = boto3.client('dynamodb')
@@ -63,15 +62,10 @@ apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url
 system_prompt = ''
 
 @tracer.capture_lambda_handler
-def lambda_handler(event, context):   
+def lambda_handler(event, context):  
     """Lambda Hander Function"""
-    # logger.info("Executing Bedrock Async Function")
     try:
-        # Check if the event is a WebSocket event
-        if event['requestContext']['eventType'] == 'MESSAGE':
-            # Handle WebSocket message
-            process_websocket_message(event)
-
+        process_websocket_message(event)
         return {'statusCode': 200}
 
     except Exception as e:    
@@ -80,20 +74,17 @@ def lambda_handler(event, context):
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
 @tracer.capture_method
-def process_websocket_message(event):
+def process_websocket_message(request_body):
     """Function to process a websocket message"""
     global system_prompt
-    # Extract the request body and session ID from the WebSocket event
-    request_body = json.loads(event['body'])
-    id_token = request_body.get('idToken', 'none')
-    decoded_token = jwt.decode(id_token, algorithms=["RS256"], options={"verify_signature": False})
-    user_id = decoded_token['cognito:username']
-    tracer.put_annotation(key="UserID", value=user_id)
-    message_type = request_body.get('type', '')
-    tracer.put_annotation(key="MessageType", value=message_type)
+    access_token = request_body.get('access_token', {})
     session_id = request_body.get('session_id', 'XYZ')
+    connection_id = request_body.get('connection_id', 'ZYX')
+    user_id = access_token['payload']['sub']
+    message_type = request_body.get('type', '')
     tracer.put_annotation(key="SessionID", value=session_id)
-    connection_id = event['requestContext']['connectionId']
+    tracer.put_annotation(key="UserID", value=user_id)
+    tracer.put_annotation(key="MessageType", value=message_type)
     tracer.put_annotation(key="ConnectionID", value=connection_id)
     # Check if the WebSocket connection is open
     try:
@@ -109,9 +100,9 @@ def process_websocket_message(event):
     if message_type == 'clear_conversation':
         # logger.info(f'Action: Clear Conversation {session_id}')
         # Delete the conversation history from DynamoDB
-        delete_s3_attachments_for_session(session_id,attachment_bucket,user_id) 
-        delete_s3_attachments_for_session(session_id,image_bucket,user_id)
-        delete_s3_attachments_for_session(session_id,conversation_history_bucket,user_id)
+        commons.delete_s3_attachments_for_session(session_id,attachment_bucket,user_id,None,s3_client, logger)
+        commons.delete_s3_attachments_for_session(session_id,image_bucket,user_id,None,s3_client, logger)
+        commons.delete_s3_attachments_for_session(session_id,conversation_history_bucket,user_id,None,s3_client, logger)
         conversations.delete_conversation_history(dynamodb,conversations_table_name,logger,session_id)
         return
     elif message_type == 'load':
@@ -149,26 +140,30 @@ def process_websocket_message(event):
         processed_attachments = []
         for attachment in attachments:
             file_type = attachment['type'].split('/')[-1].lower()
-            if not attachment['type'].startswith('image/') and file_type not in ALLOWED_DOCUMENT_TYPES:
+            if not attachment['type'].startswith('image/') and not attachment['type'].startswith('video/') and file_type not in ALLOWED_DOCUMENT_TYPES:
                 commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'error',
-                    'error': f'Invalid file type: {file_type}. Allowed types are images and {", ".join(ALLOWED_DOCUMENT_TYPES)}.'
+                    'error': f'Invalid file type: {file_type}. Allowed types are images, videos and {", ".join(ALLOWED_DOCUMENT_TYPES)}.'
                 })
                 return {'statusCode': 400}
 
             # Download file from S3
-            try:
+            if attachment['type'].startswith('video/'):
                 file_key = attachment['url'].split('/')[-1]
-                response = s3_client.get_object(Bucket=os.environ['ATTACHMENT_BUCKET'], Key=f'{user_id}/{session_id}/{file_key}')
-                file_content = response['Body'].read()
-            except Exception as e:
-                logger.exception(e)
-                logger.error(f"Error downloading file from S3: {str(e)}")
-                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                    'type': 'error',
-                    'error': f'Error processing attachment: {attachment["name"]}'
-                })
-                return {'statusCode': 500}
+                file_content = None
+            else:
+                try:
+                    file_key = attachment['url'].split('/')[-1]
+                    response = s3_client.get_object(Bucket=os.environ['ATTACHMENT_BUCKET'], Key=f'{user_id}/{session_id}/{file_key}')
+                    file_content = response['Body'].read()
+                except Exception as e:
+                    logger.exception(e)
+                    logger.error(f"Error downloading file from S3: {str(e)}")
+                    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                        'type': 'error',
+                        'error': f'Error processing attachment: {attachment["name"]}'
+                    })
+                    return {'statusCode': 500}
 
             processed_attachments.append({
                 'type': attachment['type'],
@@ -189,10 +184,11 @@ def process_websocket_message(event):
         tracer.put_annotation(key="PromptUserOrSystem", value=system_prompt_user_or_system)
         if not system_prompt or reload_prompt_config:
             system_prompt = load_system_prompt_config(system_prompt_user_or_system,user_id)
-        selected_mode = request_body.get('selectedMode', '')
+        selected_mode = request_body.get('selected_mode', {})
         title_theme = request_body.get('titleGenTheme', '')
         title_gen_model = request_body.get('titleGenModel', '')
-        # if title_gen_model includes a '/' then split it and take the second part
+        if title_gen_model == 'DEFAULT' or not title_gen_model:
+            title_gen_model = ''
         if '/' in title_gen_model:
             title_gen_model = title_gen_model.split('/')[1]
         
@@ -208,7 +204,6 @@ def process_websocket_message(event):
         if prompt:
             converse_content_array.append({'text': prompt})
             converse_content_with_s3_pointers.append({'text': prompt})
-        
         for attachment in processed_attachments:
             if attachment['type'].startswith('image/'):
                 converse_content_array.append({'image':{'format': attachment['type'].split('/')[1],
@@ -216,6 +211,21 @@ def process_websocket_message(event):
                                                         }
                                                 })
                 converse_content_with_s3_pointers.append({'image':{'format': attachment['type'].split('/')[1],
+                                                        's3source': {'s3bucket': attachment['s3bucket'], 's3key': attachment['s3key']}
+                                                        }
+                                                })
+            elif attachment['type'].startswith('video/'):
+                video_format = attachment['type'].split('/')[1]
+                if video_format == '3pg':
+                    video_format = 'three_gp'
+                
+                converse_content_array.append({'video':{'format': video_format,
+                                                        'source': {'s3Location': {
+                                                                    'uri': f"s3://{attachment['s3bucket']}/{attachment['s3key']}"
+                                                                }}
+                                                        }
+                                                })
+                converse_content_with_s3_pointers.append({'video':{'format': video_format,
                                                         's3source': {'s3bucket': attachment['s3bucket'], 's3key': attachment['s3key']}
                                                         }
                                                 })
@@ -230,7 +240,6 @@ def process_websocket_message(event):
                                                             's3source': {'s3bucket': attachment['s3bucket'], 's3key': attachment['s3key']}
                                                             }
                                                 })
-
         message_content = process_message_history_converse(existing_history) + [{
                 'role': 'user',
                 'content': converse_content_array,
@@ -260,7 +269,15 @@ def process_websocket_message(event):
                     except Exception:
                         chat_title = f'New Conversation: {hash(prompt) % 1000000:06x}'
                 new_conversation = bool(not original_existing_history or len(original_existing_history) == 0)
-                timezone_prompt = f'The Current Time in UTC is: {message_received_timestamp_utc}. Use the timezone of {timestamp_local_timezone} When making a reference to time. Always use the date format of: Month DD, YYYY HH24:mm:ss. only included the time if needed. '
+                timezone_prompt = (
+                    f"The Current Time in UTC is: {message_received_timestamp_utc}. "
+                    f"Use the timezone of {timestamp_local_timezone} when making a reference to time. "
+                    "ALWAYS use the date format of: Month DD, YYYY HH24:mm:ss. "
+                    "ONLY include the time if needed. "
+                    "NEVER reference this date randomly. "
+                    "Use it to support high quality answers when the current date is NEEDED."
+                )
+
                 if system_prompt:
                     system_prompt = system_prompt + ' ' + timezone_prompt
                 else:
@@ -286,8 +303,9 @@ def process_websocket_message(event):
                 assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)
                 store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id,chat_title,new_conversation,selected_model_category, message_stop_reason)
             except Exception as e:
-                logger.exception(e)
-                logger.error(f"Error calling bedrock model (912): {str(e)}")
+                if 'ThrottlingException' not in str(e):
+                    logger.exception(e)
+                logger.warn(f"Error calling bedrock model (912): {str(e)}")
                 if 'have access to the model with the specified model ID.' in str(e):
                     model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
                     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
@@ -316,37 +334,7 @@ def get_title_from_message(messages: list, selected_model_id: str,connection_id:
     return chat_title['title']
 
     
-@tracer.capture_method
-def delete_s3_attachments_for_session(session_id: str,bucket: str,user_id:str):
-    """Function to delete conversation attachments from s3"""
-    deleted_objects = []
-    errors = []
-    prefix = rf'{user_id}/{session_id}'
-    
-    try:
-        # List objects with the specified prefix
-        paginator = s3_client.get_paginator('list_objects_v2')
-        pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
-        
-        for page in pages:
-            if 'Contents' in page:
-                for obj in page['Contents']:
-                    key = obj['Key']
-                    try:
-                        s3_client.delete_object(Bucket=bucket, Key=key)
-                        deleted_objects.append(f"s3://{bucket}/{key}")
-                    except Exception as e:
-                        logger.exception(e)
-                        errors.append(f"Error deleting s3://{bucket}/{key}: {str(e)}")
-    
-    except Exception as e:
-        logger.exception(e)
-        errors.append(f"Error listing objects in s3://{bucket}/{prefix}: {str(e)}")
-    
-    if errors:
-        logger.error(f"Encountered {len(errors)} errors:")
-        for error in errors:
-            logger.error(f"- {error}")
+
               
 @tracer.capture_method
 def download_s3_content(item, content_type):
@@ -394,7 +382,9 @@ def load_documents_from_existing_history(existing_history):
         for content_item in item['content']:
             modified_content_item = {}
             for key, value in content_item.items():
-                if key in ['text']:
+                if key in ['video']:
+                    modified_content_item[key] = convert_video_s3_source_to_bedrock_format(value)
+                elif key in ['text']:
                     modified_content_item[key] = value
                 elif key in ['document', 'image']:
                     modified_content_item[key] = value
@@ -455,13 +445,16 @@ def store_conversation_history_converse(session_id, selected_model_id, existing_
             # Update DynamoDB to indicate S3 storage
             dynamodb.update_item(
                 TableName=conversations_table_name,
-                Key={'session_id': session_id},
+                Key={
+                    'session_id': {'S': session_id} 
+                },
                 UpdateExpression="SET conversation_history_in_s3=:true, last_modified_date = :current_time",
                 ExpressionAttributeValues={
-                    ':true': True,
+                    ':true': {'BOOL': True}, 
                     ':current_time': {'N': current_timestamp}
                 }
             )
+
         else:
             # Store in DynamoDB
             logger.info(f"Storing TITLE for conversation history in DynamoDB: {title}")
@@ -534,3 +527,24 @@ def sanitize_filename(filename: str) -> str:
     sanitized_filename = sanitized_filename.strip()
     
     return sanitized_filename
+
+def convert_video_s3_source_to_bedrock_format(input_json):
+    # Extract the necessary information from the input dictionary
+    videoformat = input_json['format']
+    s3bucket = input_json['s3source']['s3bucket']
+    s3key = input_json['s3source']['s3key']
+
+    # Construct the S3 URI
+    s3_uri = f"s3://{s3bucket}/{s3key}"
+
+    # Create the new dictionary structure
+    output_dict = {
+        'format': videoformat,
+        'source': {
+            's3Location': {
+                'uri': s3_uri
+            }
+        }
+    }
+
+    return output_dict

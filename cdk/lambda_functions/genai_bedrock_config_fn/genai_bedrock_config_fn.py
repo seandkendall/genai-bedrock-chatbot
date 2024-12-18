@@ -41,6 +41,7 @@ load_agents_response = None
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
+    """Lambda Hander Function"""
     # logger.info("Executing Bedrock Config Function")
     try:
         # Parse request body
@@ -95,7 +96,6 @@ def lambda_handler(event, context):
                         response = action_map[action]()
                         globals()[response_var] = response
                         return_obj[action] = response
-
             if return_obj:
                 return_obj['type'] = 'load_response'
                 return_obj['modelscan'] = modelscan

@@ -51,6 +51,11 @@ cd genai-bedrock-chatbot
 ./deploy-cicd.sh -d --allowlist @example.com,@example.ca --branch feature_branch
 ```
 
+**Option 5 (adding the -a flag):** Deploy from a 'main' or the latest feature branch on each deploy without the need to specify the branch name using a domain allow-list, but delete old CodeBuild resources first
+```bash
+./deploy-cicd.sh -a -d --allowlist @example.com,@example.ca --schedule daily
+```
+
 On any of these options, you can also specify a flag for `--schedule daily` if you would like to redeploy the latest changes daily, otherwise weekly releases will be auto-deployed
 
 
@@ -282,8 +287,10 @@ npm-check -u -g
 
 ## Useful Links
  - Bedrock Converse API Capabilities per model: [https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)
+ - Amazon Nova User Guide: [https://docs.aws.amazon.com/pdfs/nova/latest/userguide/nova-ug.pdf](https://docs.aws.amazon.com/pdfs/nova/latest/userguide/nova-ug.pdf)
  - Bedrock Runtime Documentation: (https://docs.aws.amazon.com/bedrock/latest/userguide/service_code_examples_bedrock-runtime.html)[https://docs.aws.amazon.com/bedrock/latest/userguide/service_code_examples_bedrock-runtime.html]
  - Bedrock Runtime Boto3 Documentation: (https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime.html)[https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime.html]
+
  
 
 ## Contributing

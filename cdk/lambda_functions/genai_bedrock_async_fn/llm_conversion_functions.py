@@ -58,7 +58,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                         'message_counter': counter
                     })
                 else:
-                    if current_time - start_time <= 60:  # First 60 seconds
+                    if current_time - start_time <= 20:  # First 20 seconds
                         # Send messages immediately
                         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                             'type': 'content_block_delta',
@@ -107,14 +107,18 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
         logger.info(f"TokenCounts (Converse): {str(current_input_tokens)}/{str(current_output_tokens)}")
         # Send the message_stop event to the WebSocket client
         message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
+        needs_code_end = False
+        # if count of ``` inside of result_text is odd, then needs_code_end = True
+        if result_text.count('```') % 2 != 0:
+            needs_code_end = True
         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'message_stop',
             'session_id':session_id,
             'message_counter': counter,
             'message_stop_reason': message_stop_reason,
+            'needs_code_end': needs_code_end,
             'new_conversation': new_conversation,
             'timestamp': message_end_timestamp_utc,
-            'converse_content_with_s3_pointers': converse_content_with_s3_pointers,
             'amazon_bedrock_invocation_metrics': {
                 'inputTokenCount': current_input_tokens,
                 'outputTokenCount': current_output_tokens

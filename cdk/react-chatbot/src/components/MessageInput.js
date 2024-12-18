@@ -3,18 +3,20 @@ import React, {
 	useRef,
 	forwardRef,
 	useImperativeHandle,
-  useCallback,
+	useCallback,
 } from "react";
-import { Box, TextField, IconButton, Typography } from "@mui/material";
-import { FaPaperPlane, FaPaperclip, FaTimes } from "react-icons/fa";
+import { Box, Chip,TextField, IconButton } from "@mui/material";
+import { FaPaperPlane, FaPaperclip } from "react-icons/fa";
 import axios from "axios";
 
 const MAX_CONTENT_ITEMS = 20;
 const MAX_IMAGES = 20;
+const MAX_VIDEOS = 1;
 const MAX_DOCUMENTS = 5;
 const MAX_IMAGE_SIZE = 3.75 * 1024 * 1024; // 3.75 MB
 const MAX_IMAGE_DIMENSION = 8000; // 8000 px
 const MAX_DOCUMENT_SIZE = 4.5 * 1024 * 1024; // 4.5 MB
+const MAX_VIDEO_SIZE = 1024 * 1024 * 1024; // 1 GB
 const ALLOWED_DOCUMENT_TYPES = [
 	"pdf",
 	"csv",
@@ -26,6 +28,25 @@ const ALLOWED_DOCUMENT_TYPES = [
 	"txt",
 	"md",
 ];
+const ALLOWED_VIDEO_TYPES = [
+  "mov",
+  "mkv",
+  "mp4",
+  "webm",
+  "flv",
+  "mpeg",
+  "mpg",
+  "wmv",
+  "3gp"
+];
+const ALLOWED_IMAGE_TYPES = [
+	"png",
+	"jpeg",
+	"jpg",
+	"gif",
+	"webp",
+];
+
 
 export const getPlaceholderText = (selectedMode, selectedKbMode) => {
 	if (!selectedMode || !selectedMode.category) {
@@ -33,6 +54,9 @@ export const getPlaceholderText = (selectedMode, selectedKbMode) => {
 	}
 	if (selectedMode.category === "Bedrock Image Models") {
 		return "Generate an Image of...";
+	}
+	if (selectedMode.category === "Bedrock Video Models") {
+		return "Generate an Video of...";
 	}
 	return selectedMode.category === "Bedrock KnowledgeBases" && !selectedKbMode
 		? "Select a Model for your KnowledgeBase in the Header"
@@ -71,6 +95,7 @@ const MessageInput = forwardRef(
 			setIsRefreshingMessage,
 			uploadedFileNames,
 			setUploadedFileNames,
+			reactThemeMode,
 		},
 		ref,
 	) => {
@@ -93,21 +118,30 @@ const MessageInput = forwardRef(
 			}
 		};
 		const isImageFile = useCallback((file) => {
-      const imageTypes = [
-        "image/png",
-        "image/jpeg",
-        "image/jpg",
-        "image/gif",
-        "image/webp",
-      ];
-      return imageTypes.includes(file.type);
-    }, []);
+			if (file instanceof File) {
+				return ALLOWED_IMAGE_TYPES.includes(file.name.split('.').pop().toLowerCase());
+			}
+			return ALLOWED_IMAGE_TYPES.includes(file.split('.').pop().toLowerCase());
+		}, []);
+		
+		const isVideoFile = useCallback((file) => {
+			if (file instanceof File) {
+				return ALLOWED_VIDEO_TYPES.includes(file.name.split('.').pop().toLowerCase());
+			}
+			return ALLOWED_VIDEO_TYPES.includes(file.split('.').pop().toLowerCase());
+		  }, []);
+
+		  const isDocumentFile = useCallback((file) => {
+			if (file instanceof File) {
+				return ALLOWED_DOCUMENT_TYPES.includes(file.name.split('.').pop().toLowerCase());
+			}
+			return ALLOWED_DOCUMENT_TYPES.includes(file.split('.').pop().toLowerCase());
+		  }, []);
 
 		const handleFiles = async (files) => {
 			const newAttachments = [];
 
 			for (const file of files) {
-
 				if (attachments.length + newAttachments.length >= MAX_CONTENT_ITEMS) {
 					alert(
 						`You can only attach up to ${MAX_CONTENT_ITEMS} items in total.`,
@@ -126,12 +160,16 @@ const MessageInput = forwardRef(
 				}
 
 				const isImage = isImageFile(file);
-				const isDocument = ALLOWED_DOCUMENT_TYPES.includes(
-					file.name.split(".").pop().toLowerCase(),
-				);
+				const isVideo = isVideoFile(file);
+				const isDocument = isDocumentFile(file);
 
 				if (isImage && !selectedMode.allow_input_image) {
 					alert("Image uploads are not allowed for this mode.");
+					continue;
+				}
+
+				if (isVideo && !selectedMode.allow_input_video) {
+					alert("Video uploads are not allowed for this mode.");
 					continue;
 				}
 
@@ -140,7 +178,7 @@ const MessageInput = forwardRef(
 					continue;
 				}
 
-				if (!isImage && !isDocument) {
+				if (!isImage && !isDocument && !isVideo) {
 					alert(`File type not allowed: ${file.name}`);
 					continue;
 				}
@@ -148,7 +186,8 @@ const MessageInput = forwardRef(
 				if (isImage) {
 					if (
 						attachments.filter((a) => isImageFile(a)).length +
-							newAttachments.filter((a) => isImageFile(a)).length >=
+							newAttachments.filter((a) => isImageFile(a)).length +
+							uploadedFileNames.filter((a) => isImageFile(a)).length >=
 						MAX_IMAGES
 					) {
 						alert(`You can only attach up to ${MAX_IMAGES} images.`);
@@ -176,10 +215,29 @@ const MessageInput = forwardRef(
 						console.error("Error processing image:", error);
 						alert(`Error processing image: ${file.name}`);
 					}
+				} else if(isVideo) {
+					if (
+						attachments.filter((a) => isVideoFile(a)).length +
+							newAttachments.filter((a) => isVideoFile(a)).length +
+							uploadedFileNames.filter((a) => isVideoFile(a)).length >=
+						MAX_VIDEOS
+					) {
+						alert(`You can only attach up to ${MAX_VIDEOS} video.`);
+						continue;
+					}
+					// https://docs.aws.amazon.com/nova/latest/userguide/prompting-vision-limitations.html
+			
+					  if (file.size > MAX_VIDEO_SIZE) {
+						alert(`Video size must be no more than 1 GB: ${file.name}`);
+						continue;
+					  }
+			
+					  newAttachments.push(file);
 				} else {
 					if (
 						attachments.filter((a) => !isImageFile(a)).length +
-							newAttachments.filter((a) => !isImageFile(a)).length >=
+							newAttachments.filter((a) => !isImageFile(a)).length +
+							uploadedFileNames.filter((a) => !isImageFile(a)).length >=
 						MAX_DOCUMENTS
 					) {
 						alert(`You can only attach up to ${MAX_DOCUMENTS} documents.`);
@@ -315,7 +373,7 @@ const MessageInput = forwardRef(
 		};
 
 		const isDragDropEnabled =
-			selectedMode?.allow_input_image || selectedMode?.allow_input_document;
+			selectedMode?.allow_input_image || selectedMode?.allow_input_document || selectedMode?.allow_input_video;
 
 		const handleDragOver = (e) => {
 			if (isDragDropEnabled && !isDisabled()) {
@@ -357,39 +415,20 @@ const MessageInput = forwardRef(
 				{attachments.length > 0 && (
 					<Box sx={{ mb: 2, display: "flex", flexWrap: "wrap", gap: 1 }}>
 						{attachments.map((file, index) => (
-							<Box
+							<Chip
 								key={index}
-								sx={{
-									display: "flex",
-									alignItems: "center",
-									backgroundColor: isImageFile(file)
-										? "lightgreen"
-										: "lightblue",
-									borderRadius: "16px",
-									padding: "4px 8px",
-									maxWidth: "200px",
-								}}
-							>
-								<Typography
-									variant="body2"
-									sx={{
-										whiteSpace: "nowrap",
-										overflow: "hidden",
-										textOverflow: "ellipsis",
-										marginRight: "4px",
-									}}
-								>
-									{file.name}
-								</Typography>
-								<IconButton
-									disabled={isDisabled()}
-									onClick={() => handleRemoveAttachment(index)}
-									size="small"
-									sx={{ padding: 0 }}
-								>
-									<FaTimes />
-								</IconButton>
-							</Box>
+								label={file.name}
+								color={
+									isImageFile(file) ? "primary" :
+									isVideoFile(file) ? "secondary" :
+									isDocumentFile(file) ? "warning" :
+									"success"
+								  }	
+								  disabled={isDisabled()}
+								  onDelete={() => handleRemoveAttachment(index)}
+								sx={{ml: 1}}
+								size="small"
+							/>
 						))}
 					</Box>
 				)}
@@ -420,7 +459,7 @@ const MessageInput = forwardRef(
 						style={{ display: "none" }}
 						onChange={handleFileChange}
 						multiple
-						accept={`${selectedMode?.allow_input_image ? "image/png,image/jpeg,image/jpg,image/gif,image/webp," : ""}${selectedMode?.allow_input_document ? ".pdf,.csv,.doc,.docx,.xls,.xlsx,.html,.txt,.md" : ""}`}
+						accept={`${selectedMode?.allow_input_image ? "image/png,image/jpeg,image/jpg,image/gif,image/webp," : ""}${selectedMode?.allow_input_document ? ".pdf,.csv,.doc,.docx,.xls,.xlsx,.html,.txt,.md," : ""}${selectedMode?.allow_input_video ? "video/mp4,video/x-m4v,video/quicktime,video/x-matroska,video/webm,video/x-flv,video/mpeg,video/x-msvideo,video/3gpp," : ""}`}
 					/>
 					<IconButton
 						onClick={handleAttachmentClick}
@@ -429,6 +468,7 @@ const MessageInput = forwardRef(
 						sx={{
 							display:
 								selectedMode?.allow_input_image ||
+								selectedMode?.allow_input_video ||
 								selectedMode?.allow_input_document
 									? "inline-flex"
 									: "none",

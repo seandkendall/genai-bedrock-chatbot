@@ -1,4 +1,27 @@
 #!/usr/bin/env bash
+ORIGINAL_ARGS=("$@")
+
+display_help() {
+    echo "Usage: $0 [OPTIONS]"
+    echo
+    echo "Options:"
+    echo "  -h, --help                 Display this help message and exit"
+    echo "  -a, --app APP              Specify the app name"
+    echo "  -c, --context CONTEXT      Specify the context"
+    echo "  --debug                    Enable debug mode"
+    echo "  --profile PROFILE          Specify the AWS profile"
+    echo "  -t, --tags TAGS            Specify tags"
+    echo "  -f, --force                Force deployment"
+    echo "  -v, --verbose              Enable verbose output"
+    echo "  -r, --role-arn ROLE_ARN    Specify the role ARN"
+    echo "  --allowlist DOMAINS        Specify allowlist domains"
+    echo "  --deploy-agents-example    Deploy agents example"
+    echo "  --headless                 Run in headless mode"
+    echo "  --redeploy                 Force redeployment"
+    echo
+    echo "For more information, please refer to the documentation."
+}
+
 
 # Define colors
 has_colors() {
@@ -128,7 +151,6 @@ start_docker_macos() {
         echo "Docker Desktop is already running."
     fi
 }
-
 # Get the current git repository URL
 repo_url=$(git config --get remote.origin.url)
 # Get the latest commit hash
@@ -207,6 +229,10 @@ redeploy=false
 POSITIONAL_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -h|--help)
+            display_help
+            exit 0
+            ;;
         -a|--app) app_flag="--app $2"; shift 2;;
         -c|--context) context_flag="--context $2"; shift 2;;
         --debug) debug_flag="--debug"; shift;;
@@ -297,7 +323,10 @@ if [ -z "${VIRTUAL_ENV}" ]; then
         echo -e ""
         echo -e "${GREEN_COLOR}cd cdk"
         echo -e "${GREEN_COLOR}source .venv/bin/activate"
+        echo -e "${GREEN_COLOR}python -m pip install -r requirements.txt"
+        echo -e "${GREEN_COLOR}python -m pip install -r requirements-dev.txt"
         echo -e "${GREEN_COLOR}cd .."
+        echo -e "${GREEN_COLOR}./$(basename "$0") ${ORIGINAL_ARGS[*]}"
         echo -e ""
         echo -e "${DEFAULT_COLOR}Once this is complete, run the deploy command again"
     else
@@ -309,13 +338,15 @@ if [ -z "${VIRTUAL_ENV}" ]; then
         echo -e "${GREEN_COLOR}python3 -m venv .venv"
         echo -e "${GREEN_COLOR}source .venv/bin/activate"
         echo -e "${GREEN_COLOR}python3 -m pip install -r requirements.txt"
+        echo -e "${GREEN_COLOR}python3 -m pip install -r requirements-dev.txt"
         echo -e "${GREEN_COLOR}cd .."
+        echo -e "${GREEN_COLOR}./$(basename "$0") ${ORIGINAL_ARGS[*]}"
         echo -e ""
         echo -e "${DEFAULT_COLOR}Once this is complete, run the deploy command again"
     fi
     exit 1
 fi
-npm install -g aws-cdk
+npm install
 user_pool_id=$(aws cognito-idp list-user-pools --max-results 60 --query 'UserPools[?contains(Name, `ChatbotUserPool`)].Id' --output text)
 if [ -n "$user_pool_id" ] && [ "$user_pool_id" != "None" ]; then
     cognitoDomain=$(aws cognito-idp describe-user-pool --user-pool-id "$user_pool_id" --query 'UserPool.Domain' --output text)
@@ -531,7 +562,7 @@ echo -e " "
 echo -e "${GREEN_COLOR}Deployment complete! (Git Version $latest_commit)${DEFAULT_COLOR}"
 echo -e " "
 # tell user to visit the url: awschatboturl
-echo -e "${GREEN_COLOR}Tail the application logs here: ${cloudwatchlogslivetailurl}${DEFAULT_COLOR}"
+echo -e "${GREEN_COLOR}Tail the application logs here: "
+echo -e "${GREEN_COLOR}${cloudwatchlogslivetailurl}${DEFAULT_COLOR}"
 echo -e " "
 echo -e "${GREEN_COLOR}Visit the chatbot here: ${awschatboturl}${DEFAULT_COLOR}"
-

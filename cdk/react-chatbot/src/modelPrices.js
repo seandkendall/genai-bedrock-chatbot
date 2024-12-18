@@ -35,6 +35,20 @@ export const modelPrices = {
       "pricePer1000InputTokens": 0.08,
       "pricePer1000OutputTokens": 0
     },
+
+    "amazon.nova-pro-v1:0": {
+      "pricePer1000InputTokens": 0.0008,
+      "pricePer1000OutputTokens": 0.0032
+    },
+    "amazon.nova-lite-v1:0": {
+      "pricePer1000InputTokens": 0.00006,
+      "pricePer1000OutputTokens": 0.00024
+    },
+    "amazon.nova-micro-v1:0": {
+      "pricePer1000InputTokens": 0.000035,
+      "pricePer1000OutputTokens": 0.00014
+    },
+
     "anthropic.claude-v2": {
       "pricePer1000InputTokens": 0.008,
       "pricePer1000OutputTokens": 0.024

@@ -1,5 +1,6 @@
 import json
 import decimal
+import time
 import random
 import string
 from datetime import datetime, timezone, timedelta
@@ -54,6 +55,14 @@ def send_websocket_message(logger, apigateway_management_api, connection_id, mes
             ConnectionId=connection_id,
             Data=json.dumps(message, cls=DecimalEncoder).encode()
         )
+    # handle PayloadTooLargeException
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'PayloadTooLargeException':
+            logger.error(f"WebSocket message too large (9012): {str(e)}")
+            logger.error(f"Message: {message}")
+            return
+        else:
+            raise
     except apigateway_management_api.exceptions.GoneException:
         logger.info(f"WebSocket connection is closed (connectionId: {connection_id})")
     except Exception as e:
@@ -230,9 +239,9 @@ def get_ddb_config(table,ddb_cache,ddb_cache_timestamp,cache_duration,logger):
         logger.error(f"Error getting DynamoDB config: {str(e)}")
         return {}
     
-def generate_image_titan(logger,bedrock,model_id, prompt, width, height, seed):
+def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, seed):
     """ Generates an image using titan """
-    logger.info("Generating image using Titan Image Generator")
+    logger.info("Generating image using Titan/Nova Image Generator")
     # if not seed then set seed random
     if not seed:
         seed = random.randint(0, 2147483646)
@@ -272,6 +281,55 @@ def generate_image_titan(logger,bedrock,model_id, prompt, width, height, seed):
     response_body = json.loads(response['body'].read())
     return response_body['images'][0], True, None
 
+def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed, delete_after_generate):
+    logger.info(f"Generating video using Nova Reel Video Generator with model: {model_id}")
+    prefix = rf'{user_id}/{session_id}'
+    model_input = {
+        "taskType": "TEXT_VIDEO",
+        "textToVideoParams": {"text": prompt},
+        "videoGenerationConfig": {
+            "durationSeconds": duration_seconds,
+            "fps": 24,
+            "dimension": "1280x720",
+            "seed": seed
+        }
+    }
+
+    try:
+        s3uri = f"s3://{video_bucket}/videos/{prefix}/"
+        invocation = bedrock_runtime.start_async_invoke(
+            modelId=model_id,
+            modelInput=model_input,
+            outputDataConfig={"s3OutputDataConfig": {"s3Uri": s3uri}}
+        )
+        invocation_arn = invocation["invocationArn"]
+        s3_prefix = invocation_arn.split('/')[-1]
+        s3_location_original = f"videos/{prefix}/{s3_prefix}/output.mp4"
+        s3_location = f"videos/{prefix}/{s3_prefix}/{s3_prefix}.mp4"
+
+        while True:
+            response = bedrock_runtime.get_async_invoke(
+                invocationArn=invocation_arn
+            )
+            status = response["status"]
+            if status != "InProgress":
+                break
+            time.sleep(SLEEP_TIME)
+        if status == "Completed":
+            if delete_after_generate:
+                s3_client.delete_object(Bucket=video_bucket, Key=f"{s3_location_original}")
+            else:    
+                s3_client.copy_object(CopySource={'Bucket': video_bucket, 'Key': f"{s3_location_original}"}, Bucket=video_bucket, Key=f"{s3_location}")
+                s3_client.delete_object(Bucket=video_bucket, Key=f"{s3_location_original}")
+            cloudfront_url = f"https://{cloudfront_domain}/{s3_location}"
+            return f"{cloudfront_url}", True, ""
+        else:
+            return "", False, f"Video generation failed with status: {status}"
+
+    except Exception as e:
+        logger.exception(e)
+        return "", False, str(e)
+    
 def generate_random_string(length=8):
     """Function to generate a random String of length 8"""
     characters = string.ascii_lowercase + string.digits
@@ -345,3 +403,40 @@ def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, heig
         
         response_body = json.loads(response['body'].read())
         return response_body['artifacts'][0]['base64'],True,None
+
+def delete_s3_attachments_for_session(session_id: str,bucket: str,user_id:str,additional_prefix:str, s3_client, logger):
+    """Function to delete conversation attachments from s3"""
+    logger.info(f"Deleting conversation attachments for session: {session_id} bucket: {bucket} user_id: {user_id}")
+    deleted_objects = []
+    errors = []
+    # if additional_prefix is not null
+    if additional_prefix:
+        prefix = rf'{additional_prefix}/{user_id}/{session_id}'
+    else:
+        prefix = rf'{user_id}/{session_id}'
+    
+    try:
+        # List objects with the specified prefix
+        paginator = s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+        
+        for page in pages:
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    key = obj['Key']
+                    try:
+                        s3_client.delete_object(Bucket=bucket, Key=key)
+                        logger.info(f"Deleted s3://{bucket}/{key}")
+                        deleted_objects.append(f"s3://{bucket}/{key}")
+                    except Exception as e:
+                        logger.exception(e)
+                        errors.append(f"Error deleting s3://{bucket}/{key}: {str(e)}")
+    
+    except Exception as e:
+        logger.exception(e)
+        errors.append(f"Error listing objects in s3://{bucket}/{prefix}: {str(e)}")
+    
+    if errors:
+        logger.error(f"Encountered {len(errors)} errors:")
+        for error in errors:
+            logger.error(f"- {error}")

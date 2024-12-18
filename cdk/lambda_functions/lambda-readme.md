@@ -15,7 +15,7 @@ The rest of the functions are used to support security, config, lists of models 
 # How does the code decide where to route you?
 Have a look at /sample-json/1-message-from-browser.json
 
-The genai_bedrock_router_fn uses the field: selectedMode.category to determine which function to call.
+The genai_bedrock_router_fn uses the field: selected_mode.category to determine which function to call.
 
 The json message is built by the react application.
 
