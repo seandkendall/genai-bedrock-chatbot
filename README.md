@@ -1,3 +1,5 @@
+> PLEASE DO NOT DELETE - WE ARE MAINTAINING THIS BRANCH FOR PEOPLE THAT NEED THE APP TO WORK WITH EXTERNAL IDENTITY PROVIDERS
+
 # AWS Chatbot Application with Bedrock Agents and Claude-3
 <!-- MD formats here: https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax -->
 
