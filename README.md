@@ -10,6 +10,7 @@
 
 # Quick Deploy Guide
 
+> NOTE: In order for 3rd Party IDP to work, you need to add *aws.cognito.signin.user.admin* to your *openid connect scopes* when you configure Cognito
 
 For a quick start, use the [CI/CD](https://docs.aws.amazon.com/prescriptive-guidance/latest/strategy-cicd-litmus/understanding-cicd.html) script which will set-up a [CodeBuild](https://aws.amazon.com/codebuild/) project, automating the deployment.
 ![Quick Video Demo of CI/CD Setup using cloudshell](./readme-images/chatbot_web.gif)
