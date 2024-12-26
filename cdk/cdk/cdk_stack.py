@@ -284,10 +284,28 @@ class ChatbotWebsiteStack(Stack):
                 require_digits=True,
                 require_symbols=True,
             ),
+
         )
         cognito_public_key_url = f"https://cognito-idp.{region}.amazonaws.com/{user_pool.user_pool_id}/.well-known/jwks.json"
         
-        
+        # if allowlist_domain_string is not null and has a length > 0
+        if allowlist_domain_string is not None and len(allowlist_domain_string) > 0:
+            cognito_pre_signup_function = _lambda.Function(self, "CognitoPreSignupFunction",
+                runtime=_lambda.Runtime.PYTHON_3_13,
+                handler="cognito_pre_signup_fn.lambda_handler",
+                code=_lambda.Code.from_asset("lambda_functions/cognito_pre_signup_fn/"),
+                timeout=Duration.seconds(30),
+                architecture=_lambda.Architecture.ARM_64,
+                tracing=_lambda.Tracing.ACTIVE,
+                memory_size=256,
+                layers=[boto3_layer,lambda_insights_layer],
+                log_retention=logs.RetentionDays.FIVE_DAYS,
+                environment={
+                    "ALLOWLIST_DOMAIN": allowlist_domain_string,
+                    "POWERTOOLS_SERVICE_NAME":"COGNITO_PRE_SIGNUP_SERVICE",
+                },
+            )
+            user_pool.add_trigger(cognito.UserPoolOperation.PRE_SIGN_UP,cognito_pre_signup_function)
         # Create the Lambda function for image generation
         image_generation_function = _lambda.Function(self, "ImageGenerationFunction",
             runtime=_lambda.Runtime.PYTHON_3_13,
@@ -724,10 +742,6 @@ class ChatbotWebsiteStack(Stack):
         config_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
             "ConfigFnIntegration", config_function
         )
-        # model_scan_fn_integration = apigwv2_integrations.WebSocketLambdaIntegration(
-        #     "ModelScanFnIntegration", model_scan_function
-        # )
-
 
         # Add routes and integrations to the WebSocket API
         websocket_api.add_route(

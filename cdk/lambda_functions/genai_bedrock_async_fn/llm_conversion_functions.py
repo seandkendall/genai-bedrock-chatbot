@@ -29,7 +29,7 @@ def process_message_history_converse(existing_history):
     return normalized_history
 
 
-def process_bedrock_converse_response(apigateway_management_api, response, selected_model_id, connection_id, converse_content_with_s3_pointers,new_conversation,session_id):
+def process_bedrock_converse_response(apigateway_management_api, response, selected_model_id, connection_id, converse_content_with_s3_pointers, new_conversation, session_id):
     """Function to process a bedrock response and send the messages back to the websocket for converse API"""
     result_text = ""
     current_input_tokens = 0
@@ -40,12 +40,11 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
     stream = response.get('stream')
     
     if stream:
-        start_time = time()
-        buffer = deque()
-        last_send_time = start_time
+        buffer = []  # Buffer to accumulate messages
+        char_count = 0  # Tracks the total number of characters in the buffer
+
         for event in stream:
             if 'contentBlockDelta' in event:
-                current_time = time()
                 msg_text = event['contentBlockDelta']['delta']['text']
                 
                 if counter == 0:
@@ -53,32 +52,27 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                         'type': 'message_start',
                         'message': {"model": selected_model_id},
-                        'session_id':session_id,
+                        'session_id': session_id,
                         'delta': {'text': msg_text},
                         'message_counter': counter
                     })
                 else:
-                    if current_time - start_time <= 20:  # First 20 seconds
-                        # Send messages immediately
+                    # Add the new message text to the buffer
+                    buffer.append(msg_text)
+                    char_count += len(msg_text)
+
+                    # Check if the accumulated buffer exceeds or equals 1000 characters
+                    if char_count >= 1000:
+                        combined_text = ''.join(buffer)
                         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                             'type': 'content_block_delta',
-                            'session_id':session_id,
-                            'delta': {'text': msg_text},
+                            'session_id': session_id,
+                            'delta': {'text': combined_text},
                             'message_counter': counter
                         })
-                    else:  # After 20 seconds
-                        buffer.append(msg_text)
-                        # Send combined messages once per second
-                        if current_time - last_send_time >= 1 and buffer:
-                            combined_text = ''.join(buffer)
-                            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                                'type': 'content_block_delta',
-                                'session_id':session_id,
-                                'delta': {'text': combined_text},
-                                'message_counter': counter
-                            })
-                            buffer.clear()
-                            last_send_time = current_time
+                        # Clear the buffer and reset character count
+                        buffer.clear()
+                        char_count = 0
                 
                 result_text += msg_text
                 counter += 1
@@ -99,7 +93,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
             combined_text = ''.join(buffer)
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'content_block_delta',
-                'session_id':session_id,
+                'session_id': session_id,
                 'delta': {'text': combined_text},
                 'message_counter': counter
             })
@@ -108,12 +102,12 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
         # Send the message_stop event to the WebSocket client
         message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
         needs_code_end = False
-        # if count of ``` inside of result_text is odd, then needs_code_end = True
+        # if count of ```
         if result_text.count('```') % 2 != 0:
             needs_code_end = True
         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'message_stop',
-            'session_id':session_id,
+            'session_id': session_id,
             'message_counter': counter,
             'message_stop_reason': message_stop_reason,
             'needs_code_end': needs_code_end,
@@ -126,6 +120,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
         })
         
         return result_text, current_input_tokens, current_output_tokens, message_end_timestamp_utc, message_stop_reason
+
     
     
 def process_bedrock_converse_response_for_title(response):
