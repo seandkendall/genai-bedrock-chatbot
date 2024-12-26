@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export AWS_PAGER=""
 ORIGINAL_ARGS=("$@")
 
 display_help() {

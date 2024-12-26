@@ -838,6 +838,8 @@ class ChatbotWebsiteStack(Stack):
             lambda_router_function,
             presigned_url_function
         ]
+        if cognito_pre_signup_function is not None:
+            lambda_functions.append(cognito_pre_signup_function)
 
         # Construct the log group ARNs for all Lambda functions
         log_group_arns = [

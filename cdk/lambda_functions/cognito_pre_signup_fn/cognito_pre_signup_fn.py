@@ -3,23 +3,13 @@ import re
 
 def lambda_handler(event, context):
     try:
-        email = event['request']['userAttributes']['email']
+        email = event['request']['userAttributes']['email'].lower().replace(' ', '')
         allowlist_domain = os.environ.get('ALLOWLIST_DOMAIN', '')
         
         if allowlist_domain:
-            allowed_patterns = [pattern.strip() for pattern in allowlist_domain.split(',')]
+            allowed_patterns = [pattern.strip() for pattern in allowlist_domain.lower().split(',')]
             for pattern in allowed_patterns:
-                if pattern.startswith('@'):
-                    if email.endswith(pattern):
-                        event['response']['autoConfirmUser'] = True
-                        event['response']['autoVerifyEmail'] = True
-                        return event
-                elif pattern.endswith('.'):
-                    if any(email.endswith(domain) for domain in [pattern, pattern[:-1]]):
-                        event['response']['autoConfirmUser'] = True
-                        event['response']['autoVerifyEmail'] = True
-                        return event
-                elif pattern in email:
+                if pattern in email:
                     event['response']['autoConfirmUser'] = True
                     event['response']['autoVerifyEmail'] = True
                     return event
