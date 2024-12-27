@@ -349,16 +349,23 @@ def download_s3_content(item, content_type):
         None
     """
     content = item[content_type]
+    status = False
     if 's3source' in content:
         s3_bucket = content['s3source']['s3bucket']
         s3_key = content['s3source']['s3key']
         try:
             response = s3_client.get_object(Bucket=s3_bucket, Key=s3_key)
-            file_content = response['Body'].read()
-            content['source'] = {'bytes': file_content}
-            del content['s3source']
+            if response is not None and response['Body'] is not None:
+                file_content = response['Body'].read()
+                content['source'] = {'bytes': file_content}
+                status = True
         except ClientError as e:
+            logger.error(f"Error downloading content from S3: {e}")
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                logger.error(f"Key {s3_key} not found in bucket {s3_bucket}")
             logger.exception(e)
+        del content['s3source']
+        return status
 
 @tracer.capture_method
 def load_documents_from_existing_history(existing_history):
@@ -381,6 +388,7 @@ def load_documents_from_existing_history(existing_history):
         modified_item['content'] = []
         for content_item in item['content']:
             modified_content_item = {}
+            add_item = True
             for key, value in content_item.items():
                 if key in ['video']:
                     modified_content_item[key] = convert_video_s3_source_to_bedrock_format(value)
@@ -388,8 +396,11 @@ def load_documents_from_existing_history(existing_history):
                     modified_content_item[key] = value
                 elif key in ['document', 'image']:
                     modified_content_item[key] = value
-                    download_s3_content(modified_content_item, key)
-            modified_item['content'].append(modified_content_item)
+                    download_s3_content_worked = download_s3_content(modified_content_item, key)
+                    if not download_s3_content_worked:
+                        add_item = False
+            if add_item:
+                modified_item['content'].append(modified_content_item)
         modified_history.append(modified_item)
     return modified_history
 
