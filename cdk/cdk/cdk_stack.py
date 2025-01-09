@@ -287,7 +287,7 @@ class ChatbotWebsiteStack(Stack):
 
         )
         cognito_public_key_url = f"https://cognito-idp.{region}.amazonaws.com/{user_pool.user_pool_id}/.well-known/jwks.json"
-        
+        cognito_pre_signup_function = None
         # if allowlist_domain_string is not null and has a length > 0
         if allowlist_domain_string is not None and len(allowlist_domain_string) > 0:
             cognito_pre_signup_function = _lambda.Function(self, "CognitoPreSignupFunction",

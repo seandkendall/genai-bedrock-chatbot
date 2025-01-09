@@ -410,6 +410,7 @@ def store_conversation_history_converse(session_id, selected_model_id, existing_
     input_tokens, output_tokens, message_end_timestamp_utc,
     message_received_timestamp_utc, message_id, title,new_conversation,selected_model_category,message_stop_reason):
     """Function to store conversation history in DDB or S3 in the converse format"""
+    # logger.info(f"Storing conversation for session ID: {session_id}")
     
     if not (user_message.strip() and assistant_message.strip()):
         if not user_message.strip():

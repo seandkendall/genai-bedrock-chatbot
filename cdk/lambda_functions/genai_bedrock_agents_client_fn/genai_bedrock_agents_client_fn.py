@@ -347,78 +347,8 @@ def process_bedrock_agents_response(response_stream, message_id, connection_id, 
 
     return result_text, contains_errors
 
-@tracer.capture_method    
-def store_conversation_history_converse(session_id, selected_model_id, existing_history,
-    converse_content_array, user_message, assistant_message, user_id,
-    input_tokens, output_tokens, message_end_timestamp_utc,
-    message_received_timestamp_utc, message_id, title,new_conversation,selected_model_category):
-    """Function to store conversation history in DDB"""
-    
-    if not (user_message.strip() and assistant_message.strip()):
-        if not user_message.strip():
-            logger.info(f"User message is empty, skipping storage for session ID: {session_id}")
-        if not assistant_message.strip():
-            logger.info(f"Assistant response is empty, skipping storage for session ID: {session_id}")
-        return
-    
-    # Prepare the updated conversation history once
-    conversation_history = existing_history + [
-        {
-            'role': 'user',
-            'content': converse_content_array,
-            'timestamp': message_received_timestamp_utc,
-            'message_id': message_id
-        },
-        {
-            'role': 'assistant',
-            'content': [{'text': assistant_message}],
-            'timestamp': message_end_timestamp_utc,
-            'message_id': commons.generate_random_string()
-        }
-    ]
-    
-    # Convert to JSON string once
-    conversation_json = json.dumps(conversation_history)
-    current_timestamp = str(datetime.now(tz=timezone.utc).timestamp())
-    
-    try:
-        # Store in DynamoDB
-        if new_conversation:
-            dynamodb.put_item(
-                TableName=conversations_table_name,
-                Item={
-                    'session_id': {'S': session_id},
-                    'user_id': {'S': user_id},
-                    'title': {'S': title},
-                    'last_modified_date': {'N': current_timestamp},
-                    'selected_model_id': {'S': selected_model_id},
-                    'category': {'S': selected_model_category},
-                    'conversation_history': {'S': conversation_json},
-                    'conversation_history_in_s3': {'BOOL': False}
-                }
-            )
-        else:
-            dynamodb.update_item(
-                TableName=conversations_table_name,
-                Key={'session_id': {'S': session_id}},
-                UpdateExpression="SET last_modified_date = :current_time, title = :title, selected_model_id = :selected_model_id, conversation_history = :conversation_history, category = :category",
-                ExpressionAttributeValues={
-                    ':current_time': {'N': current_timestamp},
-                    ':title': {'S': title},
-                    ':selected_model_id': {'S': selected_model_id},
-                    ':conversation_history': {'S': conversation_json},
-                    ':category': {'S': selected_model_category},
-                }
-            )
-        
-        # Batch token usage update
-        conversations.save_token_usage(user_id, input_tokens,output_tokens,dynamodb,usage_table_name)
-        
-    except (ClientError, Exception) as e:
-        logger.error(f"Error storing conversation history: {e}")
-        raise
-    
 def store_bedrock_knowledgebase_response(prompt,response_text, existing_history, message_id, session_id,kb_session_id,user_id,selected_knowledgebase_id, selected_model_id,selected_model_category, chat_title):
+    """Stores the KB response in DynamoDB"""
     conversation_history = existing_history + [
         {
             'role': 'user',
@@ -452,6 +382,7 @@ def store_bedrock_knowledgebase_response(prompt,response_text, existing_history,
     )
 
 def store_bedrock_agents_response(prompt,response_text, existing_history, message_id, session_id,user_id,selected_agent_id, selected_agent_alias_id,flow_id,flow_alias_id, category, chat_title):
+    """Stores the Agent response in DynamoDB"""
     conversation_history = existing_history + [
         {
             'role': 'user',
@@ -489,3 +420,4 @@ def store_bedrock_agents_response(prompt,response_text, existing_history, messag
         TableName=conversations_table_name,
         Item=item_value
     )
+    
