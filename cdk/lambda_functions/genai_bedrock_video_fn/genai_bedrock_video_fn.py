@@ -33,6 +33,11 @@ SLEEP_TIME = 2
 def lambda_handler(event, context):
     """Lambda Handler Function"""
     try:
+        print('SDK RAW GENERATE VIDEO EVENT:')
+        print(event)
+        print('SDK RAW GENERATE VIDEO EVENT END')
+        # if theres an input image, load it from s3 then resize it to 1280 (width) x 720 (height)
+        # Create a python (Python 3.13) def/function that takes an input of an image, and returns a resized image of the size 1280 (width) x 720 (height). if the image is already sized 1280 (width) x 720 (height), then simply return the image. if the original image height or width are greater than the allowed width or height, then resize the image to be the largest size possible fiting within the constraints, always keeping the same aspect ratio. if the image width and height is smaller than the maximum allowed numbers, then resize the image to become larger to the maximum size fitting thin the alowed height width. After resizing to smaller or larger, if the final image size is not 1280 (width) x 720 (height), then extend the image adding a green color bar to the top/bottom or left/right of the image using the HEX color: 00b140
         access_token = event.get('access_token', {})
         session_id = event.get('session_id', 'XYZ')
         connection_id = event.get('connection_id', 'ZYX')
@@ -41,6 +46,7 @@ def lambda_handler(event, context):
         selected_mode = event.get('selected_mode', {})
         selected_model_category = selected_mode.get('category')
         prompt = event.get('prompt', '')
+        attachments = event.get('attachments', [])
         model_id = selected_mode.get('modelId','amazon.nova-reel-v1:0')
         # if prompt length is < 3 then prepend text 'image of '
         if len(prompt) < 3:
@@ -63,7 +69,8 @@ def lambda_handler(event, context):
             return
         duration_seconds = 6
         seed = random.randint(0, 2147483648)
-        video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain,duration_seconds,seed,False)
+        images_array = []
+        video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain,duration_seconds,seed,False,images_array)
         
         needs_load_from_s3, chat_title_loaded, original_existing_history = conversations.query_existing_history(dynamodb, conversations_table_name, logger, session_id)
         existing_history = copy.deepcopy(original_existing_history)

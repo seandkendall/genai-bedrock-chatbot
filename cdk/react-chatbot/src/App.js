@@ -533,6 +533,8 @@ const App = memo(({ signOut, user }) => {
 			setRequireConversationLoad(false);
 			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
 			setAppSessionId(newAppSessionid);
+			console.log('SDK DEBUG 99 SET NEW APP SESSION ID OF: ')
+			console.log(newAppSessionid)
 		}
 
 		if (retryPreviousMessage) {
@@ -565,13 +567,16 @@ const App = memo(({ signOut, user }) => {
 			.formatToParts(new Date())
 			.find((part) => part.type === "timeZoneName").value;
 
+		console.log(`SDK LOADING FOR: ${newAppSessionid ? newAppSessionid : appSessionid}`)
+		console.log(`newAppSessionid: ${newAppSessionid}`)
+		console.log(`appSessionid: ${appSessionid}`)
 		const data = {
 			prompt: sanitizedMessage,
 			type: "chat",
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
 			timestamp_local_timezone: timezone,
-			session_id: newAppSessionid ? newAppSessionid : appSessionid,
+			session_id: (newAppSessionid ? newAppSessionid : appSessionid),
 			kb_session_id: kbSessionId,
 			selected_mode: selectedMode,
 			titleGenModel: selectedTitleGenerationMode,
@@ -623,18 +628,18 @@ const App = memo(({ signOut, user }) => {
 
 		setTimeout(scrollToBottom, 0);
 		sendMessageViaRest(data,"/rest/send-message")
-		// sendMessage(JSON.stringify(data));
 		setReloadPromptConfig(false);
 	};
 
 	const generateImage = async (prompt, randomMessageId) => {
 		setIsLoading(true);
-		// if appsessionid is null then setappsessionid
 		let newAppSessionid;
 		if (!appSessionid) {
 			setRequireConversationLoad(false);
 			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
 			setAppSessionId(newAppSessionid);
+			console.log('SDK DEBUG 991 SET NEW APP SESSION ID OF: ')
+			console.log(newAppSessionid)
 		}
 				
 
@@ -683,12 +688,13 @@ const App = memo(({ signOut, user }) => {
 
 	const generateVideo = async (prompt, randomMessageId) => {
 		setIsLoading(true);
-		// if appsessionid is null then setappsessionid
 		let newAppSessionid;
 		if (!appSessionid) {
 			setRequireConversationLoad(false);
 			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
 			setAppSessionId(newAppSessionid);
+			console.log('SDK DEBUG 992 SET NEW APP SESSION ID OF: ')
+			console.log(newAppSessionid)
 		}
 
 		const { accessToken, idToken } = await getCurrentSession();
@@ -701,12 +707,30 @@ const App = memo(({ signOut, user }) => {
 			selected_mode: selectedMode,
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
+			attachments: await Promise.all(
+				attachments
+					.map(async (file) => {
+						try {
+							return {
+								name: file.name,
+								type: file.type,
+								url: file.url,
+							};
+						} catch (error) {
+							console.error("Error processing file:", file.name, error);
+							return null;
+						}
+					})
+					.filter(Boolean),
+			),
 		};
 
+
 		const currentTime = new Date();
+		const reformatted_attachments = reformat_attachments(attachments);
 		const messageWithTime = {
 			role: "user",
-			content: `Generate a Video of: ${prompt}.`,
+			content: [{ text: `Generate a Video of: ${prompt}.` }, ...reformatted_attachments],
 			message_id: randomMessageId,
 			timestamp: currentTime.toISOString(),
 		};
@@ -1150,9 +1174,10 @@ const App = memo(({ signOut, user }) => {
 		setUploadedFileNames([]);
 		setSelectedChatId("");
 		localStorage.removeItem("selectedChatId")
-		setAppSessionId(
-			`session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
-		);
+		const newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`
+		setAppSessionId(newAppSessionid);
+		console.log('SDK DEBUG 999 SET NEW APP SESSION ID OF: ')
+		console.log(newAppSessionid)
 	};
 
 	const handleDeleteChat = (chatId) => {
@@ -1164,7 +1189,7 @@ const App = memo(({ signOut, user }) => {
 
 		//logic for handling the current loaded chat
 		if (selectedChatId === chatId) {
-			setAppSessionId("");
+			setAppSessionId(`session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`);
 			setSelectedChatId("");
 			localStorage.removeItem("selectedChatId")
 			setMessages([]);

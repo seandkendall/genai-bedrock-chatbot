@@ -32,44 +32,60 @@ user_cache = {}
 def lambda_handler(event, context):
     """Lambda Hander Function"""
     is_websocket_event = False
-    if 'requestContext' in event:
+    connection_id = None
+    access_token = None
+
+    if 'Records' in event:
         is_websocket_event = True
-        request_context = event['requestContext']
-        if 'connectionId' in request_context:
-            connection_id = event['requestContext']['connectionId']
-            # Check if the WebSocket connection is open
-            try:
-                connection = apigateway_management_api.get_connection(ConnectionId=connection_id)
-                connection_state = connection.get('ConnectionStatus', 'OPEN')
-                if connection_state != 'OPEN':
-                    logger.info(f"WebSocket connection is not open (state: {connection_state})")
-                    return
-            except apigateway_management_api.exceptions.GoneException:
-                logger.error(f"WebSocket connection is closed (connectionId: {connection_id})")
+        record = event['Records'][0]
+        request_body = json.loads(record['body'])
+        connection_id = request_body.get('connection_id')
+        access_token = request_body.get('accessToken')
+    elif 'immediate' in event:
+        is_websocket_event = False
+    else:
+        logger.error(f"Unexpected event format: {event}")
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'error': 'Unexpected event format'})
+        }
+
+    if is_websocket_event:
+        # Check if the WebSocket connection is open
+        try:
+            connection = apigateway_management_api.get_connection(ConnectionId=connection_id)
+            connection_state = connection.get('ConnectionStatus', 'OPEN')
+            if connection_state != 'OPEN':
+                logger.info(f"WebSocket connection is not open (state: {connection_state})")
                 return
+        except apigateway_management_api.exceptions.GoneException:
+            logger.error(f"WebSocket connection is closed (connectionId: {connection_id})")
+            return
 
         try:
-            request_body = json.loads(event.get('body', '{}'))
-        except json.JSONDecodeError:
-            request_body = {}
-        access_token = request_body.get('accessToken', 'none')
-        try:
-            allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache,allowlist_domain,access_token)
+            allowed, not_allowed_message = commons.validate_jwt_token(cognito_client, user_cache, allowlist_domain, access_token)
         except ClientError as e:
             allowed, not_allowed_message = (False, "Your Access Token has expired. Please log in again.") if e.response['Error']['Code'] == 'NotAuthorizedException' else (None, None)
-            
+
         if not allowed:
             return {
                 'statusCode': 403,
                 'body': json.dumps({'error': not_allowed_message})
             }
-    
+
     active_models = scan_for_active_models()
-    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {'type':'modelscan','results':active_models,'timestamp': datetime.now(timezone.utc).isoformat(),})
+
+    if connection_id is None:
+        logger.info(f"SDK no connection ID found event: {event}")
+        print(event)
+    else:
+        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {'type':'modelscan','results':active_models,'timestamp': datetime.now(timezone.utc).isoformat(),})
+
     return {
         'statusCode': 200,
         'body': json.dumps(active_models, indent=2)
     }
+    
 def scan_for_active_models():
     """ Scans for active models in Bedrock """
     try:
@@ -170,21 +186,23 @@ def scan_for_active_models():
                     error_code = e.response['Error']['Code']
                     if error_code == 'ThrottlingException':
                         results[model_id][prompt_type] = True
-                        logger.warning(f"ThrottlingException for model {model_id}, prompt type {prompt_type}: {str(e)}")
+                        logger.warning(f"Throttling for model {model_id}, prompt type {prompt_type}")
                     elif error_code == 'ValidationException':
                         # log warning
-                        logger.warning(f"ValidationException for model {model_id}, prompt type {prompt_type}: {str(e)}")
+                        logger.warning(f"Validation issues (not supported) for model {model_id}, prompt type {prompt_type}")
                     elif error_code == 'AccessDeniedException':
-                        logger.warning(f"AccessDeniedException for model {model_id}, prompt type {prompt_type}: {str(e)}")
+                        logger.warning(f"AccessDenied for model {model_id}, prompt type {prompt_type}")
                     else:
-                        logger.warning(f"ClientError for model {model_id}, prompt type {prompt_type}: {str(e)}")
+                        logger.warning(f"Client issue for model {model_id}, prompt type {prompt_type}")
                 except Exception as e:
                     logger.exception(e)
                     logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
         if 'VIDEO' in output_modalities:
-            results[model_id]['TEXT'] = test_video_model(model_id)
+            video_success_status = test_video_model(model_id)
+            results[model_id]['TEXT'] = video_success_status
+            results[model_id]['IMAGE'] = video_success_status
             
     for model_id, model_info in results.items():
         # if TEXT = True or DOCUMENT = True or IMAGE = true then access_granted = True
@@ -216,7 +234,7 @@ def load_mp4():
     
 def test_video_model(model_id):
     """ tests video model for access"""
-    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain,6,0,True)
+    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain,6,0,True,[])
     return success_status
     
 def test_image_model(model_id):

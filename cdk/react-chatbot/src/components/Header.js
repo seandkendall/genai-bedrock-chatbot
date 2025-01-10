@@ -379,10 +379,16 @@ const Header = ({
 	};
 
 	const formatTimer = (value) => {
-		if (value > 5000) {
+		if (value < 1000) {
+			return `${value} ms`;
+		}
+		if (value < 60000) { // Less than 60 seconds
 			return `${(value / 1000).toFixed(1)} s`;
 		}
-		return `${value} ms`;
+		const totalSeconds = Math.floor(value / 1000);
+		const minutes = Math.floor(totalSeconds / 60);
+		const seconds = totalSeconds % 60;
+		return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 	};
 
 	const handleInfoTooltipOpen = () => {

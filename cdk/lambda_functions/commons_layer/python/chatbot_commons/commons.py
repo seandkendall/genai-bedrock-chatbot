@@ -281,7 +281,7 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
     response_body = json.loads(response['body'].read())
     return response_body['images'][0], True, None
 
-def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed, delete_after_generate):
+def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed, delete_after_generate, images):
     logger.info(f"Generating video using Nova Reel Video Generator with model: {model_id}")
     prefix = rf'{user_id}/{session_id}'
     model_input = {
@@ -294,6 +294,10 @@ def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client
             "seed": seed
         }
     }
+    # Add 'images' attribute to model_input.textToVideoParams if images is not null
+    # if images is an array and length > 0
+    if images and len(images) > 0:
+        model_input["textToVideoParams"]["images"] = images
 
     try:
         s3uri = f"s3://{video_bucket}/videos/{prefix}/"
