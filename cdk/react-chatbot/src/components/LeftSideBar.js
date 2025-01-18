@@ -138,7 +138,14 @@ const LeftSideBar = ({
 					p: 2,
 				}}
 			>
-				<Typography variant="h6">Chats</Typography>
+				<Typography variant="h6">
+					Chats{" "}
+					{conversationList.length > 1 && (
+						<Typography component="span" variant="subtitle1">
+						({conversationList.length})
+						</Typography>
+					)}
+				</Typography>
 				<IconButton onClick={handleNewChat} disabled={isDisabled}>
 					<AddIcon />
 				</IconButton>
