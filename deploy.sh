@@ -468,7 +468,11 @@ region=$(jq -r '.ChatbotWebsiteStack.region' ./outputs.json)
 s3bucket=$(jq -r '.ChatbotWebsiteStack.s3bucket' ./outputs.json)
 userpoolid=$(jq -r '.ChatbotWebsiteStack.userpoolid' ./outputs.json)
 userpoolclientid=$(jq -r '.ChatbotWebsiteStack.userpoolclientid' ./outputs.json)
+rum_identity_pool_id=$(jq -r '.ChatbotWebsiteStack.rumidentitypoolid' ./outputs.json)
 awschatboturl=$(jq -r '.ChatbotWebsiteStack.AWSChatBotURL' ./outputs.json)
+rum_application_monitor_arn=$(jq -r '.ChatbotWebsiteStack.RUMAppMonitorARN' ./outputs.json)
+rum_application_id=$(echo $rum_application_monitor_arn | awk -F/ '{print $NF}')
+
 cloudwatchlogslivetailurl=$(jq -r '.ChatbotWebsiteStack.CloudWatchLogsLiveTailURL' ./outputs.json)
 
 # Generate ./react-chatbot/src/variables.js
@@ -506,7 +510,11 @@ new_config_content=$(cat <<HEREDOC_DELIMITER
   "aws_project_region": "${region}",
   "aws_cognito_region": "${region}",
   "aws_user_pools_id": "${userpoolid}",
-  "aws_user_pools_web_client_id": "${userpoolclientid}"
+  "aws_user_pools_web_client_id": "${userpoolclientid}",
+  "rum_application_id":"${rum_application_id}",
+  "rum_application_version":"1.0.0",
+  "rum_application_region":"${region}",
+  "rum_identity_pool_id":"${rum_identity_pool_id}"
 }
 HEREDOC_DELIMITER
 )

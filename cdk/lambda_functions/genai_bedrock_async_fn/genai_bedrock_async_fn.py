@@ -79,9 +79,6 @@ def process_websocket_message(request_body):
     global system_prompt
     access_token = request_body.get('access_token', {})
     session_id = request_body.get('session_id', 'XYZ')
-    print('SDK DEBUG session_id 1')
-    print(session_id)
-    print(request_body)
     connection_id = request_body.get('connection_id', 'ZYX')
     user_id = access_token['payload']['sub']
     message_type = request_body.get('type', '')
@@ -107,18 +104,12 @@ def process_websocket_message(request_body):
         commons.delete_s3_attachments_for_session(session_id,image_bucket,user_id,None,s3_client, logger)
         commons.delete_s3_attachments_for_session(session_id,conversation_history_bucket,user_id,None,s3_client, logger)
         conversations.delete_conversation_history(dynamodb,conversations_table_name,logger,session_id)
-        print('SDK DEBUG session_id 2')
-        print(session_id)
         return
     elif message_type == 'load':
         # Load conversation history from DynamoDB
         conversations.load_and_send_conversation_history(session_id, connection_id, user_id, dynamodb,conversations_table_name,s3_client,conversation_history_bucket,logger, commons,apigateway_management_api)
-        print('SDK DEBUG session_id 3')
-        print(session_id)
         return
     else:
-        print('SDK DEBUG session_id 4')
-        print(session_id)
         # Handle other message types (e.g., prompt)
         prompt = request_body.get('prompt', '')
         attachments = request_body.get('attachments', [])
@@ -132,8 +123,6 @@ def process_websocket_message(request_body):
 
         image_count = sum(1 for a in attachments if a['type'].startswith('image/'))
         document_count = len(attachments) - image_count
-        print('SDK DEBUG session_id 5')
-        print(session_id)
         if image_count > MAX_IMAGES:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'error',
@@ -148,11 +137,7 @@ def process_websocket_message(request_body):
             })
             return {'statusCode': 400}
         processed_attachments = []
-        print('SDK DEBUG session_id 6')
-        print(session_id)
         for attachment in attachments:
-            print('SDK DEBUG session_id 7')
-            print(session_id)
             file_type = attachment['type'].split('/')[-1].lower()
             if not attachment['type'].startswith('image/') and not attachment['type'].startswith('video/') and file_type not in ALLOWED_DOCUMENT_TYPES:
                 commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
@@ -168,8 +153,6 @@ def process_websocket_message(request_body):
             else:
                 try:
                     file_key = attachment['url'].split('/')[-1]
-                    print('SDK DEBUG session_id 8')
-                    print(session_id)
                     response = s3_client.get_object(Bucket=os.environ['ATTACHMENT_BUCKET'], Key=f'{user_id}/{session_id}/{file_key}')
                     file_content = response['Body'].read()
                 except Exception as e:
@@ -188,16 +171,9 @@ def process_websocket_message(request_body):
                 's3key': f'{user_id}/{session_id}/{file_key}',
                 'content': file_content
             })
-            print('SDK DEBUG session_id 9')
-            print(session_id)
 
         # Query existing history for the session from DynamoDB
-        print('SDK: Querying Existing History for sessionID ')
-        #Why is the next line sometimes null?
-        print(session_id)
         needs_load_from_s3, chat_title, original_existing_history = conversations.query_existing_history(dynamodb,conversations_table_name,logger,session_id)
-        print('SDK DEBUG session_id 10')
-        print(session_id)
         if needs_load_from_s3:
             existing_history = load_documents_from_existing_history(original_existing_history)
         else:
@@ -215,8 +191,6 @@ def process_websocket_message(request_body):
         if '/' in title_gen_model:
             title_gen_model = title_gen_model.split('/')[1]
         
-        print('SDK DEBUG session_id 11')
-        print(session_id)
         selected_model_id = selected_mode.get('modelId','')
         selected_model_category = selected_mode.get('category','')
         model_provider = selected_model_id.split('.')[0]
@@ -226,14 +200,10 @@ def process_websocket_message(request_body):
         bedrock_request = None
         converse_content_array = []
         converse_content_with_s3_pointers = []
-        print('SDK DEBUG session_id 12')
-        print(session_id)
         if prompt:
             converse_content_array.append({'text': prompt})
             converse_content_with_s3_pointers.append({'text': prompt})
         for attachment in processed_attachments:
-            print('SDK DEBUG session_id 13')
-            print(session_id)
             if attachment['type'].startswith('image/'):
                 converse_content_array.append({'image':{'format': attachment['type'].split('/')[1],
                                                         'source': {'bytes': attachment['content']}
@@ -269,8 +239,6 @@ def process_websocket_message(request_body):
                                                             's3source': {'s3bucket': attachment['s3bucket'], 's3key': attachment['s3key']}
                                                             }
                                                 })
-        print('SDK DEBUG session_id 14')
-        print(session_id)
         message_content = process_message_history_converse(existing_history) + [{
                 'role': 'user',
                 'content': converse_content_array,
@@ -278,14 +246,10 @@ def process_websocket_message(request_body):
         bedrock_request = {
             'messages': message_content
         }
-        print('SDK DEBUG session_id 15')
-        print(session_id)
         if model_provider == 'meta':
             bedrock_request['additionalModelRequestFields'] = {'max_gen_len':2048}
         
         if bedrock_request:
-            print('SDK DEBUG session_id 16')
-            print(session_id)
             try:
                 tracer.put_annotation(key="Model", value=selected_model_id)
                 system_prompt_array = []
@@ -312,16 +276,12 @@ def process_websocket_message(request_body):
                     "NEVER reference this date randomly. "
                     "Use it to support high quality answers when the current date is NEEDED."
                 )
-                print('SDK DEBUG session_id 17')
-                print(session_id)
 
                 if system_prompt:
                     system_prompt = system_prompt + ' ' + timezone_prompt
                 else:
                     system_prompt = timezone_prompt
                 
-                print('SDK DEBUG session_id 18')
-                print(session_id)
                 if system_prompt and selected_model_id not in SYSTEM_PROMPT_EXCLUDED_MODELS and model_provider != 'amazon':
                     system_prompt_array.append({'text': system_prompt})
                     response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
@@ -337,15 +297,9 @@ def process_websocket_message(request_body):
                 else:
                     response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
                                                     modelId=selected_model_id,
-                                                    additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{}))
-                print('SDK DEBUG session_id 19')
-                print(session_id)    
-                assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)
-                print('SDK DEBUG session_id 20')
-                print(session_id)    
+                                                    additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{})) 
+                assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)  
                 store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id,chat_title,new_conversation,selected_model_category, message_stop_reason)
-                print('SDK DEBUG session_id 21')
-                print(session_id)    
             except Exception as e:
                 if 'ThrottlingException' not in str(e):
                     logger.exception(e)

@@ -20,7 +20,15 @@ from aws_cdk import ( # type: ignore
     aws_scheduler_alpha as scheduler,
     aws_scheduler_targets_alpha as scheduler_targets,
     aws_lambda_event_sources as lambda_event_sources,
+    aws_rum as rum,
 )
+from aws_cdk.aws_cognito_identitypool_alpha import (  
+    IdentityPool,  
+    IdentityPoolAuthenticationProviders,  
+    IdentityPoolRoleMapping,  
+    IdentityPoolProviderUrl,  
+    UserPoolAuthenticationProvider,  
+)    
 from datetime import datetime, timezone
 from urllib.parse import quote
 from constructs import Construct
@@ -286,6 +294,7 @@ class ChatbotWebsiteStack(Stack):
             ),
 
         )
+        
         cognito_public_key_url = f"https://cognito-idp.{region}.amazonaws.com/{user_pool.user_pool_id}/.well-known/jwks.json"
         cognito_pre_signup_function = None
         # if allowlist_domain_string is not null and has a length > 0
@@ -749,11 +758,7 @@ class ChatbotWebsiteStack(Stack):
             integration=config_fn_integration,
             return_response=True
         )
-        # websocket_api.add_route(
-        #     "modelscan",
-        #     integration=model_scan_fn_integration,
-        #     return_response=False
-        # )
+
         websocket_api.add_route(
             "$default",
             integration=bedrock_fn_integration,
@@ -780,6 +785,14 @@ class ChatbotWebsiteStack(Stack):
             user_pool_client_name="ChatbotUserPoolClient",
         )
         user_pool_client.apply_removal_policy(RemovalPolicy.DESTROY)
+        # cognito_client_id = user_pool_client.user_pool_client_id
+        # cognito_provider_name = f'cognito-idp.{region}.amazonaws.com/{user_pool.user_pool_id}'
+        # cognito_identity_provider_property = cognito.CfnIdentityPool.CognitoIdentityProviderProperty(
+        #     client_id=cognito_client_id,
+        #     provider_name=cognito_provider_name,
+        #     server_side_token_check=False
+        # )
+        
 
         # Create a Cognito User Pool Domain
         user_pool_domain = cognito.UserPoolDomain(
@@ -840,6 +853,88 @@ class ChatbotWebsiteStack(Stack):
         ]
         if cognito_pre_signup_function is not None:
             lambda_functions.append(cognito_pre_signup_function)
+            
+        #AWS RUM:
+        # Create the Cognito Identity Pool
+        # Step 1: Create a placeholder guest role with an empty assume role policy
+        guest_role = iam.Role(
+            self,
+            "GuestRole",
+            assumed_by=iam.FederatedPrincipal(
+                        "cognito-identity.amazonaws.com",
+                        {
+                            "StringEquals": {
+                                "cognito-identity.amazonaws.com:aud": (self.region + ":abcdefg-1234-5678-910a-0e8443553f95") #an impossible ID
+                            },
+                            "ForAnyValue:StringLike": {
+                                "cognito-identity.amazonaws.com:amr": "unauthenticated"
+                            }
+                        },
+                        "sts:AssumeRoleWithWebIdentity"
+                    )
+        )
+
+        # Step 2: Define the identity pool with the guest role
+        identity_pool = IdentityPool(
+            self,
+            "ChatBotRUMIdentityPool",
+            allow_unauthenticated_identities=True,
+            unauthenticated_role=guest_role,
+        )
+
+        # Step 3: Update the assume role policy of the guest role after identity pool creation
+        guest_role.assume_role_policy.add_statements(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["sts:AssumeRoleWithWebIdentity"],
+                principals=[
+                    iam.FederatedPrincipal(
+                        "cognito-identity.amazonaws.com",
+                        {
+                            "StringEquals": {
+                                "cognito-identity.amazonaws.com:aud": identity_pool.identity_pool_id
+                            },
+                            "ForAnyValue:StringLike": {
+                                "cognito-identity.amazonaws.com:amr": "unauthenticated"
+                            }
+                        },
+                        "sts:AssumeRoleWithWebIdentity"
+                    )
+                ]
+            )
+        )
+
+        # Step 4: Add permissions to the guest role
+        guest_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["rum:PutRumEvents"],
+                resources=[f"arn:aws:rum:{self.region}:{self.account}:appmonitor/*"]
+            )
+        )
+
+        # Output the Identity Pool ID
+        CfnOutput(self, "IdentityPoolId", value=identity_pool.identity_pool_id)
+        app_monitor_name = "ChatbotAppMonitor"
+        
+        cfn_app_monitor = rum.CfnAppMonitor(self,app_monitor_name ,
+            domain=cloudfront_distribution_domain_name,
+            name=app_monitor_name,
+            app_monitor_configuration=rum.CfnAppMonitor.AppMonitorConfigurationProperty(
+                allow_cookies=True,
+                enable_x_ray=True,
+                identity_pool_id=identity_pool.identity_pool_id,
+                # guest_role_arn=guest_role.role_arn,
+                session_sample_rate=1,  # Capture 100% of sessions
+                telemetries=["performance", "errors","http"]
+            ),
+            cw_log_enabled=True,  # Enable CloudWatch Logs
+        )
+        app_monitor_arn = f"arn:aws:rum:{region}:{self.account}:appmonitor/{cfn_app_monitor.attr_id}"
+        CfnOutput(self, "RUMAppMonitorARN", value=app_monitor_arn)
+        CfnOutput(self, "rum_identity_pool_id",value=identity_pool.identity_pool_id)
+        CfnOutput(self, "rum_application_id",value=identity_pool.identity_pool_id)
+        #END OF AWS RUM            
 
         # Construct the log group ARNs for all Lambda functions
         log_group_arns = [
@@ -866,5 +961,5 @@ class ChatbotWebsiteStack(Stack):
         CfnOutput(self, "user_pool_client_id", value=user_pool_client.user_pool_client_id)
         CfnOutput(self, "websocket_api_endpoint", value=websocket_api_endpoint+'/ws')
         CfnOutput(self, "RestApiUrl", value=rest_api.url)
-        CfnOutput(self,"CloudWatchLogsLiveTailURL",value=cloudwatch_logs_url,description="URL to CloudWatch Logs live tail screen for all Lambda functions")
-
+        CfnOutput(self, "CloudWatchLogsLiveTailURL",value=cloudwatch_logs_url,description="URL to CloudWatch Logs live tail screen for all Lambda functions")
+        

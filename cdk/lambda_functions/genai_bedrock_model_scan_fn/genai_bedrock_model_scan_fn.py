@@ -74,12 +74,7 @@ def lambda_handler(event, context):
             }
 
     active_models = scan_for_active_models()
-
-    if connection_id is None:
-        logger.info(f"SDK no connection ID found event: {event}")
-        print(event)
-    else:
-        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {'type':'modelscan','results':active_models,'timestamp': datetime.now(timezone.utc).isoformat(),})
+    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {'type':'modelscan','results':active_models,'timestamp': datetime.now(timezone.utc).isoformat(),})
 
     return {
         'statusCode': 200,

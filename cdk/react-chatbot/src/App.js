@@ -147,7 +147,6 @@ const App = memo(({ signOut, user }) => {
 	const [isDragging, setIsDragging] = useState(false);
 	const isMobile = useMediaQuery("(max-width:600px)");
 
-
 	// Use the useWebSocket hook to manage the WebSocket connection
 	// eslint-disable-next-line
 	const { sendMessage, lastMessage, readyState, getWebSocket } = useWebSocket(websocketUrl, {
@@ -533,8 +532,6 @@ const App = memo(({ signOut, user }) => {
 			setRequireConversationLoad(false);
 			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
 			setAppSessionId(newAppSessionid);
-			console.log('SDK DEBUG 99 SET NEW APP SESSION ID OF: ')
-			console.log(newAppSessionid)
 		}
 
 		if (retryPreviousMessage) {
@@ -567,9 +564,6 @@ const App = memo(({ signOut, user }) => {
 			.formatToParts(new Date())
 			.find((part) => part.type === "timeZoneName").value;
 
-		console.log(`SDK LOADING FOR: ${newAppSessionid ? newAppSessionid : appSessionid}`)
-		console.log(`newAppSessionid: ${newAppSessionid}`)
-		console.log(`appSessionid: ${appSessionid}`)
 		const data = {
 			prompt: sanitizedMessage,
 			type: "chat",
@@ -638,8 +632,6 @@ const App = memo(({ signOut, user }) => {
 			setRequireConversationLoad(false);
 			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
 			setAppSessionId(newAppSessionid);
-			console.log('SDK DEBUG 991 SET NEW APP SESSION ID OF: ')
-			console.log(newAppSessionid)
 		}
 				
 
@@ -693,8 +685,6 @@ const App = memo(({ signOut, user }) => {
 			setRequireConversationLoad(false);
 			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
 			setAppSessionId(newAppSessionid);
-			console.log('SDK DEBUG 992 SET NEW APP SESSION ID OF: ')
-			console.log(newAppSessionid)
 		}
 
 		const { accessToken, idToken } = await getCurrentSession();
@@ -1176,8 +1166,6 @@ const App = memo(({ signOut, user }) => {
 		localStorage.removeItem("selectedChatId")
 		const newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`
 		setAppSessionId(newAppSessionid);
-		console.log('SDK DEBUG 999 SET NEW APP SESSION ID OF: ')
-		console.log(newAppSessionid)
 	};
 
 	const handleDeleteChat = (chatId) => {

@@ -33,11 +33,6 @@ SLEEP_TIME = 2
 def lambda_handler(event, context):
     """Lambda Handler Function"""
     try:
-        print('SDK RAW GENERATE VIDEO EVENT:')
-        print(event)
-        print('SDK RAW GENERATE VIDEO EVENT END')
-        # if theres an input image, load it from s3 then resize it to 1280 (width) x 720 (height)
-        # Create a python (Python 3.13) def/function that takes an input of an image, and returns a resized image of the size 1280 (width) x 720 (height). if the image is already sized 1280 (width) x 720 (height), then simply return the image. if the original image height or width are greater than the allowed width or height, then resize the image to be the largest size possible fiting within the constraints, always keeping the same aspect ratio. if the image width and height is smaller than the maximum allowed numbers, then resize the image to become larger to the maximum size fitting thin the alowed height width. After resizing to smaller or larger, if the final image size is not 1280 (width) x 720 (height), then extend the image adding a green color bar to the top/bottom or left/right of the image using the HEX color: 00b140
         access_token = event.get('access_token', {})
         session_id = event.get('session_id', 'XYZ')
         connection_id = event.get('connection_id', 'ZYX')

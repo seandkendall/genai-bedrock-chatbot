@@ -56,6 +56,13 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                         'delta': {'text': msg_text},
                         'message_counter': counter
                     })
+                elif len(result_text) < 1000:
+                    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                            'type': 'content_block_delta',
+                            'session_id': session_id,
+                            'delta': {'text': msg_text},
+                            'message_counter': counter
+                        })
                 else:
                     # Add the new message text to the buffer
                     buffer.append(msg_text)
@@ -97,6 +104,8 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                 'delta': {'text': combined_text},
                 'message_counter': counter
             })
+            buffer.clear()
+            char_count = 0
         
         logger.info(f"TokenCounts (Converse): {str(current_input_tokens)}/{str(current_output_tokens)}")
         # Send the message_stop event to the WebSocket client
