@@ -1,10 +1,25 @@
 import json
 import decimal
 import time
+import io
 import random
 import string
 from datetime import datetime, timezone, timedelta
 from botocore.exceptions import ClientError
+
+try:
+    print('SDK: importing PIL from Image')
+    from PIL import Image
+    print('SDK: importing PIL from Image DONE')
+    pil_available = True
+except ImportError as e:
+    print('SDK: importing PIL from Image FAILED')
+    print(e)
+    pil_available = False
+    print('SDK: importing PIL from Image FAILED DONE')
+# pil_available = True
+
+GREEN_SCREEN_COLOR = (4, 244, 4)
 
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -282,7 +297,10 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
     return response_body['images'][0], True, None
 
 def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed, delete_after_generate, images):
+    """Generates a video through GenAi on Amazon Bedrock"""
     logger.info(f"Generating video using Nova Reel Video Generator with model: {model_id}")
+    print('SDK Images for generating a video?')
+    print(images)
     prefix = rf'{user_id}/{session_id}'
     model_input = {
         "taskType": "TEXT_VIDEO",
@@ -444,3 +462,109 @@ def delete_s3_attachments_for_session(session_id: str,bucket: str,user_id:str,ad
         logger.error(f"Encountered {len(errors)} errors:")
         for error in errors:
             logger.error(f"- {error}")
+
+def extend_image():
+    inside_color_value = (0, 0, 0) #inside is black - this is the masked area
+    outside_color_value = (255, 255, 255)
+def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, allowed_document_types,required_image_width,required_image_height):
+    processed_attachments = []
+    error_message = ""
+    for attachment in attachments:
+        file_type = attachment['type'].split('/')[-1].lower()
+        if not attachment['type'].startswith('image/') and not attachment['type'].startswith('video/') and file_type not in allowed_document_types:
+            error_message += f'Invalid file type: {file_type}. Allowed types are images, videos and {", ".join(allowed_document_types)}.'
+            return processed_attachments, error_message
+
+        # Download file from S3
+        if attachment['type'].startswith('video/'):
+            file_key = attachment['url'].split('/')[-1]
+            file_content = None
+        else:
+            try:
+                file_key = attachment['url'].split('/')[-1]
+                response = s3_client.get_object(Bucket=attachment_bucket, Key=f'{user_id}/{session_id}/{file_key}')
+                file_content = response['Body'].read()
+            except Exception as e:
+                logger.exception(e)
+                logger.error(f"Error downloading file from S3: {str(e)}")
+                error_message += f'Error processing attachment: {attachment["name"]}'
+                return processed_attachments, error_message
+        if attachment['type'].startswith('image/'):
+            if pil_available:
+                print('SDK RESIZING IMAGE')
+                file_content, file_was_modified = resize_image_if_needed(file_content, required_image_width, required_image_height)
+                print(f'File was modified? {file_was_modified}')
+                print('SDK RESIZING IMAGE DONE')
+            else:
+                print('SDK: pil_available is false')
+                print(pil_available)
+                print('-----END0---')
+
+        processed_attachments.append({
+            'type': attachment['type'],
+            'name': attachment['name'],
+            's3bucket': attachment_bucket, 
+            's3key': f'{user_id}/{session_id}/{file_key}',
+            'content': file_content
+        })
+    return processed_attachments, error_message
+
+def resize_image_if_needed(file_content, required_image_width, required_image_height):
+    """
+    Resize and pad an image to meet specified dimensions.
+
+    This function takes an image file's content and resizes it to fit within the
+    specified dimensions while maintaining its aspect ratio. If the image is smaller
+    than the required dimensions, it's enlarged. The image is then padded with a
+    specified color to exactly match the required dimensions.
+
+    Args:
+    file_content (bytes): The binary content of the image file.
+    required_image_width (int): The required width of the output image.
+    required_image_height (int): The required height of the output image.
+
+    Returns:
+    tuple: A tuple containing:
+        - bytes: The binary content of the modified image.
+        - bool: True if the image was modified, False otherwise.
+
+    Example:
+    >>> with open('image.jpg', 'rb') as f:
+    ...     content = f.read()
+    >>> new_content, was_modified = resize_image_if_needed(content, 800, 600)
+    """
+    image = Image.open(io.BytesIO(file_content))
+    original_format = image.format
+    original_size = image.size
+
+    # Calculate the scaling factor
+    width_ratio = required_image_width / image.width
+    height_ratio = required_image_height / image.height
+    scale_factor = min(width_ratio, height_ratio)
+
+    # Calculate new dimensions
+    new_width = int(image.width * scale_factor)
+    new_height = int(image.height * scale_factor)
+
+    # Resize the image
+    image = image.resize((new_width, new_height), Image.LANCZOS)
+
+    # Create a new image with the required dimensions and fill it with the padding color
+    padded_image = Image.new('RGB', (required_image_width, required_image_height), GREEN_SCREEN_COLOR)
+
+    # Calculate position to paste the resized image
+    paste_x = (required_image_width - new_width) // 2
+    paste_y = (required_image_height - new_height) // 2
+
+    # Paste the resized image onto the padded image
+    padded_image.paste(image, (paste_x, paste_y))
+
+    # Save the result to a bytes object
+    output_buffer = io.BytesIO()
+    padded_image.save(output_buffer, format=original_format)
+    modified_content = output_buffer.getvalue()
+
+    # Check if the image was modified
+    was_modified = (original_size != (required_image_width, required_image_height))
+
+    return modified_content, was_modified

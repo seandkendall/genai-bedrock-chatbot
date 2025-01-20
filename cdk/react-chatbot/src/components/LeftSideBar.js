@@ -92,7 +92,9 @@ const LeftSideBar = ({
 		}
 		setRequireConversationLoad(true);
 		setSelectedChatId(sessionId);
-		localStorage.setItem("selectedChatId", sessionId);
+		if (sessionId && !sessionId.includes("undefined")) {
+			localStorage.setItem("selectedChatId", sessionId);
+		}
 		setAppSessionId(sessionId);
 		const selMode = getModeObjectFromModelID(category, selectedModelId);
 		if (selected_knowledgebase_id && kb_session_id) {

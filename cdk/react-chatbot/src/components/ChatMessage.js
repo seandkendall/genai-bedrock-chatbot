@@ -354,10 +354,10 @@ const ChatMessage = memo(
 									? "grey.200"
 									: "background.paper"
 							: hasError
-								? "#333"
+								? "#DC3545"
 								: isHuman
 									? "grey.800"
-									: "background.default",
+									: "background.paper",
 					boxShadow: isAssistant ? "0 1px 2px rgba(0, 0, 0, 0.1)" : "none",
 					userSelect: "text",
 				}}

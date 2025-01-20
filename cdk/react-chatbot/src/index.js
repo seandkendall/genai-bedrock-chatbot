@@ -6,6 +6,7 @@ import reportWebVitals from './reportWebVitals';
 import { AwsRum } from 'aws-rum-web';
 
 import configJson from './config.json';
+let awsRum = null;
 
 try {
   const config = {
@@ -20,7 +21,7 @@ try {
   const APPLICATION_ID = configJson.rum_application_id;
   const APPLICATION_VERSION = configJson.rum_application_version;
   const APPLICATION_REGION = configJson.rum_application_region;
-  const awsRum = new AwsRum(
+  awsRum = new AwsRum(
     APPLICATION_ID,
     APPLICATION_VERSION,
     APPLICATION_REGION,
@@ -35,7 +36,7 @@ try {
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    <App awsRum={awsRum} />
   </React.StrictMode>
 );
 

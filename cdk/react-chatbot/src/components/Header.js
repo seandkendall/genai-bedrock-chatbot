@@ -533,7 +533,10 @@ const Header = ({
 									</Typography>
 									{user?.signInDetails?.loginId && (
 										<Typography>
-											You are Logged in as: {user?.signInDetails?.loginId}
+											User: {user?.signInDetails?.loginId}
+											{user?.userId && user?.userId.length > 1 && (
+												<> ({user?.userId})</>
+											)}
 										</Typography>
 									)}
 									{region && (

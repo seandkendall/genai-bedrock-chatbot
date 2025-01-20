@@ -130,8 +130,8 @@ phases:
       - git checkout $branch_name
       - cd cdk
       - cdk --version
-      - python3 -m venv .venv
-      - . .venv/bin/activate
+      - python3 -m venv .env
+      - . .env/bin/activate
       - pip install --upgrade pip
       - pip install -r requirements.txt
   build:
@@ -165,8 +165,8 @@ phases:
         fi
       - cd cdk
       - cdk --version
-      - python3 -m venv .venv
-      - . .venv/bin/activate
+      - python3 -m venv .env
+      - . .env/bin/activate
       - pip install --upgrade pip
       - pip install -r requirements.txt
   build:
@@ -193,8 +193,8 @@ phases:
     commands:
       - cd cdk
       - cdk --version
-      - python3 -m venv .venv
-      - . .venv/bin/activate
+      - python3 -m venv .env
+      - . .env/bin/activate
       - pip install --upgrade pip
       - pip install -r requirements.txt
   build:

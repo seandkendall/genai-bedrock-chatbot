@@ -1,16 +1,15 @@
 import json
 import os
-import boto3
-from boto3.dynamodb.conditions import Key
-import jwt
+import copy
 import re
 import sys
 import base64
-import copy
+from datetime import datetime, timezone
+import boto3
+from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
 from chatbot_commons import commons
 from conversations import conversations
-from datetime import datetime, timezone
-from botocore.exceptions import ClientError
 #use AWS powertools for logging
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from llm_conversion_functions import (
@@ -53,8 +52,8 @@ MAX_IMAGES = 20
 MAX_DOCUMENTS = 5
 ALLOWED_DOCUMENT_TYPES = ['pdf', 'csv', 'doc', 'docx', 'xls', 'xlsx', 'html', 'txt', 'md', 'png','jpeg','gif','webp']
 
-# Initialize Bedrock client
-bedrock = boto3.client(service_name="bedrock-runtime")
+# Initialize bedrock_runtime client
+bedrock_runtime = boto3.client(service_name="bedrock-runtime")
 
 # AWS API Gateway Management API client
 apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
@@ -64,6 +63,8 @@ system_prompt = ''
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):  
     """Lambda Hander Function"""
+    print('SDK EVENT ASYNC')
+    print(event)
     try:
         process_websocket_message(event)
         return {'statusCode': 200}
@@ -136,41 +137,13 @@ def process_websocket_message(request_body):
                 'error': f'Too many documents. Maximum allowed is {MAX_DOCUMENTS}.'
             })
             return {'statusCode': 400}
-        processed_attachments = []
-        for attachment in attachments:
-            file_type = attachment['type'].split('/')[-1].lower()
-            if not attachment['type'].startswith('image/') and not attachment['type'].startswith('video/') and file_type not in ALLOWED_DOCUMENT_TYPES:
-                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                    'type': 'error',
-                    'error': f'Invalid file type: {file_type}. Allowed types are images, videos and {", ".join(ALLOWED_DOCUMENT_TYPES)}.'
-                })
-                return {'statusCode': 400}
-
-            # Download file from S3
-            if attachment['type'].startswith('video/'):
-                file_key = attachment['url'].split('/')[-1]
-                file_content = None
-            else:
-                try:
-                    file_key = attachment['url'].split('/')[-1]
-                    response = s3_client.get_object(Bucket=os.environ['ATTACHMENT_BUCKET'], Key=f'{user_id}/{session_id}/{file_key}')
-                    file_content = response['Body'].read()
-                except Exception as e:
-                    logger.exception(e)
-                    logger.error(f"Error downloading file from S3: {str(e)}")
-                    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                        'type': 'error',
-                        'error': f'Error processing attachment: {attachment["name"]}'
-                    })
-                    return {'statusCode': 500}
-
-            processed_attachments.append({
-                'type': attachment['type'],
-                'name': attachment['name'],
-                's3bucket': os.environ['ATTACHMENT_BUCKET'], 
-                's3key': f'{user_id}/{session_id}/{file_key}',
-                'content': file_content
+        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, ALLOWED_DOCUMENT_TYPES,0,0,bedrock_runtime)
+        if error_message and len(error_message) > 1:
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                'type': 'error',
+                'error': error_message
             })
+            return {'statusCode': 400}
 
         # Query existing history for the session from DynamoDB
         needs_load_from_s3, chat_title, original_existing_history = conversations.query_existing_history(dynamodb,conversations_table_name,logger,session_id)
@@ -284,7 +257,7 @@ def process_websocket_message(request_body):
                 
                 if system_prompt and selected_model_id not in SYSTEM_PROMPT_EXCLUDED_MODELS and model_provider != 'amazon':
                     system_prompt_array.append({'text': system_prompt})
-                    response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
+                    response = bedrock_runtime.converse_stream(messages=bedrock_request.get('messages'),
                                                         modelId=selected_model_id,
                                                         system=system_prompt_array,
                                                         additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{}))
@@ -295,7 +268,7 @@ def process_websocket_message(request_body):
                     #     'session_id':session_id,
                     # });
                 else:
-                    response = bedrock.converse_stream(messages=bedrock_request.get('messages'),
+                    response = bedrock_runtime.converse_stream(messages=bedrock_request.get('messages'),
                                                     modelId=selected_model_id,
                                                     additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{})) 
                 assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)  
@@ -321,7 +294,7 @@ def process_websocket_message(request_body):
             
 @tracer.capture_method
 def get_title_from_message(messages: list, selected_model_id: str,connection_id: str, message_id: str) -> str:
-    response = bedrock.converse_stream(messages=messages,
+    response = bedrock_runtime.converse_stream(messages=messages,
                                            modelId=selected_model_id,
                                            additionalModelRequestFields={})
     # chat_title is a json object

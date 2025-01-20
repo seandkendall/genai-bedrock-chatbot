@@ -1,5 +1,5 @@
 # ARN Lookup: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versionsARM.html
-lambda_insights_layers = {
+lambda_insights_layers_arm64 = {
     "us-east-1": "arn:aws:lambda:us-east-1:580247275435:layer:LambdaInsightsExtension-Arm64:20",
     "us-east-2": "arn:aws:lambda:us-east-2:580247275435:layer:LambdaInsightsExtension-Arm64:22",
     "us-west-1": "arn:aws:lambda:us-west-1:580247275435:layer:LambdaInsightsExtension-Arm64:18",
@@ -26,4 +26,41 @@ lambda_insights_layers = {
     "sa-east-1": "arn:aws:lambda:sa-east-1:580247275435:layer:LambdaInsightsExtension-Arm64:18",
     "us-gov-east-1": "arn:aws-us-gov:lambda:us-gov-east-1:122132214140:layer:LambdaInsightsExtension-Arm64:3",
     "us-gov-west-1": "arn:aws-us-gov:lambda:us-gov-west-1:751350123760:layer:LambdaInsightsExtension-Arm64:3"
+}
+
+lambda_insights_layers_x86 = {
+    "us-east-1": "arn:aws:lambda:us-east-1:580247275435:layer:LambdaInsightsExtension:53",
+    "us-east-2": "arn:aws:lambda:us-east-2:580247275435:layer:LambdaInsightsExtension:53",
+    "us-west-1": "arn:aws:lambda:us-west-1:580247275435:layer:LambdaInsightsExtension:53",
+    "us-west-2": "arn:aws:lambda:us-west-2:580247275435:layer:LambdaInsightsExtension:53",
+    "af-south-1": "arn:aws:lambda:af-south-1:012438385374:layer:LambdaInsightsExtension:44",
+    "ap-east-1": "arn:aws:lambda:ap-east-1:519774774795:layer:LambdaInsightsExtension:44",
+    "ap-south-2": "arn:aws:lambda:ap-south-2:891564319516:layer:LambdaInsightsExtension:26",
+    "ap-southeast-3": "arn:aws:lambda:ap-southeast-3:439286490199:layer:LambdaInsightsExtension:30",
+    "ap-southeast-5": "arn:aws:lambda:ap-southeast-5:590183865173:layer:LambdaInsightsExtension:1",
+    "ap-southeast-4": "arn:aws:lambda:ap-southeast-4:158895979263:layer:LambdaInsightsExtension:21",
+    "ap-south-1": "arn:aws:lambda:ap-south-1:580247275435:layer:LambdaInsightsExtension:51",
+    "ap-northeast-3": "arn:aws:lambda:ap-northeast-3:194566237122:layer:LambdaInsightsExtension:34",
+    "ap-northeast-2": "arn:aws:lambda:ap-northeast-2:580247275435:layer:LambdaInsightsExtension:52",
+    "ap-southeast-1": "arn:aws:lambda:ap-southeast-1:580247275435:layer:LambdaInsightsExtension:53",
+    "ap-southeast-2": "arn:aws:lambda:ap-southeast-2:580247275435:layer:LambdaInsightsExtension:53",
+    "ap-northeast-1": "arn:aws:lambda:ap-northeast-1:580247275435:layer:LambdaInsightsExtension:80",
+    "ca-central-1": "arn:aws:lambda:ca-central-1:580247275435:layer:LambdaInsightsExtension:52",
+    "ca-west-1": "arn:aws:lambda:ca-west-1:946466191631:layer:LambdaInsightsExtension:13",
+    "cn-north-1": "arn:aws-cn:lambda:cn-north-1:488211338238:layer:LambdaInsightsExtension:43",
+    "cn-northwest-1": "arn:aws-cn:lambda:cn-northwest-1:488211338238:layer:LambdaInsightsExtension:43",
+    "eu-central-1": "arn:aws:lambda:eu-central-1:580247275435:layer:LambdaInsightsExtension:53",
+    "eu-west-1": "arn:aws:lambda:eu-west-1:580247275435:layer:LambdaInsightsExtension:53",
+    "eu-west-2": "arn:aws:lambda:eu-west-2:580247275435:layer:LambdaInsightsExtension:53",
+    "eu-south-1": "arn:aws:lambda:eu-south-1:339249233099:layer:LambdaInsightsExtension:44",
+    "eu-west-3": "arn:aws:lambda:eu-west-3:580247275435:layer:LambdaInsightsExtension:52",
+    "eu-south-2": "arn:aws:lambda:eu-south-2:352183217350:layer:LambdaInsightsExtension:28",
+    "eu-north-1": "arn:aws:lambda:eu-north-1:580247275435:layer:LambdaInsightsExtension:50",
+    "eu-central-2": "arn:aws:lambda:eu-central-2:033019950311:layer:LambdaInsightsExtension:27",
+    "il-central-1": "arn:aws:lambda:il-central-1:459530977127:layer:LambdaInsightsExtension:21",
+    "me-south-1": "arn:aws:lambda:me-south-1:285320876703:layer:LambdaInsightsExtension:44",
+    "me-central-1": "arn:aws:lambda:me-central-1:732604637566:layer:LambdaInsightsExtension:27",
+    "sa-east-1": "arn:aws:lambda:sa-east-1:580247275435:layer:LambdaInsightsExtension:52",
+    "us-gov-east-1": "arn:aws-us-gov:lambda:us-gov-east-1:122132214140:layer:LambdaInsightsExtension:21",
+    "us-gov-west-1": "arn:aws-us-gov:lambda:us-gov-west-1:751350123760:layer:LambdaInsightsExtension:21"
 }

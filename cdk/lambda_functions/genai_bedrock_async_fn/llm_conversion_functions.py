@@ -68,8 +68,8 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                     buffer.append(msg_text)
                     char_count += len(msg_text)
 
-                    # Check if the accumulated buffer exceeds or equals 1000 characters
-                    if char_count >= 1000:
+                    # Check if the accumulated buffer exceeds or equals 300 characters
+                    if char_count >= 300:
                         combined_text = ''.join(buffer)
                         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                             'type': 'content_block_delta',

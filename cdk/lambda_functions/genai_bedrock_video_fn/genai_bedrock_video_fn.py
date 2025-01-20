@@ -1,18 +1,28 @@
 import json
 import os
-import time
+import base64
 import random
-import jwt
 import copy
 from datetime import datetime, timezone
 import boto3
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from chatbot_commons import commons
 from conversations import conversations
+# try:
+#     print('SDK2: importing PIL from Image')
+#     from PIL import Image
+#     print('SDK2: importing PIL from Image DONE')
+#     pil_available = True
+# except ImportError as e:
+#     print('SDK2: importing PIL from Image FAILED')
+#     print(e)
+#     pil_available = False
+#     print('SDK2: importing PIL from Image FAILED DONE')
 
 logger = Logger(service="BedrockVideo")
 metrics = Metrics()
 tracer = Tracer()
+MAX_IMAGES = 1
 
 bedrock_runtime = boto3.client(service_name="bedrock-runtime")
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
@@ -23,6 +33,7 @@ cloudfront_domain = os.environ['CLOUDFRONT_DOMAIN']
 conversations_table_name = os.environ['CONVERSATIONS_DYNAMODB_TABLE']
 conversations_table = boto3.resource('dynamodb').Table(conversations_table_name)
 conversation_history_bucket = os.environ['CONVERSATION_HISTORY_BUCKET']
+attachment_bucket = os.environ['ATTACHMENT_BUCKET']
 
 apigateway_management_api = boto3.client('apigatewaymanagementapi', 
                                          endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
@@ -33,6 +44,8 @@ SLEEP_TIME = 2
 def lambda_handler(event, context):
     """Lambda Handler Function"""
     try:
+        print('SDK VIDEO event')
+        print(event)
         access_token = event.get('access_token', {})
         session_id = event.get('session_id', 'XYZ')
         connection_id = event.get('connection_id', 'ZYX')
@@ -64,7 +77,27 @@ def lambda_handler(event, context):
             return
         duration_seconds = 6
         seed = random.randint(0, 2147483648)
-        images_array = []
+        print('SDK FOUND ATTACHMENTS:')
+        print(attachments)
+        image_count = sum(1 for a in attachments if a['type'].startswith('image/'))
+        if image_count > MAX_IMAGES:
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                'type': 'error',
+                'error': f'Too many images. Maximum allowed is {MAX_IMAGES}.'
+            })
+            return {'statusCode': 400}
+        required_image_width = 1280
+        required_image_height = 720
+        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, [],required_image_width,required_image_height)
+        if error_message and len(error_message) > 1:
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                'type': 'error',
+                'error': error_message
+            })
+            return {'statusCode': 400}
+        print('SDK processed_attachments:')
+        print(processed_attachments)
+        images_array = convert_attachments(processed_attachments)
         video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain,duration_seconds,seed,False,images_array)
         
         needs_load_from_s3, chat_title_loaded, original_existing_history = conversations.query_existing_history(dynamodb, conversations_table_name, logger, session_id)
@@ -172,3 +205,47 @@ def store_bedrock_videos_response(prompt, video_url, existing_history, message_i
         TableName=conversations_table_name,
         Item=item_value
     )
+    
+def convert_attachments(attachments):
+    """
+    Convert a list of attachments from the input format to the desired output format.
+
+    This function takes a list of attachment dictionaries and converts each one
+    to a new format suitable for further processing or API calls.
+
+    Args:
+    attachments (list): A list of dictionaries, each representing an attachment.
+        Each dictionary should have the following keys:
+        - 'name': str, the filename of the attachment
+        - 'content': bytes, the base64 encoded content of the attachment
+
+    Returns:
+    list: A list of dictionaries in the new format. Each dictionary contains:
+        - 'format': str, the file extension of the attachment
+        - 'source': dict, containing:
+            - 'bytes': str, the base64 encoded content as a UTF-8 string
+
+    Example:
+    >>> input = [{'name': 'image.png', 'content': b'base64encodedcontent'}]
+    >>> convert_attachments(input)
+    [{'format': 'png', 'source': {'bytes': 'base64encodedcontent'}}]
+    """
+    converted_attachments = []
+    
+    for attachment in attachments:
+        # Extract the file extension from the name
+        file_extension = attachment['name'].split('.')[-1].lower()
+        
+        # Convert the binary content directly to a string
+        base64_content = base64.b64encode(attachment['content']).decode('utf-8')
+        
+        converted_attachment = {
+            "format": file_extension,
+            "source": {
+                "bytes": base64_content
+            }
+        }
+        
+        converted_attachments.append(converted_attachment)
+    
+    return converted_attachments

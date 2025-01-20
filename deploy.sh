@@ -317,13 +317,13 @@ fi
 # Check if the virtual environment is activated
 if [ -z "${VIRTUAL_ENV}" ]; then
     # Virtual environment is not activated
-    if [ -d "./cdk/.venv" ]; then
+    if [ -d "./cdk/.env" ]; then
         # Virtual environment exists, but not activated
         echo -e "${DEFAULT_COLOR}The virtual environment exists but is not activated."
         echo -e "${DEFAULT_COLOR}To activate the virtual environment, run the following commands:"
         echo -e ""
         echo -e "${GREEN_COLOR}cd cdk"
-        echo -e "${GREEN_COLOR}source .venv/bin/activate"
+        echo -e "${GREEN_COLOR}source .env/bin/activate"
         echo -e "${GREEN_COLOR}python -m pip install -r requirements.txt"
         echo -e "${GREEN_COLOR}python -m pip install -r requirements-dev.txt"
         echo -e "${GREEN_COLOR}cd .."
@@ -336,8 +336,8 @@ if [ -z "${VIRTUAL_ENV}" ]; then
         echo -e "${DEFAULT_COLOR}To create and activate the virtual environment, run the following commands:"
         echo -e ""
         echo -e "${GREEN_COLOR}cd cdk"
-        echo -e "${GREEN_COLOR}python3 -m venv .venv"
-        echo -e "${GREEN_COLOR}source .venv/bin/activate"
+        echo -e "${GREEN_COLOR}python3 -m venv .env"
+        echo -e "${GREEN_COLOR}source .env/bin/activate"
         echo -e "${GREEN_COLOR}python3 -m pip install -r requirements.txt"
         echo -e "${GREEN_COLOR}python3 -m pip install -r requirements-dev.txt"
         echo -e "${GREEN_COLOR}cd .."

@@ -39,7 +39,7 @@ async function getCurrentSession() {
 
 Amplify.configure(amplifyConfig);
 
-const App = memo(({ signOut, user }) => {
+const App = memo(({ signOut, user, awsRum }) => {
 	const [region, setRegion] = useState('');
 	const [websocketConnectionId, setWebsocketConnectionId] = useState(null);
 	const [reactThemeMode, setReactThemeMode] = useState(localStorage.getItem("react_theme_mode") || 'light');
@@ -139,8 +139,6 @@ const App = memo(({ signOut, user }) => {
 		useState("Loading Models");
 	const [attachments, setAttachments] = useState([]);
 	const [allowlist, setAllowList] = useState(null);
-	
-	const lastMessageRef = useRef(null);
 	const messageInputRef = useRef(null);
 
 	const [sidebarWidth, setSidebarWidth] = useState(250);
@@ -338,6 +336,11 @@ const App = memo(({ signOut, user }) => {
 			accessToken: `${accessToken}`,
 		};
 		sendMessage(JSON.stringify(data));
+		awsRum.recordEvent('chatbot_websocket_call', {
+			action: 'loadConfigSubaction', 
+			data: data
+		}
+	)
 	};
 
 	const triggerModelScan = async () => {
@@ -350,8 +353,7 @@ const App = memo(({ signOut, user }) => {
 				idToken: `${idToken}`,
 				accessToken: `${accessToken}`,
 			};
-			// sendMessage(JSON.stringify(data));
-			sendMessageViaRest(data,"/rest/model-scan-request")
+			sendMessageViaRest(data,"/rest/model-scan-request",'triggerModelScan')
 		} catch (error) {
 			console.error("Error refreshing models:", error);
 		}
@@ -378,8 +380,7 @@ const App = memo(({ signOut, user }) => {
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		// sendMessage(JSON.stringify(data));
-		sendMessageViaRest(data,"/rest/send-message")
+		sendMessageViaRest(data,"/rest/send-message",'loadConversationList')
 	};
 
 	const loadConversationHistory = async (sessId) => {
@@ -395,8 +396,7 @@ const App = memo(({ signOut, user }) => {
 				idToken: `${idToken}`,
 				accessToken: `${accessToken}`,
 			};
-			// sendMessage(JSON.stringify(data));
-			sendMessageViaRest(data,"/rest/send-message")
+			sendMessageViaRest(data,"/rest/send-message",'loadConversationHistory')
 		}
 	};
 
@@ -411,8 +411,7 @@ const App = memo(({ signOut, user }) => {
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		// sendMessage(JSON.stringify(data));
-		sendMessageViaRest(data,"/rest/send-message")
+		sendMessageViaRest(data,"/rest/send-message",'clearConversationHistory')
 	};
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: only fire this when lastMessage changes
@@ -450,7 +449,10 @@ const App = memo(({ signOut, user }) => {
 			if (last_message) {
 				setIsRefreshing(false);
 				setTimeout(scrollToBottom, 0);
-				localStorage.setItem(`chatHistory-${appSessionid}`,JSON.stringify(message_temp_cache),);
+				// if appSessionid is not null and does not contain the word 'undefined'
+				if (appSessionid && !appSessionid.includes("undefined")) {
+					localStorage.setItem(`chatHistory-${appSessionid}`,JSON.stringify(message_temp_cache),);
+				}
 				message_temp_cache.length = 0;
 			}
 		} catch (error) {
@@ -473,7 +475,7 @@ const App = memo(({ signOut, user }) => {
 			)
 		) {
 			popupMsg = errormessage;
-		} else if (errormessage.includes("throttlingException")) {
+		} else if (errormessage.includes("throttlingException") || errormessage.includes("ThrottlingException")) {
 			popupMsg =
 				"Sorry, we encountered a throttling issue. Please try resubmitting your message.";
 		} else if (errormessage.includes("AUP or AWS Responsible AI")) {
@@ -500,10 +502,16 @@ const App = memo(({ signOut, user }) => {
 		});
 	}
 
-	const sendMessageViaRest = async (data,endpoint) => {
+	const sendMessageViaRest = async (data,endpoint,action) => {
+		awsRum.recordEvent('chatbot_rest_call', {
+				action: action, 
+				endpoint: endpoint, 
+				data: data
+			}
+		)
 		try {
 			const { accessToken, idToken } = await getCurrentSession();
-			const response = await axios.post(
+			await axios.post(
 				endpoint,
 				{
 					...data,
@@ -533,6 +541,8 @@ const App = memo(({ signOut, user }) => {
 			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
 			setAppSessionId(newAppSessionid);
 		}
+		console.log('SDK attachments: ')
+		console.log(attachments)
 
 		if (retryPreviousMessage) {
 			message = previousSentMessage.message;
@@ -547,11 +557,11 @@ const App = memo(({ signOut, user }) => {
 		const randomMessageId = Math.random().toString(36).substring(2, 10);
 
 		if (selectedMode.category === "Bedrock Image Models") {
-			generateImage(sanitizedMessage, randomMessageId);
+			generateImage(sanitizedMessage, randomMessageId,attachments);
 			return;
 		}
 		if (selectedMode.category === "Bedrock Video Models") {
-			generateVideo(sanitizedMessage, randomMessageId);
+			generateVideo(sanitizedMessage, randomMessageId,attachments);
 			return;
 		}
 
@@ -621,11 +631,11 @@ const App = memo(({ signOut, user }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-		sendMessageViaRest(data,"/rest/send-message")
+		sendMessageViaRest(data,"/rest/send-message",'chatMessage')
 		setReloadPromptConfig(false);
 	};
 
-	const generateImage = async (prompt, randomMessageId) => {
+	const generateImage = async (prompt, randomMessageId, attachments) => {
 		setIsLoading(true);
 		let newAppSessionid;
 		if (!appSessionid) {
@@ -673,12 +683,10 @@ const App = memo(({ signOut, user }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-
-		// sendMessage(JSON.stringify(data));
-		sendMessageViaRest(data,"/rest/send-message")
+		sendMessageViaRest(data,"/rest/send-message",'generateImageRequest')
 	};
 
-	const generateVideo = async (prompt, randomMessageId) => {
+	const generateVideo = async (prompt, randomMessageId,attachments) => {
 		setIsLoading(true);
 		let newAppSessionid;
 		if (!appSessionid) {
@@ -741,9 +749,7 @@ const App = memo(({ signOut, user }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-
-		// sendMessage(JSON.stringify(data));
-		sendMessageViaRest(data,"/rest/send-message")
+		sendMessageViaRest(data,"/rest/send-message",'generateVideoRequest')
 	};
 
 	useEffect(() => {
@@ -806,7 +812,9 @@ const App = memo(({ signOut, user }) => {
 				if (message.new_conversation) {
 					loadConversationList();
 					setSelectedChatId(message.session_id);
-					localStorage.setItem("selectedChatId", message.session_id);
+					if (message.session_id && !message.session_id.includes("undefined")) {
+						localStorage.setItem("selectedChatId", message.session_id);
+					}
 				}
 			} else if (
 				message.type === "error" ||
@@ -814,6 +822,11 @@ const App = memo(({ signOut, user }) => {
 			) {
 				if (isRefreshing) {
 					setIsRefreshing(false);
+				}
+				console.log('SDK Oh yeah this is the error!')
+				console.log(message)
+				if (message.error && (message.error.includes("throttlingException") || message.error.includes("ThrottlingException"))){
+					message.error = "Oops! Looks like we're experiencing a 'traffic jam' on the Amazon Bedrock superhighway. Our AI is currently doing the digital equivalent of honking its horn and tapping its foot impatiently. \n\r\n\rPlease give it another shot - our AI is eager to chat with you! If this keeps happening, it might be time to sweet-talk your IT team into upgrading our 'digital express lane' by purchasing some fancy 'Provisioned Throughput' from Amazon Bedrock. \n\r\n\rRemember, good things come to those who wait... but faster things come to those with better throughput!"
 				}
 				updateMessagesOnStop(message);
 				handleError(message);
@@ -1120,7 +1133,9 @@ const App = memo(({ signOut, user }) => {
 						},
 					);
 					//save conversation to local storage
-					localStorage.setItem(`chatHistory-${appSessionid}`,JSON.stringify(filteredMessages),);
+					if (appSessionid && !appSessionid.includes("undefined")) {
+						localStorage.setItem(`chatHistory-${appSessionid}`,JSON.stringify(filteredMessages),);
+					}
 				}
 			} else {
 				console.log("No messages to save to local storage");

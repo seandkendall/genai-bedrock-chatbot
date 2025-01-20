@@ -35,12 +35,50 @@ from constructs import Construct
 from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3 # type: ignore
 from .constructs.user_pool_user import UserPoolUser
 import json
+import requests
+import time
 import os
 from aws_cdk.aws_route53 import PublicHostedZone
-from .cdk_constants import lambda_insights_layers
+from .cdk_constants import lambda_insights_layers_arm64
+from .cdk_constants import lambda_insights_layers_x86
 
+def get_pillow_arn_for_region(python_version="p3.12", region="us-east-1"):
+    """
+    Fetches the latest Pillow AWS Lambda layer ARN for the given Python version and region.
+
+    Args:
+        python_version (str): The Python version, defaults to "p3.12".
+        region (str): The AWS region, defaults to "us-east-1".
+
+    Returns:
+        str: The ARN of the latest Pillow AWS Lambda layer, or `None` if no record is found after all retries.
+    """
+    max_retries = 5
+    current_version = python_version
+
+    for _ in range(max_retries):
+        url = f"https://api.klayers.cloud/api/v2/{current_version}/layers/latest/{region}/pillow"
+        print(f"SDK: Fetching Pillow ARN for {current_version} in {region}: {url}")
+        response = requests.get(url, timeout=29)
+
+        if response.status_code == 200:
+            data = response.json()
+            print(f"SDK: Fetched Pillow ARN for {current_version} in {region}: {data}")
+            for item in data:
+                if "pillow" in item["arn"].lower():
+                    print(f"SDK: Found Pillow ARN for {current_version} in {region}: {item['arn']}")
+                    return item["arn"]
+        else:
+            print(f"Error fetching Pillow ARN for {current_version} in {region}: {response.status_code} - {response.text}")
+
+        # Reduce the Python version for the next retry
+        major, minor = map(int, current_version[1:].split("."))
+        current_version = f"p{major}.{minor-1}"
+        time.sleep(1)  # Introduce a small delay to avoid rate limiting
+
+    return None
+    
 class ChatbotWebsiteStack(Stack):
-
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         region = os.environ.get('CDK_DEFAULT_REGION')
@@ -73,30 +111,40 @@ class ChatbotWebsiteStack(Stack):
             self, "Boto3Layer",
             entry="lambda_functions/python_layer",
             compatible_runtimes=[_lambda.Runtime.PYTHON_3_12,_lambda.Runtime.PYTHON_3_13],
-            compatible_architectures=[_lambda.Architecture.ARM_64],
+            compatible_architectures=[_lambda.Architecture.ARM_64,_lambda.Architecture.X86_64],
             description="Boto3 library with  PyJWT django pytz requests used for arm64/3.12"
         )
         commons_layer = _lambda.LayerVersion(
             self, "KendallChatCommons",
             code=_lambda.Code.from_asset("lambda_functions/commons_layer"),
             compatible_runtimes=[_lambda.Runtime.PYTHON_3_12,_lambda.Runtime.PYTHON_3_13],
-            compatible_architectures=[_lambda.Architecture.ARM_64],
+            compatible_architectures=[_lambda.Architecture.ARM_64,_lambda.Architecture.X86_64],
             description="KendallChat Commons: Making all the code more simple and reusable"
         )
         conversations_layer = _lambda.LayerVersion(
             self, "KendallChatConversations",
             code=_lambda.Code.from_asset("lambda_functions/conversations_layer"),
             compatible_runtimes=[_lambda.Runtime.PYTHON_3_12,_lambda.Runtime.PYTHON_3_13],
-            compatible_architectures=[_lambda.Architecture.ARM_64],
+            compatible_architectures=[_lambda.Architecture.ARM_64,_lambda.Architecture.X86_64],
             description="KendallChat Conversations: Making all the code more simple and reusable in relation to loading and deleting conversations"
         )
         
         # ARN Lookup: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versionsARM.html
-        lambda_insights_layer = _lambda.LayerVersion.from_layer_version_arn(
+        lambda_insights_layer_arm64 = _lambda.LayerVersion.from_layer_version_arn(
             self,
-            "LambdaInsightsLayer",
-            lambda_insights_layers[region]
+            "LambdaInsightsLayerArm64",
+            lambda_insights_layers_arm64[region]
         )
+        # ARN Lookup: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versionsx86-64.html
+        lambda_insights_layer_x86 = _lambda.LayerVersion.from_layer_version_arn(
+            self,
+            "LambdaInsightsLayerX86",
+            lambda_insights_layers_x86[region]
+        )
+        pillow_arn = get_pillow_arn_for_region(python_version="p3.13", region=region)
+        pillow_layer = None
+        if pillow_arn:
+            pillow_layer = _lambda.LayerVersion.from_layer_version_arn(self,"PillowLayer",pillow_arn)
 
 
 
@@ -307,7 +355,7 @@ class ChatbotWebsiteStack(Stack):
                 architecture=_lambda.Architecture.ARM_64,
                 tracing=_lambda.Tracing.ACTIVE,
                 memory_size=256,
-                layers=[boto3_layer,lambda_insights_layer],
+                layers=[boto3_layer,lambda_insights_layer_arm64],
                 log_retention=logs.RetentionDays.FIVE_DAYS,
                 environment={
                     "ALLOWLIST_DOMAIN": allowlist_domain_string,
@@ -324,7 +372,7 @@ class ChatbotWebsiteStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             tracing=_lambda.Tracing.ACTIVE,
             memory_size=1024,
-            layers=[boto3_layer, commons_layer, conversations_layer,lambda_insights_layer],
+            layers=[boto3_layer, commons_layer, conversations_layer,lambda_insights_layer_arm64],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={
                 "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
@@ -345,18 +393,19 @@ class ChatbotWebsiteStack(Stack):
         
         # Create the Lambda function for video generation
         video_generation_function = _lambda.Function(self, "VideoGenerationFunction",
-            runtime=_lambda.Runtime.PYTHON_3_13,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="genai_bedrock_video_fn.lambda_handler",
             code=_lambda.Code.from_asset("lambda_functions/genai_bedrock_video_fn/"),
             timeout=Duration.seconds(900),
-            architecture=_lambda.Architecture.ARM_64,
+            architecture=_lambda.Architecture.X86_64,
             tracing=_lambda.Tracing.ACTIVE,
             memory_size=3008,
-            layers=[boto3_layer, commons_layer, conversations_layer,lambda_insights_layer],
+            layers=[boto3_layer, commons_layer, conversations_layer, lambda_insights_layer_x86],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={
                 "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                 "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
+                "ATTACHMENT_BUCKET": attachment_bucket.bucket_name,
                 "CLOUDFRONT_DOMAIN": cloudfront_distribution.distribution_domain_name,
                 "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                 "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
@@ -364,9 +413,13 @@ class ChatbotWebsiteStack(Stack):
                 "POWERTOOLS_SERVICE_NAME":"VIDEO_GENERATION_SERVICE",
             },
         )
+        # if pillow_layer is not None, then add this layer to video_generation_function
+        if pillow_layer is not None:
+            video_generation_function.add_layers(pillow_layer)
         video_generation_function.apply_removal_policy(RemovalPolicy.DESTROY)
         websocket_api.grant_manage_connections(video_generation_function)
         image_bucket.grant_read_write(video_generation_function)
+        attachment_bucket.grant_read_write(video_generation_function)
         video_generation_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
         video_generation_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"))
         dynamodb_conversations_table.grant_full_access(video_generation_function)
@@ -380,7 +433,7 @@ class ChatbotWebsiteStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             tracing=_lambda.Tracing.ACTIVE,
             memory_size=1024,
-            layers=[boto3_layer, commons_layer, lambda_insights_layer],
+            layers=[boto3_layer, commons_layer, lambda_insights_layer_arm64],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={
                 "DYNAMODB_CONFIG_TABLE": dynamodb_configurations_table.table_name,
@@ -413,7 +466,7 @@ class ChatbotWebsiteStack(Stack):
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer, commons_layer,conversations_layer, lambda_insights_layer],
+                                     layers=[boto3_layer, commons_layer,conversations_layer, lambda_insights_layer_arm64],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
@@ -445,7 +498,7 @@ class ChatbotWebsiteStack(Stack):
                                         architecture=_lambda.Architecture.ARM_64,
                                         tracing=_lambda.Tracing.ACTIVE,
                                         memory_size=1024,
-                                        layers=[boto3_layer, commons_layer, lambda_insights_layer],
+                                        layers=[boto3_layer, commons_layer, lambda_insights_layer_arm64],
                                         log_retention=logs.RetentionDays.FIVE_DAYS,
                                         environment={
                                             "INCIDENTS_DYNAMODB_TABLE": dynamodb_incidents_table_name,
@@ -470,7 +523,7 @@ class ChatbotWebsiteStack(Stack):
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer, commons_layer,conversations_layer, lambda_insights_layer],
+                                     layers=[boto3_layer, commons_layer,conversations_layer,lambda_insights_layer_arm64],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
@@ -506,7 +559,7 @@ class ChatbotWebsiteStack(Stack):
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer, commons_layer, lambda_insights_layer],
+                                     layers=[boto3_layer, commons_layer, lambda_insights_layer_arm64],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
@@ -534,7 +587,7 @@ class ChatbotWebsiteStack(Stack):
             architecture=_lambda.Architecture.ARM_64 ,
             tracing=_lambda.Tracing.ACTIVE,
             memory_size=1024,
-            layers=[boto3_layer, commons_layer, lambda_insights_layer],
+            layers=[boto3_layer, commons_layer, lambda_insights_layer_arm64],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={
                 "CONFIG_DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
@@ -570,7 +623,7 @@ class ChatbotWebsiteStack(Stack):
                                      architecture=_lambda.Architecture.ARM_64,
                                      tracing=_lambda.Tracing.ACTIVE,
                                      memory_size=1024,
-                                     layers=[boto3_layer, commons_layer, lambda_insights_layer],
+                                     layers=[boto3_layer, commons_layer, lambda_insights_layer_arm64],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "USER_POOL_ID": user_pool.user_pool_id,
@@ -604,7 +657,7 @@ class ChatbotWebsiteStack(Stack):
                                     architecture=_lambda.Architecture.ARM_64,
                                     tracing=_lambda.Tracing.ACTIVE,
                                     memory_size=1024,
-                                    layers=[boto3_layer, commons_layer, lambda_insights_layer],
+                                    layers=[boto3_layer, commons_layer, lambda_insights_layer_arm64],
                                     log_retention=logs.RetentionDays.FIVE_DAYS,
                                     environment={
                                         "ATTACHMENT_BUCKET": attachment_bucket.bucket_name,
@@ -855,8 +908,6 @@ class ChatbotWebsiteStack(Stack):
             lambda_functions.append(cognito_pre_signup_function)
             
         #AWS RUM:
-        # Create the Cognito Identity Pool
-        # Step 1: Create a placeholder guest role with an empty assume role policy
         guest_role = iam.Role(
             self,
             "GuestRole",
@@ -873,16 +924,12 @@ class ChatbotWebsiteStack(Stack):
                         "sts:AssumeRoleWithWebIdentity"
                     )
         )
-
-        # Step 2: Define the identity pool with the guest role
         identity_pool = IdentityPool(
             self,
             "ChatBotRUMIdentityPool",
             allow_unauthenticated_identities=True,
             unauthenticated_role=guest_role,
         )
-
-        # Step 3: Update the assume role policy of the guest role after identity pool creation
         guest_role.assume_role_policy.add_statements(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -903,8 +950,6 @@ class ChatbotWebsiteStack(Stack):
                 ]
             )
         )
-
-        # Step 4: Add permissions to the guest role
         guest_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -924,10 +969,12 @@ class ChatbotWebsiteStack(Stack):
                 allow_cookies=True,
                 enable_x_ray=True,
                 identity_pool_id=identity_pool.identity_pool_id,
-                # guest_role_arn=guest_role.role_arn,
                 session_sample_rate=1,  # Capture 100% of sessions
                 telemetries=["performance", "errors","http"]
             ),
+            custom_events=rum.CfnAppMonitor.CustomEventsProperty(
+                    status="ENABLED"
+                ),
             cw_log_enabled=True,  # Enable CloudWatch Logs
         )
         app_monitor_arn = f"arn:aws:rum:{region}:{self.account}:appmonitor/{cfn_app_monitor.attr_id}"
@@ -961,5 +1008,4 @@ class ChatbotWebsiteStack(Stack):
         CfnOutput(self, "user_pool_client_id", value=user_pool_client.user_pool_client_id)
         CfnOutput(self, "websocket_api_endpoint", value=websocket_api_endpoint+'/ws')
         CfnOutput(self, "RestApiUrl", value=rest_api.url)
-        CfnOutput(self, "CloudWatchLogsLiveTailURL",value=cloudwatch_logs_url,description="URL to CloudWatch Logs live tail screen for all Lambda functions")
-        
+        CfnOutput(self, "CloudWatchLogsLiveTailURL",value=cloudwatch_logs_url,description="URL to CloudWatch Logs live tail screen for all Lambda functions")    

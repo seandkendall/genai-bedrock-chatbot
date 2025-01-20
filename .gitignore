@@ -22,6 +22,7 @@ cdk/package-lock.json
 cdk/__pycache__
 cdk/.pytest_cache
 cdk/.venv
+cdk/.env
 cdk/*.egg-info
 cdk/static-website-source/*
 
@@ -30,6 +31,7 @@ cdk/cdk/package-lock.json
 cdk/cdk/__pycache__
 cdk/cdk/.pytest_cache
 cdk/cdk/.venv
+cdk/cdk/.env
 cdk/cdk/*.egg-info
 
 cdk/lambda_functions/python_layer/python/

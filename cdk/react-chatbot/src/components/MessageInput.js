@@ -5,7 +5,7 @@ import React, {
 	useImperativeHandle,
 	useCallback,
 } from "react";
-import { Box, Chip,TextField, IconButton } from "@mui/material";
+import { Box, Chip, TextField, IconButton } from "@mui/material";
 import { FaPaperPlane, FaPaperclip } from "react-icons/fa";
 import axios from "axios";
 
@@ -29,24 +29,17 @@ const ALLOWED_DOCUMENT_TYPES = [
 	"md",
 ];
 const ALLOWED_VIDEO_TYPES = [
-  "mov",
-  "mkv",
-  "mp4",
-  "webm",
-  "flv",
-  "mpeg",
-  "mpg",
-  "wmv",
-  "3gp"
+	"mov",
+	"mkv",
+	"mp4",
+	"webm",
+	"flv",
+	"mpeg",
+	"mpg",
+	"wmv",
+	"3gp",
 ];
-const ALLOWED_IMAGE_TYPES = [
-	"png",
-	"jpeg",
-	"jpg",
-	"gif",
-	"webp",
-];
-
+const ALLOWED_IMAGE_TYPES = ["png", "jpeg", "jpg", "gif", "webp"];
 
 export const getPlaceholderText = (selectedMode, selectedKbMode) => {
 	if (!selectedMode || !selectedMode.category) {
@@ -119,24 +112,32 @@ const MessageInput = forwardRef(
 		};
 		const isImageFile = useCallback((file) => {
 			if (file instanceof File) {
-				return ALLOWED_IMAGE_TYPES.includes(file.name.split('.').pop().toLowerCase());
+				return ALLOWED_IMAGE_TYPES.includes(
+					file.name.split(".").pop().toLowerCase(),
+				);
 			}
-			return ALLOWED_IMAGE_TYPES.includes(file.split('.').pop().toLowerCase());
+			return ALLOWED_IMAGE_TYPES.includes(file.split(".").pop().toLowerCase());
 		}, []);
-		
+
 		const isVideoFile = useCallback((file) => {
 			if (file instanceof File) {
-				return ALLOWED_VIDEO_TYPES.includes(file.name.split('.').pop().toLowerCase());
+				return ALLOWED_VIDEO_TYPES.includes(
+					file.name.split(".").pop().toLowerCase(),
+				);
 			}
-			return ALLOWED_VIDEO_TYPES.includes(file.split('.').pop().toLowerCase());
-		  }, []);
+			return ALLOWED_VIDEO_TYPES.includes(file.split(".").pop().toLowerCase());
+		}, []);
 
-		  const isDocumentFile = useCallback((file) => {
+		const isDocumentFile = useCallback((file) => {
 			if (file instanceof File) {
-				return ALLOWED_DOCUMENT_TYPES.includes(file.name.split('.').pop().toLowerCase());
+				return ALLOWED_DOCUMENT_TYPES.includes(
+					file.name.split(".").pop().toLowerCase(),
+				);
 			}
-			return ALLOWED_DOCUMENT_TYPES.includes(file.split('.').pop().toLowerCase());
-		  }, []);
+			return ALLOWED_DOCUMENT_TYPES.includes(
+				file.split(".").pop().toLowerCase(),
+			);
+		}, []);
 
 		const handleFiles = async (files) => {
 			const newAttachments = [];
@@ -215,7 +216,7 @@ const MessageInput = forwardRef(
 						console.error("Error processing image:", error);
 						alert(`Error processing image: ${file.name}`);
 					}
-				} else if(isVideo) {
+				} else if (isVideo) {
 					if (
 						attachments.filter((a) => isVideoFile(a)).length +
 							newAttachments.filter((a) => isVideoFile(a)).length +
@@ -226,13 +227,13 @@ const MessageInput = forwardRef(
 						continue;
 					}
 					// https://docs.aws.amazon.com/nova/latest/userguide/prompting-vision-limitations.html
-			
-					  if (file.size > MAX_VIDEO_SIZE) {
+
+					if (file.size > MAX_VIDEO_SIZE) {
 						alert(`Video size must be no more than 1 GB: ${file.name}`);
 						continue;
-					  }
-			
-					  newAttachments.push(file);
+					}
+
+					newAttachments.push(file);
 				} else {
 					if (
 						attachments.filter((a) => !isImageFile(a)).length +
@@ -300,6 +301,7 @@ const MessageInput = forwardRef(
 					uploadedAttachments,
 					false,
 				);
+				setIsRefreshing(false);
 				setMessage("");
 				setAttachments([]);
 				if (fileInputRef.current) {
@@ -373,7 +375,9 @@ const MessageInput = forwardRef(
 		};
 
 		const isDragDropEnabled =
-			selectedMode?.allow_input_image || selectedMode?.allow_input_document || selectedMode?.allow_input_video;
+			selectedMode?.allow_input_image ||
+			selectedMode?.allow_input_document ||
+			selectedMode?.allow_input_video;
 
 		const handleDragOver = (e) => {
 			if (isDragDropEnabled && !isDisabled()) {
@@ -419,14 +423,17 @@ const MessageInput = forwardRef(
 								key={index}
 								label={file.name}
 								color={
-									isImageFile(file) ? "primary" :
-									isVideoFile(file) ? "secondary" :
-									isDocumentFile(file) ? "warning" :
-									"success"
-								  }	
-								  disabled={isDisabled()}
-								  onDelete={() => handleRemoveAttachment(index)}
-								sx={{ml: 1}}
+									isImageFile(file)
+										? "primary"
+										: isVideoFile(file)
+											? "secondary"
+											: isDocumentFile(file)
+												? "warning"
+												: "success"
+								}
+								disabled={isDisabled()}
+								onDelete={() => handleRemoveAttachment(index)}
+								sx={{ ml: 1 }}
 								size="small"
 							/>
 						))}
@@ -442,11 +449,13 @@ const MessageInput = forwardRef(
 						placeholder={getPlaceholderText(selectedMode, selectedKbMode)}
 						disabled={isDisabled()}
 						multiline
+						maxRows={4}
 						fullWidth
 						variant="outlined"
 						slotProps={{
 							htmlInput: {
-								...(selectedMode?.category === "Bedrock Image Models" && {
+								...((selectedMode?.category === "Bedrock Image Models" ||
+									selectedMode?.category === "Bedrock Video Models") && {
 									maxLength: 512,
 								}),
 							},
