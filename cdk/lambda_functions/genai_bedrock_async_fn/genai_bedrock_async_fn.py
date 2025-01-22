@@ -63,8 +63,6 @@ system_prompt = ''
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):  
     """Lambda Hander Function"""
-    print('SDK EVENT ASYNC')
-    print(event)
     try:
         process_websocket_message(event)
         return {'statusCode': 200}

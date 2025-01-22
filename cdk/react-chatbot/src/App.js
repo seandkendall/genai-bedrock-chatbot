@@ -541,8 +541,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
 			setAppSessionId(newAppSessionid);
 		}
-		console.log('SDK attachments: ')
-		console.log(attachments)
 
 		if (retryPreviousMessage) {
 			message = previousSentMessage.message;
@@ -809,12 +807,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				setIsDisabled(false);
 				setIsLoading(false);
 				setTimeout(scrollToBottom, 0);
-				console.log('SDK DEBUG LOGGING MESSAGE:')
-				console.log(message)
-				console.log('SDK DEBUG LOGGING NEW CONVERSATION:')
-				console.log(message.new_conversation)
 				if (message.new_conversation) {
-					console.log('We made it!')
 					loadConversationList();
 					setSelectedChatId(message.session_id);
 					if (message.session_id && !message.session_id.includes("undefined")) {
@@ -828,8 +821,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 				if (isRefreshing) {
 					setIsRefreshing(false);
 				}
-				console.log('SDK Oh yeah this is the error!')
-				console.log(message)
 				if (message.error && (message.error.includes("throttlingException") || message.error.includes("ThrottlingException"))){
 					message.error = "Oops! Looks like we're experiencing a 'traffic jam' on the Amazon Bedrock superhighway. Our AI is currently doing the digital equivalent of honking its horn and tapping its foot impatiently. \n\r\n\rPlease give it another shot - our AI is eager to chat with you! If this keeps happening, it might be time to sweet-talk your IT team into upgrading our 'digital express lane' by purchasing some fancy 'Provisioned Throughput' from Amazon Bedrock. \n\r\n\rRemember, good things come to those who wait... but faster things come to those with better throughput!"
 				}

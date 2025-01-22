@@ -8,16 +8,6 @@ import boto3
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from chatbot_commons import commons
 from conversations import conversations
-# try:
-#     print('SDK2: importing PIL from Image')
-#     from PIL import Image
-#     print('SDK2: importing PIL from Image DONE')
-#     pil_available = True
-# except ImportError as e:
-#     print('SDK2: importing PIL from Image FAILED')
-#     print(e)
-#     pil_available = False
-#     print('SDK2: importing PIL from Image FAILED DONE')
 
 logger = Logger(service="BedrockVideo")
 metrics = Metrics()
@@ -44,8 +34,6 @@ SLEEP_TIME = 2
 def lambda_handler(event, context):
     """Lambda Handler Function"""
     try:
-        print('SDK VIDEO event')
-        print(event)
         access_token = event.get('access_token', {})
         session_id = event.get('session_id', 'XYZ')
         connection_id = event.get('connection_id', 'ZYX')
@@ -77,8 +65,6 @@ def lambda_handler(event, context):
             return
         duration_seconds = 6
         seed = random.randint(0, 2147483648)
-        print('SDK FOUND ATTACHMENTS:')
-        print(attachments)
         image_count = sum(1 for a in attachments if a['type'].startswith('image/'))
         if image_count > MAX_IMAGES:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
@@ -95,8 +81,6 @@ def lambda_handler(event, context):
                 'error': error_message
             })
             return {'statusCode': 400}
-        print('SDK processed_attachments:')
-        print(processed_attachments)
         images_array = convert_attachments(processed_attachments)
         video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain,duration_seconds,seed,False,images_array)
         
