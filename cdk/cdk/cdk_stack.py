@@ -58,18 +58,13 @@ def get_pillow_arn_for_region(python_version="p3.12", region="us-east-1"):
 
     for _ in range(max_retries):
         url = f"https://api.klayers.cloud/api/v2/{current_version}/layers/latest/{region}/pillow"
-        print(f"SDK: Fetching Pillow ARN for {current_version} in {region}: {url}")
         response = requests.get(url, timeout=29)
 
         if response.status_code == 200:
             data = response.json()
-            print(f"SDK: Fetched Pillow ARN for {current_version} in {region}: {data}")
             for item in data:
                 if "pillow" in item["arn"].lower():
-                    print(f"SDK: Found Pillow ARN for {current_version} in {region}: {item['arn']}")
                     return item["arn"]
-        else:
-            print(f"Error fetching Pillow ARN for {current_version} in {region}: {response.status_code} - {response.text}")
 
         # Reduce the Python version for the next retry
         major, minor = map(int, current_version[1:].split("."))
@@ -413,7 +408,6 @@ class ChatbotWebsiteStack(Stack):
                 "POWERTOOLS_SERVICE_NAME":"VIDEO_GENERATION_SERVICE",
             },
         )
-        # if pillow_layer is not None, then add this layer to video_generation_function
         if pillow_layer is not None:
             video_generation_function.add_layers(pillow_layer)
         video_generation_function.apply_removal_policy(RemovalPolicy.DESTROY)
@@ -516,14 +510,14 @@ class ChatbotWebsiteStack(Stack):
 
         # Create the "genai_bedrock_fn_async" Lambda function
         lambda_async_function = _lambda.Function(self, "genai_bedrock_fn_async",
-                                     runtime=_lambda.Runtime.PYTHON_3_13,
+                                     runtime=_lambda.Runtime.PYTHON_3_12,
                                      handler="genai_bedrock_async_fn.lambda_handler",
                                      code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_async_fn/"),
                                      timeout=Duration.seconds(900),
-                                     architecture=_lambda.Architecture.ARM_64,
+                                     architecture=_lambda.Architecture.X86_64,
                                      tracing=_lambda.Tracing.ACTIVE,
-                                     memory_size=1024,
-                                     layers=[boto3_layer, commons_layer,conversations_layer,lambda_insights_layer_arm64],
+                                     memory_size=3008,
+                                     layers=[boto3_layer, commons_layer,conversations_layer,lambda_insights_layer_x86],
                                      log_retention=logs.RetentionDays.FIVE_DAYS,
                                      environment={
                                           "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
@@ -538,6 +532,8 @@ class ChatbotWebsiteStack(Stack):
                                           "POWERTOOLS_SERVICE_NAME":"BEDROCK_ASYNC_SERVICE",
                                      }
                                      )
+        if pillow_layer is not None:
+            lambda_async_function.add_layers(pillow_layer)
         lambda_async_function.apply_removal_policy(RemovalPolicy.DESTROY)
         websocket_api.grant_manage_connections(lambda_async_function)
         lambda_async_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))

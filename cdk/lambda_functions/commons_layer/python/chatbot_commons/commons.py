@@ -1,4 +1,5 @@
 import json
+import base64
 import decimal
 import time
 import io
@@ -8,16 +9,10 @@ from datetime import datetime, timezone, timedelta
 from botocore.exceptions import ClientError
 
 try:
-    print('SDK: importing PIL from Image')
     from PIL import Image
-    print('SDK: importing PIL from Image DONE')
     pil_available = True
 except ImportError as e:
-    print('SDK: importing PIL from Image FAILED')
-    print(e)
     pil_available = False
-    print('SDK: importing PIL from Image FAILED DONE')
-# pil_available = True
 
 GREEN_SCREEN_COLOR = (4, 244, 4)
 
@@ -299,8 +294,6 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
 def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed, delete_after_generate, images):
     """Generates a video through GenAi on Amazon Bedrock"""
     logger.info(f"Generating video using Nova Reel Video Generator with model: {model_id}")
-    print('SDK Images for generating a video?')
-    print(images)
     prefix = rf'{user_id}/{session_id}'
     model_input = {
         "taskType": "TEXT_VIDEO",
@@ -463,10 +456,7 @@ def delete_s3_attachments_for_session(session_id: str,bucket: str,user_id:str,ad
         for error in errors:
             logger.error(f"- {error}")
 
-def extend_image():
-    inside_color_value = (0, 0, 0) #inside is black - this is the masked area
-    outside_color_value = (255, 255, 255)
-def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, allowed_document_types,required_image_width,required_image_height):
+def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, allowed_document_types,required_image_width,required_image_height,bedrock_runtime):
     processed_attachments = []
     error_message = ""
     for attachment in attachments:
@@ -491,14 +481,12 @@ def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,
                 return processed_attachments, error_message
         if attachment['type'].startswith('image/'):
             if pil_available:
-                print('SDK RESIZING IMAGE')
-                file_content, file_was_modified = resize_image_if_needed(file_content, required_image_width, required_image_height)
-                print(f'File was modified? {file_was_modified}')
-                print('SDK RESIZING IMAGE DONE')
-            else:
-                print('SDK: pil_available is false')
-                print(pil_available)
-                print('-----END0---')
+                file_content, file_was_modified = resize_image_if_needed(file_content, required_image_width, required_image_height,bedrock_runtime,logger)
+                file_content = convert_image_to_png(file_content, logger)
+                # Change file_key extention from .* to .png
+                file_key = f"{file_key.rsplit('.', 1)[0].replace(' ', '_')}.png"
+                attachment['name'] = f"{attachment['name'].rsplit('.', 1)[0].replace(' ', '_')}.png"
+                attachment['type'] = 'image/png'
 
         processed_attachments.append({
             'type': attachment['type'],
@@ -509,62 +497,170 @@ def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,
         })
     return processed_attachments, error_message
 
-def resize_image_if_needed(file_content, required_image_width, required_image_height):
-    """
-    Resize and pad an image to meet specified dimensions.
-
-    This function takes an image file's content and resizes it to fit within the
-    specified dimensions while maintaining its aspect ratio. If the image is smaller
-    than the required dimensions, it's enlarged. The image is then padded with a
-    specified color to exactly match the required dimensions.
-
-    Args:
-    file_content (bytes): The binary content of the image file.
-    required_image_width (int): The required width of the output image.
-    required_image_height (int): The required height of the output image.
-
-    Returns:
-    tuple: A tuple containing:
-        - bytes: The binary content of the modified image.
-        - bool: True if the image was modified, False otherwise.
-
-    Example:
-    >>> with open('image.jpg', 'rb') as f:
-    ...     content = f.read()
-    >>> new_content, was_modified = resize_image_if_needed(content, 800, 600)
-    """
+def resize_image_if_needed(file_content, required_image_width, required_image_height, bedrock_runtime, logger):
+    """Max image Size: 3.7MB"""
+    MAX_SIZE_BYTES = 3700000
     image = Image.open(io.BytesIO(file_content))
     original_format = image.format
     original_size = image.size
+    if required_image_width > 0 and required_image_height > 0:
+        # Calculate the scaling factors for both dimensions
+        width_ratio = required_image_width / image.width
+        height_ratio = required_image_height / image.height
 
-    # Calculate the scaling factor
-    width_ratio = required_image_width / image.width
-    height_ratio = required_image_height / image.height
-    scale_factor = min(width_ratio, height_ratio)
+        # Determine which ratio to use based on the condition
+        if image.width > required_image_width or image.height > required_image_height:
+            # Case 1: Image needs to be made smaller
+            scale_factor = min(width_ratio, height_ratio)
+        else:
+            # Case 2: Image needs to be made larger
+            scale_factor = max(width_ratio, height_ratio)
 
-    # Calculate new dimensions
-    new_width = int(image.width * scale_factor)
-    new_height = int(image.height * scale_factor)
+        # Calculate new dimensions
+        new_width = int(image.width * scale_factor)
+        new_height = int(image.height * scale_factor)
 
-    # Resize the image
-    image = image.resize((new_width, new_height), Image.LANCZOS)
+        # Ensure the new dimensions don't exceed the required dimensions
+        new_width = min(new_width, required_image_width)
+        new_height = min(new_height, required_image_height)
+        
+        # Resize the image
+        resized_image = image.resize((new_width, new_height), Image.LANCZOS)
 
-    # Create a new image with the required dimensions and fill it with the padding color
-    padded_image = Image.new('RGB', (required_image_width, required_image_height), GREEN_SCREEN_COLOR)
+        # If the image is smaller than required, extend it
+        if new_width < required_image_width or new_height < required_image_height:
+            outpaint_image = extend_image(resized_image, required_image_width, required_image_height, bedrock_runtime, logger)
+        else:
+            outpaint_image = resized_image
 
-    # Calculate position to paste the resized image
-    paste_x = (required_image_width - new_width) // 2
-    paste_y = (required_image_height - new_height) // 2
+        # Save the result to a bytes object
+        output_buffer = io.BytesIO()
+        outpaint_image.save(output_buffer, format=original_format, quality=95)  # Start with high quality
+        modified_content = output_buffer.getvalue()
+    else:
+        modified_content = file_content
+        outpaint_image = image
 
-    # Paste the resized image onto the padded image
-    padded_image.paste(image, (paste_x, paste_y))
+    # Check if the image size exceeds 3.7MB and reduce quality if needed
+    quality = 95
+    mode = outpaint_image.mode
+    bytes_per_pixel = {
+        'RGB': 3,
+        'RGBA': 4,
+        'L': 1
+    }.get(mode, 4)
+    width, height = outpaint_image.size
+    uncompressed_size = width * height * bytes_per_pixel
+    while uncompressed_size > MAX_SIZE_BYTES and quality > 10:
+        output_buffer = io.BytesIO()
+        quality -= 5
+        outpaint_image.save(output_buffer, format=original_format, quality=quality)
+        modified_content = output_buffer.getvalue()
+        width, height = outpaint_image.size
+        uncompressed_size = width * height * bytes_per_pixel
 
-    # Save the result to a bytes object
-    output_buffer = io.BytesIO()
-    padded_image.save(output_buffer, format=original_format)
-    modified_content = output_buffer.getvalue()
+    # If reducing quality didn't work, scale down the image
+    if uncompressed_size > MAX_SIZE_BYTES:
+        scale_factor = 0.9  # Start with 90% of the current size
+        while uncompressed_size > MAX_SIZE_BYTES and scale_factor > 0.1:
+            new_width = int(outpaint_image.width * scale_factor)
+            new_height = int(outpaint_image.height * scale_factor)
+            scaled_image = outpaint_image.resize((new_width, new_height), Image.LANCZOS)
+            output_buffer = io.BytesIO()
+            scaled_image.save(output_buffer, format=original_format, quality=quality)
+            modified_content = output_buffer.getvalue()
+            scale_factor *= 0.9  # Reduce by 10% each iteration
+            width, height = outpaint_image.size
+            uncompressed_size = width * height * bytes_per_pixel
 
     # Check if the image was modified
-    was_modified = (original_size != (required_image_width, required_image_height))
+    was_modified = ((required_image_width > 0 and required_image_height > 0 and original_size != (required_image_width, required_image_height)) or len(modified_content) != len(file_content))
 
     return modified_content, was_modified
+
+def extend_image(image,required_image_width, required_image_height,bedrock_runtime,logger):
+    original_width, original_height = image.size
+    position = ( #position the existing image in the center of the larger canvas
+        int((required_image_width - original_width) * 0.5),
+        int((required_image_height - original_height) * 0.5),
+    )
+    extended_image = Image.new("RGB", (required_image_width, required_image_height), GREEN_SCREEN_COLOR)
+    extended_image.paste(image, position)
+    inside_color_value = (0, 0, 0) #inside is black - this is the masked area
+    outside_color_value = GREEN_SCREEN_COLOR
+    mask_image = Image.new("RGB", (required_image_width, required_image_height), outside_color_value)
+    original_image_shape = Image.new(
+        "RGB", (original_width-40, original_height-40), inside_color_value
+    )
+    mask_image.paste(original_image_shape, tuple(x+20 for x in position))
+    request = json.dumps({
+        "taskType": "OUTPAINTING",
+        "outPaintingParams": {
+            "image": image_to_base64(extended_image,logger),
+            "maskImage": image_to_base64(mask_image,logger),
+            "text": 'extend',
+            "outPaintingMode": "PRECISE",  # "DEFAULT" softens the mask. "PRECISE" keeps it sharp.
+        },
+        "imageGenerationConfig": {
+            "numberOfImages": 1,  # Number of variations to generate
+            "quality": "premium",  # Allowed values are "standard" or "premium"
+            "width": required_image_width,
+            "height": required_image_height,
+            "cfgScale": 8,
+            "seed": random.randint(0, 2147483646)
+        },
+    })
+    response = bedrock_runtime.invoke_model(body=request, modelId='amazon.nova-canvas-v1:0')
+    response_body = json.loads(response.get("body").read())
+    image_bytes = base64.b64decode(response_body["images"][0])
+    outpaint_image = Image.open(io.BytesIO(image_bytes))
+    return outpaint_image
+
+def image_to_base64(image,logger):
+    logger.info('Converting image to Base64')
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+
+def convert_image_to_png(file_content, logger):
+    """
+    Convert an image to PNG format, properly handling transparency.
+
+    Args:
+        file_content (bytes): The binary content of the image file.
+        logger (logging.Logger): A logger object for logging messages and errors.
+
+    Returns:
+        bytes: The binary content of the image in PNG format.
+    """
+    try:
+        # Open the image using PIL
+        with Image.open(io.BytesIO(file_content)) as img:
+            # Create a new bytes buffer
+            png_buffer = io.BytesIO()
+            
+            # Convert the image to RGBA mode to ensure transparency is handled correctly
+            img = img.convert('RGBA')
+            
+            # Create a new image with a white background
+            background = Image.new('RGBA', img.size, (255, 255, 255, 255))
+            
+            # Paste the original image onto the white background, using the alpha channel as mask
+            background.paste(img, (0, 0), img)
+            
+            # Convert the result back to RGB mode (removing alpha channel)
+            background = background.convert('RGB')
+            
+            # Save the image as PNG to the buffer
+            background.save(png_buffer, format='PNG')
+            
+            # Get the PNG binary content
+            png_content = png_buffer.getvalue()
+            
+            logger.info(f"Image successfully converted to PNG format.")
+            return png_content
+    except Exception as e:
+        logger.error(f"Error converting image to PNG: {str(e)}")
+        # If conversion fails, return the original content
+        return file_content

@@ -315,6 +315,7 @@ def process_bedrock_agents_response(response_stream, message_id, connection_id, 
         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'message_title',
             'message_id': message_id,
+            'session_id':session_id,
             'title': chat_title
         })
         if counter > 0 and not message_stop_sent:

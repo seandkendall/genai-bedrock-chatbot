@@ -101,6 +101,7 @@ def scan_for_active_models():
     
     total_input_tokens = 0
     total_output_tokens = 0
+    video_helper_image_model_id = ''
     for model in active_models:
         model_id = model['modelId']
         input_modalities = model['inputModalities']
@@ -194,6 +195,8 @@ def scan_for_active_models():
                     logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
+            if 'nova' in model_id.lower() and results[model_id]['TEXT'] == True:
+                video_helper_image_model_id = model_id
         if 'VIDEO' in output_modalities:
             video_success_status = test_video_model(model_id)
             results[model_id]['TEXT'] = video_success_status
@@ -203,6 +206,8 @@ def scan_for_active_models():
         # if TEXT = True or DOCUMENT = True or IMAGE = true then access_granted = True
         if model_info['TEXT'] or model_info['DOCUMENT'] or model_info['IMAGE'] or model_info['VIDEO']:
             model_info['access_granted'] = True
+            if 'nova' in model_id.lower() and video_helper_image_model_id:
+                model_info['video_helper_image_model_id'] = video_helper_image_model_id
             
         
     # Update DynamoDB with the results
@@ -232,7 +237,7 @@ def test_video_model(model_id):
     video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain,6,0,True,[])
     return success_status
     
-def test_image_model(model_id):
+def test_image_model(model_id) -> bool:
     """ tests image model for access"""
     if 'titan' in model_id or 'nova' in model_id:
         image_base64,success_status,error_message = commons.generate_image_titan_nova(logger,bedrock_runtime,model_id, 'dog', None, None,5)

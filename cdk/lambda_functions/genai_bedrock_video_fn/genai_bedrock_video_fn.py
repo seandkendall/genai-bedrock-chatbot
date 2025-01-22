@@ -88,7 +88,7 @@ def lambda_handler(event, context):
             return {'statusCode': 400}
         required_image_width = 1280
         required_image_height = 720
-        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, [],required_image_width,required_image_height)
+        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, [],required_image_width,required_image_height,bedrock_runtime)
         if error_message and len(error_message) > 1:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'error',
@@ -123,7 +123,7 @@ def lambda_handler(event, context):
                 'type': 'message_stop',
                 'session_id': session_id,
                 'message_counter': 1,
-                'new_conversation': True,
+                'new_conversation': new_conversation,
                 'timestamp': message_end_timestamp_utc,
                 'amazon_bedrock_invocation_metrics': {
                     'inputTokenCount': 0,
@@ -138,12 +138,14 @@ def lambda_handler(event, context):
             'prompt': prompt,
             'modelId': model_id,
             'message_id': message_id,
+            'session_id':session_id,
             'timestamp': message_received_timestamp_utc,
         })
         
         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'message_title',
             'message_id': message_id,
+            'session_id':session_id,
             'title': persisted_chat_title
         })
         
@@ -152,6 +154,7 @@ def lambda_handler(event, context):
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'modelId': model_id,
             'new_conversation': new_conversation,
+            'session_id':session_id,
             'backend_type': 'video_generated',
             'message_id': message_id,
         })

@@ -21,6 +21,7 @@ import { styled } from "@mui/material/styles";
 import { FaSignOutAlt, FaInfoCircle, FaCog } from "react-icons/fa";
 import { ExpandMore, ExpandLess } from "@mui/icons-material";
 import Popup from "./Popup";
+import "./Header.css";
 
 const NoMaxWidthTooltip = styled(({ className, ...props }) => (
 	<Tooltip {...props} classes={{ popper: className }} />
@@ -520,6 +521,7 @@ const Header = ({
 					<Typography
 						variant={isMobile ? "body1" : "h6"}
 						component="div"
+						className="header-title"
 						sx={{ flexGrow: 1, display: "flex", alignItems: "center" }}
 					>
 						{isMobile

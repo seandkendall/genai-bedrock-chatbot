@@ -809,7 +809,12 @@ const App = memo(({ signOut, user, awsRum }) => {
 				setIsDisabled(false);
 				setIsLoading(false);
 				setTimeout(scrollToBottom, 0);
+				console.log('SDK DEBUG LOGGING MESSAGE:')
+				console.log(message)
+				console.log('SDK DEBUG LOGGING NEW CONVERSATION:')
+				console.log(message.new_conversation)
 				if (message.new_conversation) {
+					console.log('We made it!')
 					loadConversationList();
 					setSelectedChatId(message.session_id);
 					if (message.session_id && !message.session_id.includes("undefined")) {

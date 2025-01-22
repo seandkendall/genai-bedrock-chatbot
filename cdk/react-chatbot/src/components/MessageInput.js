@@ -195,22 +195,22 @@ const MessageInput = forwardRef(
 						continue;
 					}
 
-					if (file.size > MAX_IMAGE_SIZE) {
-						alert(`Image size must be no more than 3.75 MB: ${file.name}`);
-						continue;
-					}
+					// if (file.size > MAX_IMAGE_SIZE) {
+					// 	alert(`Image size must be no more than 3.75 MB: ${file.name}`);
+					// 	continue;
+					// }
 
 					try {
-						const dimensions = await getImageDimensions(file);
-						if (
-							dimensions.width > MAX_IMAGE_DIMENSION ||
-							dimensions.height > MAX_IMAGE_DIMENSION
-						) {
-							alert(
-								`Image dimensions must be no more than 8000x8000 pixels: ${file.name}`,
-							);
-							continue;
-						}
+						// const dimensions = await getImageDimensions(file);
+						// if (
+						// 	dimensions.width > MAX_IMAGE_DIMENSION ||
+						// 	dimensions.height > MAX_IMAGE_DIMENSION
+						// ) {
+						// 	alert(
+						// 		`Image dimensions must be no more than 8000x8000 pixels: ${file.name}`,
+						// 	);
+						// 	continue;
+						// }
 						newAttachments.push(file);
 					} catch (error) {
 						console.error("Error processing image:", error);

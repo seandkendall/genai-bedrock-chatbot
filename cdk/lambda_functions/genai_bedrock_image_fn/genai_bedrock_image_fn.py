@@ -82,6 +82,7 @@ def lambda_handler(event, context):
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                     'type': 'message_title',
                     'message_id': message_id,
+                    'session_id':session_id,
                     'title': persisted_chat_title
                 })
             message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
@@ -106,6 +107,7 @@ def lambda_handler(event, context):
             'prompt': prompt,
             'modelId': model_id,
             'message_id': message_id,
+            'session_id':session_id,
             'timestamp': message_received_timestamp_utc,
         })
         
@@ -114,6 +116,7 @@ def lambda_handler(event, context):
         commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
             'type': 'message_title',
             'message_id': message_id,
+            'session_id':session_id,
             'title': persisted_chat_title
         })
         # set new string variable message_end_timestand as current UTC timestamp in this format: 9/9/2024, 6:58:45 AM
@@ -122,6 +125,7 @@ def lambda_handler(event, context):
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'modelId': model_id,
             'new_conversation': new_conversation,
+            'session_id':session_id,
             'backend_type': 'image_generated',
             'message_id': message_id,
         })
