@@ -216,6 +216,7 @@ body {
   border-right: 1px solid var(--light-sidebar-border);
   overflow-y: auto;
   z-index: 90;
+  transition: width 0.3s ease; /* Add smooth transition */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -349,11 +350,27 @@ body {
   }
 
   .left-sidebar {
-    width: 0;
+    width: 250px; /* Keep full width on mobile */
+    transform: translateX(0);
+    visibility: visible;
+    display: block;
   }
 }
 
-@media (max-width: 600px) {
+@media (orientation: portrait) and (max-width: 600px) {
+  .left-sidebar {
+    width: 100%;
+    height: calc(100vh - var(--header-height));
+    transform: translateX(0);
+  }
+
+  .MuiListItem-root {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    padding: 12px !important;
+  }
+
   .app {
     flex-direction: column;
   }
