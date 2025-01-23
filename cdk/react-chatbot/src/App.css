@@ -340,7 +340,7 @@ body {
 
   .chat-history {
     padding: 10px;
-    max-width: calc(100% - 20px);
+    max-width: calc(100% - 2px);
     margin-left: 0;
   }
 

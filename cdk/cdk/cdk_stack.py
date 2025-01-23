@@ -702,7 +702,7 @@ class ChatbotWebsiteStack(Stack):
         # Create a REST API
         rest_api = apigw.RestApi(self, "ChatbotRestApi",
             description="RESTAPI for KendallChatbot",
-            deploy_options=apigw.StageOptions(stage_name="rest"),
+            deploy_options=apigw.StageOptions(stage_name="rest",metrics_enabled=True,tracing_enabled=True),
             default_cors_preflight_options=apigw.CorsOptions(
                 allow_origins=apigw.Cors.ALL_ORIGINS,
                 allow_methods=apigw.Cors.ALL_METHODS

@@ -1372,6 +1372,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 							setExpandedCategories={setExpandedCategories}
 							isDisabled={isDisabled}
 							reactThemeMode={reactThemeMode}
+							setMessages={setMessages}
 						/>
 						<div className="resizer" onMouseDown={handleMouseDown} />
 					</Box>

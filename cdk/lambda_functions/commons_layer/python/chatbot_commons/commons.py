@@ -6,6 +6,7 @@ import io
 import random
 import string
 from datetime import datetime, timezone, timedelta
+from aws_lambda_powertools import Tracer
 from botocore.exceptions import ClientError
 
 try:
@@ -15,6 +16,7 @@ except ImportError as e:
     pil_available = False
 
 GREEN_SCREEN_COLOR = (4, 244, 4)
+tracer = Tracer()
 
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -22,6 +24,7 @@ class DecimalEncoder(json.JSONEncoder):
             return float(obj)
         return super(DecimalEncoder, self).default(obj)
 
+@tracer.capture_method
 def send_websocket_message(logger, apigateway_management_api, connection_id, message):
     """
     Send a message to a client through a WebSocket connection.
@@ -65,7 +68,8 @@ def send_websocket_message(logger, apigateway_management_api, connection_id, mes
             ConnectionId=connection_id,
             Data=json.dumps(message, cls=DecimalEncoder).encode()
         )
-    # handle PayloadTooLargeException
+    except apigateway_management_api.exceptions.GoneException:
+        logger.info(f"Connection {connection_id} is no longer available. User must have closed browser")
     except ClientError as e:
         if e.response['Error']['Code'] == 'PayloadTooLargeException':
             logger.error(f"WebSocket message too large (9012): {str(e)}")
@@ -79,6 +83,7 @@ def send_websocket_message(logger, apigateway_management_api, connection_id, mes
         logger.exception(e)
         logger.error(f"Error sending WebSocket message (9012): {str(e)}")
         
+@tracer.capture_method        
 def validate_jwt_token(cognito_client, user_cache, allowlist_domain, access_token):
     """
     Validate a JWT token and check if the user's email domain is in the allowlist.
@@ -114,7 +119,7 @@ def validate_jwt_token(cognito_client, user_cache, allowlist_domain, access_toke
     return False, (f'You have not been allow-listed for this application. '
                   f'You require a domain containing: {allowlist_domain}')
 
-
+@tracer.capture_method(capture_response=False)
 def get_user_attributes(cognito_client, user_cache, access_token):
     """
     Retrieve user attributes from Amazon Cognito or a local cache.
@@ -147,7 +152,7 @@ def get_user_attributes(cognito_client, user_cache, access_token):
     user_cache[access_token] = user_attributes
     return user_attributes
 
-    
+@tracer.capture_method(capture_response=False)
 def keep_latest_versions(models):
     """
     Keep only the latest version of each model in the list.
@@ -183,6 +188,7 @@ def keep_latest_versions(models):
             latest_models[model_key] = model
     return list(latest_models.values())
 
+@tracer.capture_method
 def compare_versions(version1, version2):
     """
     Compare two version strings.
@@ -204,6 +210,7 @@ def compare_versions(version1, version2):
     # If one has a version number and the other doesn't, the one with a version number is newer
     return 1 if len(v1_parts) > len(v2_parts) else (-1 if len(v2_parts) > len(v1_parts) else 0)    
 
+@tracer.capture_method
 def get_ddb_config(table,ddb_cache,ddb_cache_timestamp,cache_duration,logger):
     """
     Retrieves the DynamoDB configuration from the table and caches it.
@@ -248,7 +255,8 @@ def get_ddb_config(table,ddb_cache,ddb_cache_timestamp,cache_duration,logger):
         logger.exception(e)
         logger.error(f"Error getting DynamoDB config: {str(e)}")
         return {}
-    
+
+@tracer.capture_method(capture_response=False)
 def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, seed):
     """ Generates an image using titan """
     logger.info("Generating image using Titan/Nova Image Generator")
@@ -291,6 +299,7 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
     response_body = json.loads(response['body'].read())
     return response_body['images'][0], True, None
 
+@tracer.capture_method
 def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed, delete_after_generate, images):
     """Generates a video through GenAi on Amazon Bedrock"""
     logger.info(f"Generating video using Nova Reel Video Generator with model: {model_id}")
@@ -351,6 +360,7 @@ def generate_random_string(length=8):
     random_part = ''.join(random.choice(characters) for _ in range(length))
     return f"RES{random_part}"
 
+@tracer.capture_method(capture_response=False)
 def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, height, style_preset,seed,steps):
     """Generates an image using StableDiffusion"""
     # write log for model_id
@@ -418,7 +428,7 @@ def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, heig
         
         response_body = json.loads(response['body'].read())
         return response_body['artifacts'][0]['base64'],True,None
-
+@tracer.capture_method
 def delete_s3_attachments_for_session(session_id: str,bucket: str,user_id:str,additional_prefix:str, s3_client, logger):
     """Function to delete conversation attachments from s3"""
     logger.info(f"Deleting conversation attachments for session: {session_id} bucket: {bucket} user_id: {user_id}")
@@ -456,11 +466,13 @@ def delete_s3_attachments_for_session(session_id: str,bucket: str,user_id:str,ad
         for error in errors:
             logger.error(f"- {error}")
 
+@tracer.capture_method(capture_response=False)
 def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, allowed_document_types,required_image_width,required_image_height,bedrock_runtime):
     processed_attachments = []
     error_message = ""
     for attachment in attachments:
         file_type = attachment['type'].split('/')[-1].lower()
+        tracer.put_annotation(key="FileType", value=file_type)
         if not attachment['type'].startswith('image/') and not attachment['type'].startswith('video/') and file_type not in allowed_document_types:
             error_message += f'Invalid file type: {file_type}. Allowed types are images, videos and {", ".join(allowed_document_types)}.'
             return processed_attachments, error_message
@@ -468,10 +480,12 @@ def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,
         # Download file from S3
         if attachment['type'].startswith('video/'):
             file_key = attachment['url'].split('/')[-1]
+            tracer.put_annotation(key="FileName", value=file_key)
             file_content = None
         else:
             try:
                 file_key = attachment['url'].split('/')[-1]
+                tracer.put_annotation(key="FileName", value=file_key)
                 response = s3_client.get_object(Bucket=attachment_bucket, Key=f'{user_id}/{session_id}/{file_key}')
                 file_content = response['Body'].read()
             except Exception as e:
@@ -485,6 +499,7 @@ def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,
                 file_content = convert_image_to_png(file_content, logger)
                 # Change file_key extention from .* to .png
                 file_key = f"{file_key.rsplit('.', 1)[0].replace(' ', '_')}.png"
+                tracer.put_annotation(key="FileName", value=file_key)
                 attachment['name'] = f"{attachment['name'].rsplit('.', 1)[0].replace(' ', '_')}.png"
                 attachment['type'] = 'image/png'
 
@@ -497,6 +512,7 @@ def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,
         })
     return processed_attachments, error_message
 
+@tracer.capture_method(capture_response=False)
 def resize_image_if_needed(file_content, required_image_width, required_image_height, bedrock_runtime, logger):
     """Max image Size: 3.7MB"""
     MAX_SIZE_BYTES = 3700000
@@ -578,6 +594,7 @@ def resize_image_if_needed(file_content, required_image_width, required_image_he
 
     return modified_content, was_modified
 
+@tracer.capture_method(capture_response=False)
 def extend_image(image,required_image_width, required_image_height,bedrock_runtime,logger):
     original_width, original_height = image.size
     position = ( #position the existing image in the center of the larger canvas
@@ -616,13 +633,14 @@ def extend_image(image,required_image_width, required_image_height,bedrock_runti
     outpaint_image = Image.open(io.BytesIO(image_bytes))
     return outpaint_image
 
+@tracer.capture_method(capture_response=False)
 def image_to_base64(image,logger):
     logger.info('Converting image to Base64')
     buffered = io.BytesIO()
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
-
+@tracer.capture_method(capture_response=False)
 def convert_image_to_png(file_content, logger):
     """
     Convert an image to PNG format, properly handling transparency.

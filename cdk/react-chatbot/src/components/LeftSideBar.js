@@ -69,6 +69,7 @@ const LeftSideBar = ({
 	setExpandedCategories,
 	isDisabled,
 	reactThemeMode,
+	setMessages
 }) => {
 	const sidebarStyle = {
 		height: "100%",
@@ -90,6 +91,7 @@ const LeftSideBar = ({
 		if (isDisabled) {
 			return;
 		}
+		setMessages([])
 		setRequireConversationLoad(true);
 		setSelectedChatId(sessionId);
 		if (sessionId && !sessionId.includes("undefined")) {

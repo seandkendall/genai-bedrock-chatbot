@@ -511,6 +511,7 @@ def sanitize_filename(filename: str) -> str:
     
     return sanitized_filename
 
+@tracer.capture_method(capture_response=False)
 def convert_video_s3_source_to_bedrock_format(input_json):
     # Extract the necessary information from the input dictionary
     videoformat = input_json['format']

@@ -195,18 +195,21 @@ def scan_for_active_models():
                     logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
+            print(f"SDK Image model {model_id} results: {results[model_id]['TEXT']}")
             if 'nova' in model_id.lower() and results[model_id]['TEXT'] == True:
                 video_helper_image_model_id = model_id
+                print(f"SDK Video helper image model id: {video_helper_image_model_id}")
         if 'VIDEO' in output_modalities:
             video_success_status = test_video_model(model_id)
             results[model_id]['TEXT'] = video_success_status
             results[model_id]['IMAGE'] = video_success_status
             
     for model_id, model_info in results.items():
-        # if TEXT = True or DOCUMENT = True or IMAGE = true then access_granted = True
         if model_info['TEXT'] or model_info['DOCUMENT'] or model_info['IMAGE'] or model_info['VIDEO']:
             model_info['access_granted'] = True
+            print(f"SDK2 Model {model_id} video_helper_image_model_id: {video_helper_image_model_id} results: {model_info}")
             if 'nova' in model_id.lower() and video_helper_image_model_id:
+                print(f"SDK2 Video helper image model id: {video_helper_image_model_id}  ")
                 model_info['video_helper_image_model_id'] = video_helper_image_model_id
             
         
