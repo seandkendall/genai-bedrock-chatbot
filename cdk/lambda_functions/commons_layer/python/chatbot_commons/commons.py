@@ -467,7 +467,7 @@ def delete_s3_attachments_for_session(session_id: str,bucket: str,user_id:str,ad
             logger.error(f"- {error}")
 
 @tracer.capture_method(capture_response=False)
-def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, allowed_document_types,required_image_width,required_image_height,bedrock_runtime):
+def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, allowed_document_types,required_image_width,required_image_height,bedrock_runtime,image_model_id):
     processed_attachments = []
     error_message = ""
     for attachment in attachments:
@@ -495,7 +495,7 @@ def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,
                 return processed_attachments, error_message
         if attachment['type'].startswith('image/'):
             if pil_available:
-                file_content, file_was_modified = resize_image_if_needed(file_content, required_image_width, required_image_height,bedrock_runtime,logger)
+                file_content, file_was_modified = resize_image_if_needed(file_content, required_image_width, required_image_height,bedrock_runtime,logger,image_model_id)
                 file_content = convert_image_to_png(file_content, logger)
                 # Change file_key extention from .* to .png
                 file_key = f"{file_key.rsplit('.', 1)[0].replace(' ', '_')}.png"
@@ -513,7 +513,7 @@ def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,
     return processed_attachments, error_message
 
 @tracer.capture_method(capture_response=False)
-def resize_image_if_needed(file_content, required_image_width, required_image_height, bedrock_runtime, logger):
+def resize_image_if_needed(file_content, required_image_width, required_image_height, bedrock_runtime, logger,image_model_id):
     """Max image Size: 3.7MB"""
     MAX_SIZE_BYTES = 3700000
     image = Image.open(io.BytesIO(file_content))
@@ -545,7 +545,7 @@ def resize_image_if_needed(file_content, required_image_width, required_image_he
 
         # If the image is smaller than required, extend it
         if new_width < required_image_width or new_height < required_image_height:
-            outpaint_image = extend_image(resized_image, required_image_width, required_image_height, bedrock_runtime, logger)
+            outpaint_image = extend_image(resized_image, required_image_width, required_image_height, bedrock_runtime, logger,image_model_id)
         else:
             outpaint_image = resized_image
 
@@ -595,7 +595,7 @@ def resize_image_if_needed(file_content, required_image_width, required_image_he
     return modified_content, was_modified
 
 @tracer.capture_method(capture_response=False)
-def extend_image(image,required_image_width, required_image_height,bedrock_runtime,logger):
+def extend_image(image,required_image_width, required_image_height,bedrock_runtime,logger,image_model_id):
     original_width, original_height = image.size
     position = ( #position the existing image in the center of the larger canvas
         int((required_image_width - original_width) * 0.5),
@@ -627,7 +627,8 @@ def extend_image(image,required_image_width, required_image_height,bedrock_runti
             "seed": random.randint(0, 2147483646)
         },
     })
-    response = bedrock_runtime.invoke_model(body=request, modelId='amazon.nova-canvas-v1:0')
+
+    response = bedrock_runtime.invoke_model(body=request, modelId=image_model_id)
     response_body = json.loads(response.get("body").read())
     image_bytes = base64.b64decode(response_body["images"][0])
     outpaint_image = Image.open(io.BytesIO(image_bytes))

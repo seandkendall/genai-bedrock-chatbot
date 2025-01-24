@@ -112,6 +112,10 @@ def process_websocket_message(request_body):
         # Handle other message types (e.g., prompt)
         prompt = request_body.get('prompt', '')
         attachments = request_body.get('attachments', [])
+        selected_mode = request_body.get('selected_mode', {})
+        selected_model_id = selected_mode.get('modelId','')
+        selected_model_category = selected_mode.get('category','')
+        model_provider = selected_model_id.split('.')[0]
         # Validate attachments
         if len(attachments) > MAX_CONTENT_ITEMS:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
@@ -135,7 +139,7 @@ def process_websocket_message(request_body):
                 'error': f'Too many documents. Maximum allowed is {MAX_DOCUMENTS}.'
             })
             return {'statusCode': 400}
-        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, ALLOWED_DOCUMENT_TYPES,0,0,bedrock_runtime)
+        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, ALLOWED_DOCUMENT_TYPES,0,0,bedrock_runtime,selected_model_id)
         if error_message and len(error_message) > 1:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'error',
@@ -154,17 +158,14 @@ def process_websocket_message(request_body):
         tracer.put_annotation(key="PromptUserOrSystem", value=system_prompt_user_or_system)
         if not system_prompt or reload_prompt_config:
             system_prompt = load_system_prompt_config(system_prompt_user_or_system,user_id)
-        selected_mode = request_body.get('selected_mode', {})
+
         title_theme = request_body.get('titleGenTheme', '')
         title_gen_model = request_body.get('titleGenModel', '')
         if title_gen_model == 'DEFAULT' or not title_gen_model:
             title_gen_model = ''
         if '/' in title_gen_model:
             title_gen_model = title_gen_model.split('/')[1]
-        
-        selected_model_id = selected_mode.get('modelId','')
-        selected_model_category = selected_mode.get('category','')
-        model_provider = selected_model_id.split('.')[0]
+
         message_id = request_body.get('message_id', None)
         message_received_timestamp_utc = request_body.get('timestamp', datetime.now(tz=timezone.utc).isoformat())
         timestamp_local_timezone = request_body.get('timestamp_local_timezone')

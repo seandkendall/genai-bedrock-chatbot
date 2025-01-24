@@ -245,6 +245,7 @@ def load_models(bedrock_client, table):
                 model['allow_input_video'] = ddb_config.get(model['modelId'], {}).get('VIDEO', False)
                 model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
                 model['output_type'] = 'VIDEO'
+                model['video_helper_image_model_id'] = ddb_config.get(model['modelId'], {}).get('video_helper_image_model_id', None)
                 model['category'] = 'Bedrock Video Models'
                 available_video_models_return.append(model)
             

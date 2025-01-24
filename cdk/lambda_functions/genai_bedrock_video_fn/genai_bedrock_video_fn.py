@@ -44,6 +44,7 @@ def lambda_handler(event, context):
         prompt = event.get('prompt', '')
         attachments = event.get('attachments', [])
         model_id = selected_mode.get('modelId','amazon.nova-reel-v1:0')
+        image_model_id = selected_mode.get('video_helper_image_model_id','amazon.nova-reel-v1:0')
         # if prompt length is < 3 then prepend text 'image of '
         if len(prompt) < 3:
             prompt = 'image of ' + prompt
@@ -74,7 +75,7 @@ def lambda_handler(event, context):
             return {'statusCode': 400}
         required_image_width = 1280
         required_image_height = 720
-        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, [],required_image_width,required_image_height,bedrock_runtime)
+        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, [],required_image_width,required_image_height,bedrock_runtime,image_model_id)
         if error_message and len(error_message) > 1:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'error',

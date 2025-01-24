@@ -323,6 +323,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		}
 		if (newMode) {
 			setSelectedMode(newMode);
+			localStorage.setItem("selectedMode", JSON.stringify(newMode));
 		}
 		setTimeout(scrollToBottom, 0);
 	};
@@ -559,7 +560,8 @@ const App = memo(({ signOut, user, awsRum }) => {
 			return;
 		}
 		if (selectedMode.category === "Bedrock Video Models") {
-			generateVideo(sanitizedMessage, randomMessageId,attachments);
+			const video_helper_image_model_id = selectedMode?.video_helper_image_model_id
+			generateVideo(sanitizedMessage, randomMessageId,attachments,video_helper_image_model_id);
 			return;
 		}
 
@@ -684,7 +686,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		sendMessageViaRest(data,"/rest/send-message",'generateImageRequest')
 	};
 
-	const generateVideo = async (prompt, randomMessageId,attachments) => {
+	const generateVideo = async (prompt, randomMessageId,attachments,video_helper_image_model_id) => {
 		setIsLoading(true);
 		let newAppSessionid;
 		if (!appSessionid) {
@@ -697,6 +699,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		const message_timestamp = new Date().toISOString();
 		const data = {
 			prompt: prompt,
+			video_helper_image_model_id: video_helper_image_model_id,
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
 			session_id: newAppSessionid ? newAppSessionid : appSessionid,
@@ -1426,7 +1429,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 							ref={messageInputRef}
 							uploadedFileNames={uploadedFileNames}
 							setUploadedFileNames={setUploadedFileNames}
-							reactThemeMode={reactThemeMode}
 						/>
 					</Box>
 				</Box>

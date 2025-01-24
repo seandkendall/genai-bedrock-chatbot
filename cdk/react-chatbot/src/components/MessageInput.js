@@ -88,7 +88,6 @@ const MessageInput = forwardRef(
 			setIsRefreshingMessage,
 			uploadedFileNames,
 			setUploadedFileNames,
-			reactThemeMode,
 		},
 		ref,
 	) => {
@@ -185,13 +184,18 @@ const MessageInput = forwardRef(
 				}
 
 				if (isImage) {
+					let allowed_number_of_images = MAX_IMAGES
+					// if selectedMode.output_type lowercase = video
+					if (selectedMode.output_type.toLowerCase() === "video") {
+						allowed_number_of_images = 1
+					}
+					
 					if (
 						attachments.filter((a) => isImageFile(a)).length +
 							newAttachments.filter((a) => isImageFile(a)).length +
-							uploadedFileNames.filter((a) => isImageFile(a)).length >=
-						MAX_IMAGES
+							uploadedFileNames.filter((a) => isImageFile(a)).length >= allowed_number_of_images
 					) {
-						alert(`You can only attach up to ${MAX_IMAGES} images.`);
+						alert(`You can only attach up to ${allowed_number_of_images} images.`);
 						continue;
 					}
 
