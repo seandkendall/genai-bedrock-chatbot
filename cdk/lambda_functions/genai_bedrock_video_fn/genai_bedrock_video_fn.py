@@ -44,7 +44,7 @@ def lambda_handler(event, context):
         prompt = event.get('prompt', '')
         attachments = event.get('attachments', [])
         model_id = selected_mode.get('modelId','amazon.nova-reel-v1:0')
-        image_model_id = selected_mode.get('video_helper_image_model_id','amazon.nova-reel-v1:0')
+        image_model_id = selected_mode.get('video_helper_image_model_id','amazon.nova-canvas-v1:0')
         # if prompt length is < 3 then prepend text 'image of '
         if len(prompt) < 3:
             prompt = 'image of ' + prompt
