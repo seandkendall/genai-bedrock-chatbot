@@ -834,13 +834,6 @@ class ChatbotWebsiteStack(Stack):
             user_pool_client_name="ChatbotUserPoolClient",
         )
         user_pool_client.apply_removal_policy(RemovalPolicy.DESTROY)
-        # cognito_client_id = user_pool_client.user_pool_client_id
-        # cognito_provider_name = f'cognito-idp.{region}.amazonaws.com/{user_pool.user_pool_id}'
-        # cognito_identity_provider_property = cognito.CfnIdentityPool.CognitoIdentityProviderProperty(
-        #     client_id=cognito_client_id,
-        #     provider_name=cognito_provider_name,
-        #     server_side_token_check=False
-        # )
         
 
         # Create a Cognito User Pool Domain

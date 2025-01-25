@@ -8,5 +8,6 @@ app = cdk.App()
 chatbot_stack = ChatbotWebsiteStack(app, "ChatbotWebsiteStack")
 cdk.Tags.of(chatbot_stack).add("auto-delete", "false")
 cdk.Tags.of(chatbot_stack).add("auto-stop", "false")
+cdk.Tags.of(chatbot_stack).add("project", "genai-bedrock-chatbot")
  
 app.synth()
