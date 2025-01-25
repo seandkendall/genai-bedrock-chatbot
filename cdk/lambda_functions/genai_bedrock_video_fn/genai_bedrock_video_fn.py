@@ -64,7 +64,12 @@ def lambda_handler(event, context):
             # Load conversation history from DynamoDB
             conversations.load_and_send_conversation_history(session_id, connection_id, user_id, dynamodb,conversations_table_name,s3_client,conversation_history_bucket,logger, commons,apigateway_management_api)
             return
+        # Resolution and aspect_ratio only used for Luma models
+        resolution = '720p'
+        aspect_ratio = '16:9'
         duration_seconds = 6
+        if 'luma' in model_id.lower():
+            duration_seconds = 9
         seed = random.randint(0, 2147483648)
         image_count = sum(1 for a in attachments if a['type'].startswith('image/'))
         if image_count > MAX_IMAGES:
@@ -83,7 +88,7 @@ def lambda_handler(event, context):
             })
             return {'statusCode': 400}
         images_array = convert_attachments(processed_attachments)
-        video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain,duration_seconds,seed,False,images_array)
+        video_url, success_status, error_message = commons.generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain,duration_seconds,seed,False,images_array, resolution, aspect_ratio)
         
         needs_load_from_s3, chat_title_loaded, original_existing_history = conversations.query_existing_history(dynamodb, conversations_table_name, logger, session_id)
         existing_history = copy.deepcopy(original_existing_history)

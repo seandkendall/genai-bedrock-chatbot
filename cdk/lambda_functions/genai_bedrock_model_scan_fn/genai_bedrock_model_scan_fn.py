@@ -233,7 +233,12 @@ def load_mp4():
     
 def test_video_model(model_id):
     """ tests video model for access"""
-    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain,6,0,True,[])
+    duration_seconds=6
+    resolution='540p'
+    aspect_ratio='16:9'
+    if 'luma' in model_id.lower():
+        duration_seconds = 5
+    video_url, success_status, error_message = commons.generate_video('dog', model_id,'modelscan','ms',bedrock_runtime,s3_client,video_bucket,2,logger, cloudfront_domain,duration_seconds,0,True,[],resolution, aspect_ratio)
     return success_status
     
 def test_image_model(model_id) -> bool:

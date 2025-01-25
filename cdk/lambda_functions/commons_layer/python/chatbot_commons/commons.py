@@ -300,7 +300,7 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
     return response_body['images'][0], True, None
 
 @tracer.capture_method
-def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed, delete_after_generate, images):
+def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client,video_bucket,SLEEP_TIME,logger, cloudfront_domain, duration_seconds,seed, delete_after_generate, images,resolution, aspect_ratio):
     """Generates a video through GenAi on Amazon Bedrock"""
     logger.info(f"Generating video using Nova Reel Video Generator with model: {model_id}")
     prefix = rf'{user_id}/{session_id}'
@@ -309,11 +309,17 @@ def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client
         "textToVideoParams": {"text": prompt},
         "videoGenerationConfig": {
             "durationSeconds": duration_seconds,
-            "fps": 24,
             "dimension": "1280x720",
             "seed": seed
         }
     }
+    if 'luma' in model_id.lower():
+        model_input["textToVideoParams"]["resolution"] = resolution
+        model_input["textToVideoParams"]["aspect_ratio"] = aspect_ratio
+    elif 'nova' in model_id.lower():
+        model_input["textToVideoParams"]["fps"] = 24
+        model_input["textToVideoParams"]["dimension"] = "1280x720"
+        
     # Add 'images' attribute to model_input.textToVideoParams if images is not null
     # if images is an array and length > 0
     if images and len(images) > 0:
