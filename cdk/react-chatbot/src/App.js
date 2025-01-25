@@ -55,11 +55,19 @@ const App = memo(({ signOut, user, awsRum }) => {
 	const [selectedChatId, setSelectedChatId] = useState(localStorage.getItem("selectedChatId") || "");
 	const [requireConversationLoad, setRequireConversationLoad] = useState(true);
 	const [isDisabled, setIsDisabled] = useState(false);
-	const [selectedMode, setSelectedMode] = useState(
-		localStorage.getItem("selectedMode")
-			? JSON.parse(localStorage.getItem("selectedMode"))
-			: "",
-	);
+	const [selectedMode, setSelectedMode] = useState(() => {
+		const storedValue = localStorage.getItem("selectedMode");
+		if (storedValue) {
+		  try {
+			return JSON.parse(storedValue);
+		  } catch (error) {
+			// If parsing fails, remove the invalid value from localStorage
+			localStorage.removeItem("selectedMode");
+			console.warn("Invalid JSON in localStorage, removed 'selectedMode'");
+		  }
+		}
+		return ""; // Default value if nothing in localStorage or if parsing fails
+	  });
 	const [selectedTitleGenerationMode, setSelectedTitleGenerationMode] =
 		useState(null);
 	const [selectedTitleGenerationTheme, setSelectedTitleGenerationTheme] =
