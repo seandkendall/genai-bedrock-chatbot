@@ -310,7 +310,7 @@ def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client
     if 'luma' in model_id.lower():
         model_input["prompt"] = prompt
         model_input["resolution"] = resolution
-        model_input["duration"] = duration_seconds+'s'
+        model_input["duration"] = f"{duration_seconds}s"
         model_input["aspect_ratio"] = aspect_ratio
     elif 'nova' in model_id.lower():
         model_input["videoGenerationConfig"]["fps"] = 24
