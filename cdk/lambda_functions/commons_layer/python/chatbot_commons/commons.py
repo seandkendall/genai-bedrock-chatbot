@@ -16,6 +16,7 @@ except ImportError as e:
     pil_available = False
 
 GREEN_SCREEN_COLOR = (4, 244, 4)
+BLACK_COLOR = (0, 0, 0)
 tracer = Tracer()
 
 class DecimalEncoder(json.JSONEncoder):
@@ -606,6 +607,11 @@ def extend_image(image,required_image_width, required_image_height,bedrock_runti
         int((required_image_width - original_width) * 0.5),
         int((required_image_height - original_height) * 0.5),
     )
+    if image_model_id is None:
+        extended_image = Image.new("RGB", (required_image_width, required_image_height), BLACK_COLOR)
+        extended_image.paste(image, position)
+        return extended_image
+    
     extended_image = Image.new("RGB", (required_image_width, required_image_height), GREEN_SCREEN_COLOR)
     extended_image.paste(image, position)
     inside_color_value = (0, 0, 0) #inside is black - this is the masked area
