@@ -195,12 +195,13 @@ def scan_for_active_models():
                     logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
-            if 'nova' in model_id.lower() and results[model_id]['TEXT'] == True:
+            if 'nova' in model_id.lower() and results[model_id]['TEXT'] is True:
                 video_helper_image_model_id = model_id
         if 'VIDEO' in output_modalities:
             video_success_status = test_video_model(model_id)
             results[model_id]['TEXT'] = video_success_status
-            results[model_id]['IMAGE'] = video_success_status
+            if 'nova' in model_id.lower():
+                results[model_id]['IMAGE'] = video_success_status
             
     for model_id, model_info in results.items():
         if model_info['TEXT'] or model_info['DOCUMENT'] or model_info['IMAGE'] or model_info['VIDEO']:

@@ -313,9 +313,9 @@ def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client
         model_input["resolution"] = resolution
         model_input["duration"] = f"{duration_seconds}s"
         model_input["aspect_ratio"] = aspect_ratio
-        if images and len(images) > 0:
-            model_input["keyframes"]["frame0"]["type"] = "image"
-            model_input["keyframes"]["frame0"]["url"] = "https://www.hdwallpapers.net/previews/morgan-freeman-portrait-631.jpg"
+        # if images and len(images) > 0:
+        #     model_input["keyframes"]["frame0"]["type"] = "image"
+        #     model_input["keyframes"]["frame0"]["url"] = "https://url-to-an-image.jpg"
     elif 'nova' in model_id.lower():
         model_input["videoGenerationConfig"]["fps"] = 24
         model_input["videoGenerationConfig"]["dimension"] = "1280x720"
