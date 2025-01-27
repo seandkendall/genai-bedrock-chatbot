@@ -298,6 +298,8 @@ const SettingsModal = ({
                         updateLocalState('heightWidth', newHeightWidth);
                         localStorage.setItem('heightWidth', newHeightWidth);
                         setHeightWidth(newHeightWidth)
+                        const newReactThemeMode = response.reactThemeMode || 'light';
+                        updateLocalState('reactThemeMode', newReactThemeMode);
 
                     } else if (response.message === 'Config saved successfully') {
                         console.log('Configuration saved successfully');
@@ -415,6 +417,7 @@ const SettingsModal = ({
             systemPrompt: localState.userSystemPrompt,
             stylePreset: localState.stylePreset,
             heightWidth: localState.heightWidth,
+            reactThemeMode: localState.reactThemeMode,
             systemPromptUserOrSystem: localState.systemPromptType,
         });
 
