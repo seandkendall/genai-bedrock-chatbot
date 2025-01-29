@@ -317,6 +317,8 @@ def generate_video(prompt, model_id,user_id,session_id,bedrock_runtime,s3_client
         #     model_input["keyframes"]["frame0"]["type"] = "image"
         #     model_input["keyframes"]["frame0"]["url"] = "https://url-to-an-image.jpg"
     elif 'nova' in model_id.lower():
+        model_input["videoGenerationConfig"] = {}
+        model_input["textToVideoParams"] = {}
         model_input["videoGenerationConfig"]["fps"] = 24
         model_input["videoGenerationConfig"]["dimension"] = "1280x720"
         model_input["videoGenerationConfig"]["durationSeconds"] = duration_seconds

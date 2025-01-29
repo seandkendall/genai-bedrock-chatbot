@@ -997,4 +997,4 @@ class ChatbotWebsiteStack(Stack):
         CfnOutput(self, "user_pool_client_id", value=user_pool_client.user_pool_client_id)
         CfnOutput(self, "websocket_api_endpoint", value=websocket_api_endpoint+'/ws')
         CfnOutput(self, "RestApiUrl", value=rest_api.url)
-        CfnOutput(self, "CloudWatchLogsLiveTailURL",value=cloudwatch_logs_url,description="URL to CloudWatch Logs live tail screen for all Lambda functions")    
+        CfnOutput(self, "CloudWatchLogsLiveTailURL",value=cloudwatch_logs_url,description="URL to CloudWatch Logs live tail screen for all Lambda functions")
