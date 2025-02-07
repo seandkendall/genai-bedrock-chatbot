@@ -144,6 +144,7 @@ def load_prompt_flows(bedrock_agent_client, table):
 def load_models(bedrock_client, table):
     try:
         foundation_model_response = bedrock_client.list_foundation_models(byInferenceType='ON_DEMAND')
+        list_imported_models_response = bedrock_client.list_imported_models()
         inference_profile_response = bedrock_client.list_inference_profiles()
         
         # Create a mapping of model ARNs to inference profile information
@@ -163,6 +164,15 @@ def load_models(bedrock_client, table):
                 model['originalModelName'] = model['modelName']
                 model['modelArn'] = inference_profile_map[original_model_arn]['inferenceProfileArn']
                 model['modelName'] = inference_profile_map[original_model_arn]['inferenceProfileName']
+        
+        for model in list_imported_models_response['modelSummaries']:
+            original_model_arn = model['modelArn']
+            if original_model_arn in inference_profile_map:
+                model['originalModelArn'] = original_model_arn
+                model['originalModelName'] = model['modelName']
+                model['modelArn'] = inference_profile_map[original_model_arn]['inferenceProfileArn']
+                model['modelName'] = inference_profile_map[original_model_arn]['inferenceProfileName']
+                list_imported_models_response['modelSummaries'].append(model)
 
         # Filter and process text models
         text_models = [
@@ -176,6 +186,18 @@ def load_models(bedrock_client, table):
             }
             for model in foundation_model_response['modelSummaries']
             if 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
+        ]
+        # Filter and process text models
+        imported_models = [
+            {
+                'providerName': model['modelArchitecture'],
+                'modelName': model['modelName'],
+                'modelId': model['modelArn'],
+                'modelArn': model['modelArn'],
+                'mode_selector': model['modelArn'],
+                'mode_selector_name': model['modelName'],
+            }
+            for model in list_imported_models_response['modelSummaries']
         ]
 
         # Filter and process image models
@@ -211,6 +233,7 @@ def load_models(bedrock_client, table):
         available_video_models = keep_latest_versions(video_models)
 
         available_text_models_return = []
+        available_imported_models_return = []
         available_image_models_return = []
         available_video_models_return = []
         # Update the models with DynamoDB config
@@ -248,6 +271,16 @@ def load_models(bedrock_client, table):
                 model['video_helper_image_model_id'] = ddb_config.get(model['modelId'], {}).get('video_helper_image_model_id', None)
                 model['category'] = 'Bedrock Video Models'
                 available_video_models_return.append(model)
+        for model in imported_models:
+            model_identifier = model.get('originalModelArn', model['modelId'])
+            if ddb_config.get(model_identifier, {}).get('access_granted', False):
+                model['is_active'] = True
+                model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
+                model['allow_input_video'] = ddb_config.get(model['modelId'], {}).get('VIDEO', False)
+                model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
+                model['output_type'] = 'TEXT'
+                model['category'] = 'Imported Models'
+                available_imported_models_return.append(model)
             
             
         
@@ -255,7 +288,7 @@ def load_models(bedrock_client, table):
         with open('./bedrock_supported_kb_models.json', 'r') as f:
             kb_models = json.load(f)
         
-        return {'type': 'load_models', 'text_models': available_text_models_return, 'video_models': available_video_models_return, 'image_models': available_image_models_return, 'kb_models': kb_models}
+        return {'type': 'load_models', 'imported_models':available_imported_models_return,'text_models': available_text_models_return, 'video_models': available_video_models_return, 'image_models': available_image_models_return, 'kb_models': kb_models}
     except Exception as e:
         logger.exception(e)
         logger.error(f"Error loading models: {str(e)}")

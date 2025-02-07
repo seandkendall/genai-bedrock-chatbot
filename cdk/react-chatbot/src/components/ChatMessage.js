@@ -10,6 +10,12 @@ import {
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+import { MathJaxContext, MathJax } from 'better-react-mathjax';
+
 import { okaidia } from "react-syntax-highlighter/dist/esm/styles/prism";
 import CodeBlock from "./CodeBlock";
 import MessageHeader from "./MessageHeader";
@@ -102,6 +108,7 @@ const ChatMessage = memo(
 		const isAssistant = role === "Assistant" || role === "assistant";
 		const isHuman = role === "Human" || role === "user";
 
+		// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 		const renderContent = useCallback(() => {
 			if (isImage) {
 				return (
@@ -138,173 +145,187 @@ const ChatMessage = memo(
 
 			return (
 				<>
-					<ReactMarkdown
-						remarkPlugins={[remarkGfm]}
-						components={{
-							code({ node, inline, className, children, ...props }) {
-								const match = /language-(\w+)/.exec(className || "");
-								const language = match ? match[1] : "";
-
-								return !inline && language && language.trim() !== "" ? (
-									<CodeBlock
-										code={String(children).trim()}
-										language={language}
-										style={okaidia}
-									/>
-								) : (
-									<code className={className}>{children}</code>
-								);
-							},
-							li: ({ node, checked, ...props }) => {
-								if (typeof checked === "boolean") {
-									return (
+					<MathJaxContext>
+						<MathJax>
+							<ReactMarkdown
+								remarkPlugins={[remarkGfm,remarkMath]}
+								rehypePlugins={[rehypeKatex]}
+								components={{
+									math: ({ value }) => (
+										<div>
+										  <MathJax>{`\\[${value}\\]`}</MathJax>
+										</div>
+									  ),
+									  inlineMath: ({ value }) => (
+										<span>
+										  <MathJax>{`\\(${value}\\)`}</MathJax>
+										</span>
+									  ),
+									code({ node, inline, className, children, ...props }) {
+										const match = /language-(\w+)/.exec(className || "");
+										const language = match ? match[1] : "";
+										return !inline && language && language.trim() !== "" ? (
+											<CodeBlock
+											code={String(children).trim()}
+											language={language}
+											style={okaidia}
+											/>
+										) : (
+											<code className={className}>{children}</code>
+										);
+									},
+									li: ({ node, checked, ...props }) => {
+										if (typeof checked === "boolean") {
+											return (
+												<Typography
+													component="li"
+													variant="body1"
+													sx={{
+														listStyle: "none",
+														display: "flex",
+														alignItems: "center",
+														"&::before": {
+															content: checked ? '"☑️"' : '"⬜"',
+															marginRight: "0.5rem",
+														},
+													}}
+													{...props}
+												/>
+											);
+										}
+										return (
+											<Typography
+												component="li"
+												variant="body1"
+												sx={{
+													lineHeight: 1.6,
+													"&::marker": {
+														fontSize: "1.2rem",
+														fontWeight: "bold",
+													},
+												}}
+												{...props}
+											/>
+										);
+									},
+									p: (props) => (
 										<Typography
-											component="li"
+											component="p"
 											variant="body1"
+											whiteSpace="pre-wrap"
+											sx={{ mb: 2 }}
+											{...props}
+										/>
+									),
+									table: ({ node, ...props }) => (
+										<Box sx={{ overflowX: "auto", my: 2 }}>
+											<table
+												style={{
+													borderCollapse: "collapse",
+													width: "100%",
+													minWidth: "400px",
+													marginBottom: "1rem",
+												}}
+												{...props}
+											/>
+										</Box>
+									),
+									thead: ({ node, ...props }) => (
+										<thead
+											style={{
+												backgroundColor: "#f5f5f5",
+												borderBottom: "2px solid #ddd",
+											}}
+											{...props}
+										/>
+									),
+									th: ({ node, ...props }) => (
+										<th
+											style={{
+												border: "1px solid #ddd",
+												padding: "12px 8px",
+												textAlign: "left",
+												fontWeight: "bold",
+											}}
+											{...props}
+										/>
+									),
+									td: ({ node, ...props }) => (
+										<td
+											style={{
+												border: "1px solid #ddd",
+												padding: "8px",
+												verticalAlign: "top",
+											}}
+											{...props}
+										/>
+									),
+									del: ({ node, ...props }) => (
+										<Typography
+											component="del"
 											sx={{
-												listStyle: "none",
-												display: "flex",
-												alignItems: "center",
-												"&::before": {
-													content: checked ? '"☑️"' : '"⬜"',
-													marginRight: "0.5rem",
+												color: "text.secondary",
+												textDecoration: "line-through",
+											}}
+											{...props}
+										/>
+									),
+									a: ({ node, href, ...props }) => (
+										<Typography
+											component="a"
+											href={href}
+											sx={{
+												color: "primary.main",
+												textDecoration: "none",
+												"&:hover": {
+													textDecoration: "underline",
+												},
+												...(href === props.children[0] && {
+													fontFamily: "monospace",
+													backgroundColor: "action.hover",
+													padding: "0.2em 0.4em",
+													borderRadius: "3px",
+												}),
+											}}
+											target="_blank"
+											rel="noopener noreferrer"
+											{...props}
+										/>
+									),
+									blockquote: ({ node, ...props }) => (
+										<Box
+											component="blockquote"
+											sx={{
+												borderLeft: 4,
+												borderLeftColor: "grey.300",
+												pl: 2,
+												my: 2,
+												color: "text.secondary",
+												"& p": {
+													m: 0,
 												},
 											}}
 											{...props}
 										/>
-									);
-								}
-								return (
-									<Typography
-										component="li"
-										variant="body1"
-										sx={{
-											lineHeight: 1.6,
-											"&::marker": {
-												fontSize: "1.2rem",
-												fontWeight: "bold",
-											},
-										}}
-										{...props}
-									/>
-								);
-							},
-							p: (props) => (
-								<Typography
-									component="p"
-									variant="body1"
-									whiteSpace="pre-wrap"
-									sx={{ mb: 2 }}
-									{...props}
-								/>
-							),
-							table: ({ node, ...props }) => (
-								<Box sx={{ overflowX: "auto", my: 2 }}>
-									<table
-										style={{
-											borderCollapse: "collapse",
-											width: "100%",
-											minWidth: "400px",
-											marginBottom: "1rem",
-										}}
-										{...props}
-									/>
-								</Box>
-							),
-							thead: ({ node, ...props }) => (
-								<thead
-									style={{
-										backgroundColor: "#f5f5f5",
-										borderBottom: "2px solid #ddd",
-									}}
-									{...props}
-								/>
-							),
-							th: ({ node, ...props }) => (
-								<th
-									style={{
-										border: "1px solid #ddd",
-										padding: "12px 8px",
-										textAlign: "left",
-										fontWeight: "bold",
-									}}
-									{...props}
-								/>
-							),
-							td: ({ node, ...props }) => (
-								<td
-									style={{
-										border: "1px solid #ddd",
-										padding: "8px",
-										verticalAlign: "top",
-									}}
-									{...props}
-								/>
-							),
-							del: ({ node, ...props }) => (
-								<Typography
-									component="del"
-									sx={{
-										color: "text.secondary",
-										textDecoration: "line-through",
-									}}
-									{...props}
-								/>
-							),
-							a: ({ node, href, ...props }) => (
-								<Typography
-									component="a"
-									href={href}
-									sx={{
-										color: "primary.main",
-										textDecoration: "none",
-										"&:hover": {
-											textDecoration: "underline",
-										},
-										...(href === props.children[0] && {
-											fontFamily: "monospace",
-											backgroundColor: "action.hover",
-											padding: "0.2em 0.4em",
-											borderRadius: "3px",
-										}),
-									}}
-									target="_blank"
-									rel="noopener noreferrer"
-									{...props}
-								/>
-							),
-							blockquote: ({ node, ...props }) => (
-								<Box
-									component="blockquote"
-									sx={{
-										borderLeft: 4,
-										borderLeftColor: "grey.300",
-										pl: 2,
-										my: 2,
-										color: "text.secondary",
-										"& p": {
-											m: 0,
-										},
-									}}
-									{...props}
-								/>
-							),
-							hr: ({ node, ...props }) => (
-								<Box
-									component="hr"
-									sx={{
-										border: "none",
-										height: "1px",
-										backgroundColor: "grey.300",
-										my: 2,
-									}}
-									{...props}
-								/>
-							),
-						}}
-					>
-						{formatContent(messageContent, outputTokenCount)}
-					</ReactMarkdown>
+									),
+									hr: ({ node, ...props }) => (
+										<Box
+											component="hr"
+											sx={{
+												border: "none",
+												height: "1px",
+												backgroundColor: "grey.300",
+												my: 2,
+											}}
+											{...props}
+										/>
+									),
+								}}
+							>
+								{formatContent(messageContent, outputTokenCount)}
+							</ReactMarkdown>
+						</MathJax>
+					</MathJaxContext>
 					{attachments.length > 0 && (
 						<Box mt={2} display="flex" flexWrap="wrap" gap={1}>
 							{attachments.map((attachment, index) => (

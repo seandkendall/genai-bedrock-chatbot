@@ -10,6 +10,7 @@ display_help() {
     echo "  -a, --app APP              Specify the app name"
     echo "  -c, --context CONTEXT      Specify the context"
     echo "  --debug                    Enable debug mode"
+    echo "  --deepseek                 Deploy DeepSeek as a Custom Model Import in Bedrock"
     echo "  --profile PROFILE          Specify the AWS profile"
     echo "  -t, --tags TAGS            Specify tags"
     echo "  -f, --force                Force deployment"
@@ -237,6 +238,7 @@ while [[ $# -gt 0 ]]; do
         -a|--app) app_flag="--app $2"; shift 2;;
         -c|--context) context_flag="--context $2"; shift 2;;
         --debug) debug_flag="--debug"; shift;;
+        --deepseek) deepseek_flag="y"; shift;;
         --profile) profile_flag="--profile $2"; shift 2;;
         -t|--tags) tags_flag="--tags $2"; shift 2;;
         -f|--force) force_flag="--force"; shift;;
@@ -276,6 +278,18 @@ fi
 # Restore the positional arguments
 set -- "${POSITIONAL_ARGS[@]}"
 deployExample=${deployExample:-'n'}
+deepseek_flag=${deepseek_flag:-'n'}
+
+projects=$(aws codebuild list-projects \
+  --query "projects[?starts_with(@, 'GenAIChatBotCustomModel')]" \
+  --output json)
+
+# Check if any projects are found
+if [[ $(echo "$projects" | jq 'length') -gt 0 ]]; then
+  # Override the flag if a project is found
+  deepseek_flag='y'
+fi
+
 
 # Check if AWS CDK is installed
 if ! command -v cdk &> /dev/null
@@ -420,7 +434,7 @@ else
     if [ -n "$run_bootstrap" ]; then
         # If --headless flag is used, run cdk bootstrap
         echo "Running CDK bootstrap..."
-        cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context allowlistDomain="$allowListDomain"
+        cdk bootstrap --all --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context allowlistDomain="$allowListDomain"
         if [ $? -eq 0 ]; then
             echo "CDK bootstrap completed successfully."
         else
@@ -432,7 +446,7 @@ else
         case "$run_bootstrap" in
             [yY][eE][sS]|[yY])
                 echo "Running CDK bootstrap..."
-                cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context allowlistDomain="$allowListDomain"
+                cdk bootstrap --all --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context allowlistDomain="$allowListDomain"
                 if [ $? -eq 0 ]; then
                     echo "CDK bootstrap completed successfully."
                 else
@@ -449,7 +463,7 @@ fi
 touch "$bootstrap_ref_file"
 
 # Deploy the CDK app
-cdk deploy --outputs-file outputs.json --context deployExample="$deployExample" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+cdk deploy --outputs-file outputs.json --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag --all
 if [ $? -ne 0 ]; then
     echo "Error: CDK deployment failed. Exiting script."
     exit 1

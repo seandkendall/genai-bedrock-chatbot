@@ -13,8 +13,6 @@ const MAX_CONTENT_ITEMS = 20;
 const MAX_IMAGES = 20;
 const MAX_VIDEOS = 1;
 const MAX_DOCUMENTS = 5;
-const MAX_IMAGE_SIZE = 3.75 * 1024 * 1024; // 3.75 MB
-const MAX_IMAGE_DIMENSION = 8000; // 8000 px
 const MAX_DOCUMENT_SIZE = 4.5 * 1024 * 1024; // 4.5 MB
 const MAX_VIDEO_SIZE = 1024 * 1024 * 1024; // 1 GB
 const ALLOWED_DOCUMENT_TYPES = [
@@ -199,22 +197,7 @@ const MessageInput = forwardRef(
 						continue;
 					}
 
-					// if (file.size > MAX_IMAGE_SIZE) {
-					// 	alert(`Image size must be no more than 3.75 MB: ${file.name}`);
-					// 	continue;
-					// }
-
 					try {
-						// const dimensions = await getImageDimensions(file);
-						// if (
-						// 	dimensions.width > MAX_IMAGE_DIMENSION ||
-						// 	dimensions.height > MAX_IMAGE_DIMENSION
-						// ) {
-						// 	alert(
-						// 		`Image dimensions must be no more than 8000x8000 pixels: ${file.name}`,
-						// 	);
-						// 	continue;
-						// }
 						newAttachments.push(file);
 					} catch (error) {
 						console.error("Error processing image:", error);
@@ -263,18 +246,6 @@ const MessageInput = forwardRef(
 				...uploadedFileNames,
 				...newAttachments.map((file) => file.name),
 			]);
-		};
-
-		const getImageDimensions = (file) => {
-			return new Promise((resolve, reject) => {
-				const img = new Image();
-				img.onload = () => {
-					URL.revokeObjectURL(img.src);
-					resolve({ width: img.width, height: img.height });
-				};
-				img.onerror = reject;
-				img.src = URL.createObjectURL(file);
-			});
 		};
 
 		const handleFileChange = (event) => {

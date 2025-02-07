@@ -39,6 +39,7 @@ import requests
 import time
 import os
 from aws_cdk.aws_route53 import PublicHostedZone
+import cdk_nag
 from .cdk_constants import lambda_insights_layers_arm64
 from .cdk_constants import lambda_insights_layers_x86
 
@@ -148,6 +149,7 @@ class ChatbotWebsiteStack(Stack):
                            removal_policy=RemovalPolicy.DESTROY,
                            auto_delete_objects=True,
                            enforce_ssl=True)
+        cdk_nag.NagSuppressions.add_resource_suppressions(website_content_bucket,[{'id':'AwsSolutions-S1','reason':'Server Access Logging Not Required'}])
 
         # Create the S3 bucket for conversation history
         conversation_history_bucket = s3.Bucket(self, "ConversationHistoryBucket",
@@ -160,6 +162,11 @@ class ChatbotWebsiteStack(Stack):
                            removal_policy=RemovalPolicy.DESTROY,
                            auto_delete_objects=True,
                            enforce_ssl=True)
+        custom_model_import_bucket = s3.Bucket(self, "GenAIChatbotS3BucketCustomModelImport",
+                           removal_policy=RemovalPolicy.DESTROY,
+                           auto_delete_objects=True,
+                           enforce_ssl=True)
+        self.custom_model_import_bucket = custom_model_import_bucket
         # Add this after the existing S3 bucket definitions
         image_bucket = s3.Bucket(self, "GeneratedImagesBucket",
             removal_policy=RemovalPolicy.DESTROY,
@@ -400,7 +407,7 @@ class ChatbotWebsiteStack(Stack):
             environment={
                 "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
                 "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
-                "ATTACHMENT_BUCKET": attachment_bucket.bucket_name,
+                "ATTACHMENT_BUCKET_NAME": attachment_bucket.bucket_name,
                 "CLOUDFRONT_DOMAIN": cloudfront_distribution.distribution_domain_name,
                 "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                 "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
@@ -526,8 +533,9 @@ class ChatbotWebsiteStack(Stack):
                                           "DYNAMODB_TABLE_CONFIG": dynamodb_configurations_table.table_name,
                                           "DYNAMODB_TABLE_USAGE": dynamodb_bedrock_usage_table.table_name,
                                           "REGION": region,
-                                          "ATTACHMENT_BUCKET": attachment_bucket.bucket_name,
+                                          "ATTACHMENT_BUCKET_NAME": attachment_bucket.bucket_name,
                                           "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
+                                          "S3_CUSTOM_MODEL_IMPORT_BUCKET_NAME": custom_model_import_bucket.bucket_name,
                                           "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                                           "POWERTOOLS_SERVICE_NAME":"BEDROCK_ASYNC_SERVICE",
                                      }
@@ -542,6 +550,7 @@ class ChatbotWebsiteStack(Stack):
         dynamodb_conversations_table.grant_full_access(lambda_async_function)
         dynamodb_configurations_table.grant_full_access(lambda_async_function)
         conversation_history_bucket.grant_read_write(lambda_async_function)
+        custom_model_import_bucket.grant_read_write(lambda_async_function)
         dynamodb_bedrock_usage_table.grant_full_access(lambda_async_function)
         attachment_bucket.grant_read_write(lambda_async_function)
         image_bucket.grant_read_write(lambda_async_function)
@@ -564,7 +573,7 @@ class ChatbotWebsiteStack(Stack):
                                           "DYNAMODB_TABLE_CONFIG": dynamodb_configurations_table.table_name,
                                           "DYNAMODB_TABLE_USAGE": dynamodb_bedrock_usage_table.table_name,
                                           "REGION": region,
-                                          "ATTACHMENT_BUCKET": attachment_bucket.bucket_name,
+                                          "ATTACHMENT_BUCKET_NAME": attachment_bucket.bucket_name,
                                           "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
                                           "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                                           "POWERTOOLS_SERVICE_NAME":"BEDROCK_CONVERSATIONS_SERVICE",
@@ -595,19 +604,21 @@ class ChatbotWebsiteStack(Stack):
                 "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
                 "CLOUDFRONT_DOMAIN": cloudfront_distribution.distribution_domain_name,
                 "POWERTOOLS_SERVICE_NAME":"MODEL_SCAN_SERVICE",
+                "S3_CUSTOM_MODEL_IMPORT_BUCKET_NAME": custom_model_import_bucket.bucket_name,
                 "POWERTOOLS_METRICS_NAMESPACE": "BedrockChatbotModelScan"
             },
         )
         model_scan_function.apply_removal_policy(RemovalPolicy.DESTROY)
         websocket_api.grant_manage_connections(model_scan_function)
         image_bucket.grant_read_write(model_scan_function)
+        custom_model_import_bucket.grant_read_write(model_scan_function)
         dynamodb_configurations_table.grant_read_write_data(model_scan_function)
         model_scan_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
         model_scan_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"))
         # Add permissions to the Lambda function's role
         model_scan_function.add_to_role_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
-            actions=["bedrock:*"],
+            actions=["bedrock:*","codebuild:*"],
             resources=["*"]
         ))
         # Create the "genai_bedrock_fn" Lambda function
@@ -656,7 +667,7 @@ class ChatbotWebsiteStack(Stack):
                                     layers=[boto3_layer, commons_layer, lambda_insights_layer_arm64],
                                     log_retention=logs.RetentionDays.FIVE_DAYS,
                                     environment={
-                                        "ATTACHMENT_BUCKET": attachment_bucket.bucket_name,
+                                        "ATTACHMENT_BUCKET_NAME": attachment_bucket.bucket_name,
                                         "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                                         "POWERTOOLS_SERVICE_NAME":"PRESIGNED_URL_SERVICE",
                                     },
@@ -837,13 +848,13 @@ class ChatbotWebsiteStack(Stack):
         
 
         # Create a Cognito User Pool Domain
-        user_pool_domain = cognito.UserPoolDomain(
-            self, "ChatbotUserPoolDomain",
-            user_pool=user_pool,
-            cognito_domain=cognito.CognitoDomainOptions(
-                domain_prefix=cognito_domain_string
-            )
-        )
+        # user_pool_domain = cognito.UserPoolDomain(
+        #     self, "ChatbotUserPoolDomain",
+        #     user_pool=user_pool,
+        #     cognito_domain=cognito.CognitoDomainOptions(
+        #         domain_prefix=cognito_domain_string
+        #     )
+        # )
         # TODO Customize Cognito Hosted Login
         # cfn_user_pool_uICustomization_attachment = cognito.CfnUserPoolUICustomizationAttachment(self, "CfnUserPoolUICustomizationAttachment",
         #     client_id="ALL",

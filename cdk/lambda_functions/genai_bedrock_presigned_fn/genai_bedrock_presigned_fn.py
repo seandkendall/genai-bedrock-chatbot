@@ -9,7 +9,7 @@ logger = Logger(service="S3PreSignedURL")
 tracer = Tracer()
 
 s3_client = boto3.client('s3')
-BUCKET_NAME = os.environ['ATTACHMENT_BUCKET']
+attachment_bucket_name = os.environ['ATTACHMENT_BUCKET_NAME']
 user_cache = {}
 cognito_client = boto3.client('cognito-idp')
 
@@ -29,7 +29,7 @@ def lambda_handler(event, context):
         prefix = rf'{user_id}/{session_id}'
         # Generate a pre-signed URL for uploading
         presigned_post = s3_client.generate_presigned_post(
-            Bucket=BUCKET_NAME,
+            Bucket=attachment_bucket_name,
             Key=f"{prefix}/{random_string}-{file_name}",
             Fields={"Content-Type": file_type},
             Conditions=[

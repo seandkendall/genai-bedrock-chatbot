@@ -59,7 +59,9 @@ def route_request(request_body,message_type,selected_mode):
     elif selected_mode.get('category') == 'Bedrock Models':
         # Invoke genai_bedrock_async_fn
         lambda_client.invoke(FunctionName=bedrock_function_name, InvocationType='Event', Payload=json.dumps(request_body))
-        # Process the response from lambda_fn_async
+    elif selected_mode.get('category') == 'Imported Models':
+        # Invoke genai_bedrock_async_fn
+        lambda_client.invoke(FunctionName=bedrock_function_name, InvocationType='Event', Payload=json.dumps(request_body))
     elif selected_mode.get('category') == 'Bedrock Image Models':
         lambda_client.invoke(FunctionName=image_generation_function_name, InvocationType='Event', Payload=json.dumps(request_body))
     elif selected_mode.get('category') == 'Bedrock Video Models':

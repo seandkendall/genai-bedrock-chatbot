@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { websocketUrl } from "./variables.js";
 import React, {
 	useState,
@@ -115,6 +116,11 @@ const App = memo(({ signOut, user, awsRum }) => {
 			? JSON.parse(localStorage.getItem("local-video-models"))
 			: [],
 	); //local-video-models
+	const [importedModels, setImportedModels] = useState(
+		localStorage.getItem("local-imported-models")
+			? JSON.parse(localStorage.getItem("local-imported-models"))
+			: [],
+	); //local-imported-models
 	const [kbModels, setKbModels] = useState(
 		localStorage.getItem("local-kb-models")
 			? JSON.parse(localStorage.getItem("local-kb-models"))
@@ -161,6 +167,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		reconnectInterval: (attemptNumber) =>
 			Math.min(1000 * 2 ** attemptNumber, 30000), // Exponential backoff up to 30 seconds
 	});
+	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	useEffect(() => {
 		if (readyState === WebSocket.OPEN) {
 			sendMessage(JSON.stringify({ type: "ping" }));
@@ -193,6 +200,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 		if (videoModels && videoModels.length > 0)
 			localStorage.setItem("local-video-models", JSON.stringify(videoModels));
 	}, [videoModels]);
+	useEffect(() => {
+		if (importedModels && importedModels.length > 0)
+			localStorage.setItem("local-imported-models", JSON.stringify(importedModels));
+	}, [importedModels]);
 	useEffect(() => {
 		if (kbModels && kbModels.length > 0)
 			localStorage.setItem("local-kb-models", JSON.stringify(kbModels));
@@ -900,6 +911,8 @@ const App = memo(({ signOut, user, awsRum }) => {
 					setVideoModels(
 						filter_active_models(message.load_models.video_models),
 					);
+				if (message.load_models.imported_models)
+					setImportedModels(message.load_models.imported_models);
 				if (message.load_models.kb_models)
 					setKbModels(message.load_models.kb_models);
 				if (message.load_knowledge_bases?.knowledge_bases)
@@ -1263,7 +1276,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 
 	const getModeObjectFromModelID = (category,selectedModelId) => {
 		let selectedObject = null;
-		if (category === "Bedrock Models") {
+		if (category === "Bedrock Models" || category === "Imported Models") {
 			selectedObject = models.find((item) => item.modelId === selectedModelId);
 			if (!selectedObject) {
 				selectedObject = models.find((item) => item.modelArn === selectedModelId);
@@ -1283,6 +1296,15 @@ const App = memo(({ signOut, user, awsRum }) => {
 			);
 			if (!selectedObject) {
 				selectedObject = videoModels.find(
+					(item) => item.modelArn === selectedModelId,
+				);
+			}
+		} else if (category === "Imported Models") {
+			selectedObject = importedModels.find(
+				(item) => item.modelId === selectedModelId,
+			);
+			if (!selectedObject) {
+				selectedObject = importedModels.find(
 					(item) => item.modelArn === selectedModelId,
 				);
 			}
@@ -1336,6 +1358,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 					models={models}
 					imageModels={imageModels}
 					videoModels={videoModels}
+					importedModels={importedModels}
 					kbModels={kbModels}
 					promptFlows={promptFlows}
 					selectedKbMode={selectedKbMode}

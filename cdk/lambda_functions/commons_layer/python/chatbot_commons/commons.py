@@ -79,7 +79,7 @@ def send_websocket_message(logger, apigateway_management_api, connection_id, mes
         else:
             raise
     except apigateway_management_api.exceptions.GoneException:
-        logger.info(f"WebSocket connection is closed (connectionId: {connection_id})")
+        logger.warn(f"WebSocket connection is closed (connectionId: {connection_id})")
     except Exception as e:
         logger.exception(e)
         logger.error(f"Error sending WebSocket message (9012): {str(e)}")

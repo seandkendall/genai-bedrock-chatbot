@@ -1,13 +1,14 @@
-import boto3
 import json
 import os
 import logging
+import concurrent.futures
+from datetime import datetime, timezone
+from functools import partial
+import boto3
 from chatbot_commons import commons
 from botocore.exceptions import ClientError
-from datetime import datetime, timezone
 from aws_lambda_powertools import Metrics, Tracer
 from aws_lambda_powertools.metrics import MetricUnit
-
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -16,17 +17,21 @@ metrics = Metrics()
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 cloudfront_domain = os.environ['CLOUDFRONT_DOMAIN']
 video_bucket = os.environ['S3_IMAGE_BUCKET_NAME']
+model_import_bucket_name = os.environ['S3_CUSTOM_MODEL_IMPORT_BUCKET_NAME']
 s3_client = boto3.client('s3')
+codebuild_client = boto3.client('codebuild')
 allowlist_domain = os.environ['ALLOWLIST_DOMAIN']
 user_pool_id = os.environ['USER_POOL_ID']
-config_table_name = os.environ.get('CONFIG_DYNAMODB_TABLE')
+config_table = boto3.resource('dynamodb').Table(os.environ.get('CONFIG_DYNAMODB_TABLE'))
 bedrock = boto3.client('bedrock')
 bedrock_runtime = boto3.client('bedrock-runtime')
 cognito_client = boto3.client('cognito-idp')
 apigateway_management_api = boto3.client('apigatewaymanagementapi', 
                                          endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
-config_table = boto3.resource('dynamodb').Table(config_table_name)
 user_cache = {}
+CACHE_DURATION = 60 * 5  # 5 minutes
+ddb_cache = {}
+ddb_cache_timestamp = None
 
 @metrics.log_metrics
 def lambda_handler(event, context):
@@ -59,7 +64,7 @@ def lambda_handler(event, context):
                 logger.info(f"WebSocket connection is not open (state: {connection_state})")
                 return
         except apigateway_management_api.exceptions.GoneException:
-            logger.error(f"WebSocket connection is closed (connectionId: {connection_id})")
+            logger.warn(f"WebSocket connection is closed (connectionId: {connection_id})")
             return
 
         try:
@@ -73,6 +78,12 @@ def lambda_handler(event, context):
                 'body': json.dumps({'error': not_allowed_message})
             }
 
+    result = start_custom_model_deployment_to_s3()
+    if result:
+        print("Custom model install Started")
+    else:
+        print("Custom Model Install: No deployment was needed.")
+        
     active_models = scan_for_active_models()
     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {'type':'modelscan','results':active_models,'timestamp': datetime.now(timezone.utc).isoformat(),})
 
@@ -81,12 +92,99 @@ def lambda_handler(event, context):
         'body': json.dumps(active_models, indent=2)
     }
     
+def process_prompt(model_id, prompt_type, prompt_text, model_name):
+    try:
+        if 'imported-model' in model_id and prompt_type == 'TEXT':
+            response = bedrock_runtime.invoke_model(
+                modelId=model_id,
+                body=json.dumps({'prompt':prompt_text, 'max_gen_len':100})
+            )
+            # if response contains ResponseMetadata and HTTPHeaders and x-amzn-bedrock-input-token-count
+            if 'ResponseMetadata' in response and 'HTTPHeaders' in response['ResponseMetadata'] and 'x-amzn-bedrock-input-token-count' in response['ResponseMetadata']['HTTPHeaders']:
+                input_token_count = int(response['ResponseMetadata']['HTTPHeaders']['x-amzn-bedrock-input-token-count'])                
+                output_token_count = int(response['ResponseMetadata']['HTTPHeaders']['x-amzn-bedrock-output-token-count'])
+            else:
+                input_token_count = 0
+                output_token_count = 0
+            return model_id, prompt_type, True, input_token_count, output_token_count
+        else:
+            content = [{"text": prompt_text}]
+            if prompt_type == 'IMAGE':
+                image_bytes = load_1px_image()
+                content.append({
+                    "image": {
+                        "format": "png",
+                        "source": {
+                            "bytes": image_bytes
+                        }
+                    }
+                })
+            elif prompt_type == 'DOCUMENT':
+                doc_bytes = load_pdf()
+                content.append({
+                    "document": {
+                        "format": "pdf",
+                        "name": "samplepdf",
+                        "source": {
+                            "bytes": doc_bytes
+                        }
+                    }
+                })
+            elif prompt_type == 'VIDEO':
+                doc_bytes = load_mp4()
+                content.append({
+                    "video": {
+                        "format": "mp4",
+                        "source": {
+                            "bytes": doc_bytes
+                        }
+                    }
+                })
+            response = bedrock_runtime.converse(
+                modelId=model_id,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": content
+                    }
+                ]
+            )
+            
+        return model_id, prompt_type, True, response['usage']['inputTokens'], response['usage']['outputTokens']
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        if error_code == 'ThrottlingException':
+            logger.warning(f"Throttling for model {model_id}, prompt type {prompt_type}, model name: {model_name}")
+            return model_id, prompt_type, True, 0, 0
+        elif error_code == 'ValidationException':
+            print(e)
+            logger.warning(f"Validation issues (not supported) for model {model_id}, prompt type {prompt_type}, model name: {model_name}")
+        elif error_code == 'AccessDeniedException':
+            logger.warning(f"AccessDenied for model {model_id}, prompt type {prompt_type}, model name: {model_name}")
+        else:
+            print(e)
+            logger.warning(f"Client issue for model {model_id}, prompt type {prompt_type}, model name: {model_name}")
+        return model_id, prompt_type, False, 0, 0
+    except Exception as e:
+        logger.exception(e)
+        logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}, model name: {model_name}: {str(e)}")
+        return model_id, prompt_type, False, 0, 0
+
 def scan_for_active_models():
     """ Scans for active models in Bedrock """
     try:
         
         list_foundation_models_response = bedrock.list_foundation_models(byInferenceType='ON_DEMAND')
         all_models = list_foundation_models_response.get('modelSummaries', [])
+        list_imported_models_list = bedrock.list_imported_models().get('modelSummaries', [])
+        for item in list_imported_models_list:
+            item['modelLifecycle'] = {}
+            item['modelLifecycle']['status'] = 'ACTIVE'
+            item['inputModalities'] = ['TEXT']
+            item['outputModalities'] = ['TEXT']
+            item['modelId'] = item['modelArn']
+            item['providerName'] = item['modelArchitecture']
+            all_models.append(item)
     except ClientError as e:
         logger.exception(e)
         logger.error("Error listing foundation models: %s",str(e))
@@ -94,105 +192,69 @@ def scan_for_active_models():
             'statusCode': 500,
             'body': json.dumps(f"Error listing foundation models: {str(e)}")
         }
-    
-    active_models = [model for model in all_models if model['modelLifecycle']['status'] == 'ACTIVE']
-    
+    # if modelLifecycle status == ACTIVE or modelLifecycle doesnt exist
+    active_models = [
+        model for model in all_models
+        if model.get('modelLifecycle', {}).get('status') == 'ACTIVE'
+    ]
+
     results = {}
-    
     total_input_tokens = 0
     total_output_tokens = 0
     video_helper_image_model_id = ''
+    # Load config from DDB Table so we dont check models that are already set as True for different Capabilities
+    ddb_config = commons.get_ddb_config(config_table,ddb_cache,ddb_cache_timestamp,CACHE_DURATION,logger)
+    print('SDK printing ddb_config')
+    print(ddb_config)
+    print('SDK printing ddb_config DONE')
+    # ddb_config.get('modelID', {}).get('IMAGE', False)
+    # ddb_config.get('modelID', {}).get('access_granted', False)
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = []
+        for model in active_models:
+            model_id = model['modelId']
+            model_name = model['modelName']
+            input_modalities = model['inputModalities']
+            output_modalities = model['outputModalities']
+            if model_id not in results:
+                results[model_id] = {
+                    'modelArn': model['modelArn'],
+                    'modelName': model['modelName'],
+                    'providerName': model['providerName'],
+                    'inputModalities': input_modalities,
+                    'outputModalities': output_modalities,
+                    'responseStreamingSupported': model.get('responseStreamingSupported', False),
+                    'TEXT': False,
+                    'VIDEO': False,
+                    'IMAGE': False,
+                    'DOCUMENT': False,
+                    'access_granted': False,
+                    'mode_selector': model['modelArn'],
+                    'mode_selector_name': model['modelName']
+                }
+            if 'TEXT' in output_modalities:
+                prompts = [
+                    ('TEXT', "1+1"),
+                    ('IMAGE', "what color is this?"),
+                    ('VIDEO', "explain this video"),
+                    ('DOCUMENT', "what number is in the document?")
+                ]
+                for prompt_type, prompt_text in prompts:
+                    futures.append(executor.submit(
+                        process_prompt, model_id, prompt_type, prompt_text, model_name
+                    ))
+
+        for future in concurrent.futures.as_completed(futures):
+            model_id, prompt_type, success, input_tokens, output_tokens = future.result()
+            results[model_id][prompt_type] = success
+            total_input_tokens += input_tokens
+            total_output_tokens += output_tokens
+
+    # Process IMAGE and VIDEO modalities
     for model in active_models:
         model_id = model['modelId']
-        input_modalities = model['inputModalities']
         output_modalities = model['outputModalities']
-        if model_id not in results:
-            results[model_id] = {
-                'modelArn': model['modelArn'],
-                'modelName': model['modelName'],
-                'providerName': model['providerName'],
-                'inputModalities': input_modalities,
-                'outputModalities': output_modalities,
-                'responseStreamingSupported': model.get('responseStreamingSupported', False),
-                'TEXT': False,
-                'VIDEO': False,
-                'IMAGE': False,
-                'DOCUMENT': False,
-                'access_granted': False,
-                'mode_selector': model['modelArn'],
-                'mode_selector_name': model['modelName']
-            }
-        if 'TEXT' in output_modalities:
-            prompts = []
-            prompts.append(('TEXT', "reply with '1'"))
-            prompts.append(('IMAGE', "what color is this?"))
-            prompts.append(('VIDEO', "explain this video"))
-            prompts.append(('DOCUMENT', "what number is in the document?"))
-            
-            for prompt_type, prompt_text in prompts:
-                try:
-                    content = [{"text": prompt_text}]
-                    if prompt_type == 'IMAGE':
-                        image_bytes  = load_1px_image()
-                        content.append({
-                            "image": {
-                                "format": "png",
-                                "source": {
-                                    "bytes": image_bytes
-                                }
-                            }
-                        })
-                    elif prompt_type == 'DOCUMENT':
-                        doc_bytes = load_pdf()
-                        content.append({
-                            "document": {
-                                "format": "pdf",
-                                "name": "samplepdf",
-                                "source": {
-                                    "bytes": doc_bytes
-                                }
-                            }
-                        })
-                    elif prompt_type == 'VIDEO':
-                        doc_bytes = load_mp4()
-                        content.append({
-                            "video": {
-                                "format": "mp4",
-                                "source": {
-                                    "bytes": doc_bytes
-                                }
-                            }
-                        })
-                    
-                    response = bedrock_runtime.converse(
-                        modelId=model_id,
-                        messages=[
-                            {
-                                "role": "user",
-                                "content": content
-                            }
-                        ]
-                    )
-                    
-                    total_input_tokens += response['usage']['inputTokens']
-                    total_output_tokens += response['usage']['outputTokens']
-                    
-                    results[model_id][prompt_type] = True
-                except ClientError as e:
-                    error_code = e.response['Error']['Code']
-                    if error_code == 'ThrottlingException':
-                        results[model_id][prompt_type] = True
-                        logger.warning(f"Throttling for model {model_id}, prompt type {prompt_type}")
-                    elif error_code == 'ValidationException':
-                        # log warning
-                        logger.warning(f"Validation issues (not supported) for model {model_id}, prompt type {prompt_type}")
-                    elif error_code == 'AccessDeniedException':
-                        logger.warning(f"AccessDenied for model {model_id}, prompt type {prompt_type}")
-                    else:
-                        logger.warning(f"Client issue for model {model_id}, prompt type {prompt_type}")
-                except Exception as e:
-                    logger.exception(e)
-                    logger.error(f"Unexpected error for model {model_id}, prompt type {prompt_type}: {str(e)}")
         if 'IMAGE' in output_modalities:
             results[model_id]['TEXT'] = test_image_model(model_id)
             if 'nova' in model_id.lower() and results[model_id]['TEXT'] is True:
@@ -300,3 +362,45 @@ def update_dynamodb(results):
         logger.exception(e)
         logger.error(f"Error updating DynamoDB: {str(e)}")
         
+def start_custom_model_deployment_to_s3():
+    """
+    Queries CodeBuild projects and S3 bucket to determine if deployment is needed.
+    If deployment is needed, starts the CodeBuild project.
+    
+    Returns:
+        bool: False if no deployment is needed, True if deployment was started.
+    """
+
+    try:
+        response = codebuild_client.list_projects()
+        project_names = response.get('projects', [])
+        
+        target_projects = [name for name in project_names if name.startswith('GenAIChatBotCustomModel')]
+        
+        if not target_projects:
+            print("No CodeBuild projects found with the prefix 'GenAIChatBotCustomModel'.")
+            return False 
+        
+        codebuild_project_name = target_projects[0]
+        print(f"Found CodeBuild project: {codebuild_project_name}")
+    
+    except ClientError as e:
+        print(f"Error querying CodeBuild projects: {e}")
+        return False
+
+    try:
+        # check to see if codebuild project is already running
+        response = codebuild_client.list_builds_for_project(projectName=codebuild_project_name, sortOrder='DESCENDING')
+        batch_response = codebuild_client.batch_get_builds(ids=response['ids'][:10])
+        # if any builds are running, return False
+        for build in batch_response['builds']:
+            if build['buildStatus'] == 'IN_PROGRESS':
+                print(f"CodeBuild project '{codebuild_project_name}' is already running.")
+                return False
+        build_response = codebuild_client.start_build(projectName=codebuild_project_name)
+        print(f"Started CodeBuild project '{codebuild_project_name}'. Build ID: {build_response['build']['id']}")
+        return True
+    
+    except ClientError as e:
+        print(f"Error starting CodeBuild project '{codebuild_project_name}': {e}")
+        return False

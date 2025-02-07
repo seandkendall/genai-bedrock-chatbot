@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Tooltip, Modal, Box, Typography,Divider, TextField, Button, Link, Switch, FormControl, IconButton, InputLabel, Select, MenuItem,FormControlLabel,Checkbox } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -217,6 +218,7 @@ const SettingsModal = ({
         }
     }, [heightWidth, stylePreset, updateLocalState, setHeightWidth, setStylePreset,]);
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies:
     useEffect(() => {
         if (!configLoaded) {
             loadConfig('system');
@@ -225,6 +227,7 @@ const SettingsModal = ({
         }
     }, [configLoaded, loadConfig, updateLocalState]);
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies:
     useEffect(() => {
         setReloadPromptConfig(true);
     }, [localState.userSystemPrompt, localState.systemSystemPrompt, localState.systemPromptType, setReloadPromptConfig]);
@@ -246,6 +249,7 @@ const SettingsModal = ({
 
     const prevLastMessage = usePrevious(lastMessage, null);
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies:
     useEffect(() => {
         if (lastMessage !== null && lastMessage !== prevLastMessage) {
             try {
@@ -369,7 +373,8 @@ const SettingsModal = ({
     const disableEventBridgeSchedule = useCallback(() => toggleEventBridgeSchedule(false), [toggleEventBridgeSchedule]);
     const enableEventBridgeSchedule = useCallback(() => toggleEventBridgeSchedule(true), [toggleEventBridgeSchedule]);
     
-    const handleSave = useCallback(() => {
+    // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+        const handleSave = useCallback(() => {
         setError('');
         setPricePer1000InputTokens(localState.pricePer1000InputTokens);
         setPricePer1000OutputTokens(localState.pricePer1000OutputTokens);

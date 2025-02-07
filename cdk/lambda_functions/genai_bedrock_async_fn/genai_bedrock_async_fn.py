@@ -3,6 +3,7 @@ import os
 import copy
 import re
 import sys
+import time
 import base64
 from datetime import datetime, timezone
 import boto3
@@ -16,7 +17,10 @@ from llm_conversion_functions import (
     process_message_history_converse,
     process_bedrock_converse_response,
     process_bedrock_converse_response_for_title,
+    process_bedrock_response,
 )
+from tokenizer import LightweightTokenizer
+
 logger = Logger(service="BedrockAsync")
 metrics = Metrics()
 tracer = Tracer()
@@ -27,11 +31,12 @@ config_table_name = os.environ.get('DYNAMODB_TABLE_CONFIG')
 config_table = boto3.resource('dynamodb').Table(config_table_name)
 s3_client = boto3.client('s3')
 conversation_history_bucket = os.environ['CONVERSATION_HISTORY_BUCKET']
-attachment_bucket = os.environ['ATTACHMENT_BUCKET']
-image_bucket = os.environ['S3_IMAGE_BUCKET_NAME']
+attachment_bucket_name = os.environ['ATTACHMENT_BUCKET_NAME']
+image_bucket_name = os.environ['S3_IMAGE_BUCKET_NAME']
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 conversations_table_name = os.environ['CONVERSATIONS_DYNAMODB_TABLE']
 conversations_table = boto3.resource('dynamodb').Table(conversations_table_name)
+s3_custom_model_import_bucket_name = os.environ['S3_CUSTOM_MODEL_IMPORT_BUCKET_NAME']
 usage_table_name = os.environ['DYNAMODB_TABLE_USAGE']
 region = os.environ['REGION']
 # models that do not support a system prompt (also includes all amazon models)
@@ -93,14 +98,14 @@ def process_websocket_message(request_body):
             logger.info(f"WebSocket connection is not open (state: {connection_state})")
             return
     except apigateway_management_api.exceptions.GoneException:
-        logger.error(f"WebSocket connection is closed (connectionId: {connection_id})")
+        logger.warn(f"WebSocket connection is closed (connectionId: {connection_id})")
         return
 
     if message_type == 'clear_conversation':
         # logger.info(f'Action: Clear Conversation {session_id}')
         # Delete the conversation history from DynamoDB
-        commons.delete_s3_attachments_for_session(session_id,attachment_bucket,user_id,None,s3_client, logger)
-        commons.delete_s3_attachments_for_session(session_id,image_bucket,user_id,None,s3_client, logger)
+        commons.delete_s3_attachments_for_session(session_id,attachment_bucket_name,user_id,None,s3_client, logger)
+        commons.delete_s3_attachments_for_session(session_id,image_bucket_name,user_id,None,s3_client, logger)
         commons.delete_s3_attachments_for_session(session_id,conversation_history_bucket,user_id,None,s3_client, logger)
         conversations.delete_conversation_history(dynamodb,conversations_table_name,logger,session_id)
         return
@@ -139,7 +144,7 @@ def process_websocket_message(request_body):
                 'error': f'Too many documents. Maximum allowed is {MAX_DOCUMENTS}.'
             })
             return {'statusCode': 400}
-        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, ALLOWED_DOCUMENT_TYPES,0,0,bedrock_runtime,selected_model_id)
+        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket_name,logger,s3_client, ALLOWED_DOCUMENT_TYPES,0,0,bedrock_runtime,selected_model_id)
         if error_message and len(error_message) > 1:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'error',
@@ -254,7 +259,7 @@ def process_websocket_message(request_body):
                 else:
                     system_prompt = timezone_prompt
                 
-                if system_prompt and selected_model_id not in SYSTEM_PROMPT_EXCLUDED_MODELS and model_provider != 'amazon':
+                if system_prompt and selected_model_id not in SYSTEM_PROMPT_EXCLUDED_MODELS and model_provider != 'amazon' and 'imported-model' not in selected_model_id:
                     system_prompt_array.append({'text': system_prompt})
                     response = bedrock_runtime.converse_stream(messages=bedrock_request.get('messages'),
                                                         modelId=selected_model_id,
@@ -266,11 +271,59 @@ def process_websocket_message(request_body):
                     #     'system_prompt': system_prompt,
                     #     'session_id':session_id,
                     # });
-                else:
+                elif 'imported-model' in selected_model_id:
+                    # TODO REMOVE Define the model ID and payload
+                    print('SDK: selected_model_id:')
+                    print(selected_model_id)
+                    # TODO: load tokenizer.json and tokenizer_config.json from custom model s3 bucket with table name matching conversations_table_name
+                    model_base_dir = 'DeepSeek-R1-Distill-Llama-8B'
+                    print('SDK BUCKET NAME')
+                    print(s3_custom_model_import_bucket_name)
+                    print('SDK MODEL BASE DIR')
+                    print(model_base_dir)
+                    print('SDK KEY')
+                    print(f'{model_base_dir}/tokenizer.json')
+                    tokenizer_json = s3_client.get_object(Bucket=s3_custom_model_import_bucket_name, Key=f'{model_base_dir}/tokenizer.json')
+                    # save tokenizer_json to disk at /tmp/tokenizer.json
+                    with open('/tmp/tokenizer.json', 'wb') as f:
+                        f.write(tokenizer_json['Body'].read())
+                    tokenizer_config_json = s3_client.get_object(Bucket=s3_custom_model_import_bucket_name, Key=f'{model_base_dir}/tokenizer_config.json')
+                    # save tokenizer_config_json to disk at /tmp/tokenizer_config.json
+                    with open('/tmp/tokenizer_config.json', 'wb') as f:
+                        f.write(tokenizer_config_json['Body'].read())
+                    tokenizer = LightweightTokenizer('/tmp/tokenizer.json', '/tmp/tokenizer_config.json')
+                    messages = [{"role": "user", "content": prompt}]
+                    tokenized = tokenizer.apply_chat_template(messages, tokenize=True)
+                    print('SDK tokenized:')
+                    print(tokenized)
+
+
+
+                    payload = {
+                        "prompt": tokenized,  # Use the dynamically set prompt value
+                        "max_gen_len": 4096,
+                    }
+
+                    try:
+                        # Invoke the model with response streaming
+                        response = bedrock_runtime.invoke_model_with_response_stream(
+                            modelId=selected_model_id,
+                            body=json.dumps(payload),
+                            accept="application/json",
+                            contentType="application/json",
+                            performanceConfigLatency="standard"  # Correct parameter for latency optimization
+                        )
+                        assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_response(apigateway_management_api,response.get('body'), prompt, connection_id, user_id, model_provider, selected_model_id,new_conversation, session_id)
+
+
+                    except Exception as e:
+                        print(f"Error invoking model with response stream: {e}")
+                else: 
                     response = bedrock_runtime.converse_stream(messages=bedrock_request.get('messages'),
                                                     modelId=selected_model_id,
                                                     additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{})) 
-                assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)  
+                if 'imported-model' not in selected_model_id:
+                    assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)
                 store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id,chat_title,new_conversation,selected_model_category, message_stop_reason)
             except Exception as e:
                 if 'ThrottlingException' not in str(e):

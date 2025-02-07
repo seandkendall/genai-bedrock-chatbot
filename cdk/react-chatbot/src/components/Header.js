@@ -56,6 +56,7 @@ const Header = ({
 	kbModels,
 	imageModels,
 	videoModels,
+	importedModels,
 	promptFlows,
 	selectedKbMode,
 	onSelectedKbMode,
@@ -225,6 +226,10 @@ const Header = ({
 														return isMobile
 															? `${item.modelName}`
 															: `${item.providerName} ${item.modelName}`;
+													case "Imported Models":
+														return isMobile
+															? `${item.modelName}`
+															: `${item.providerName} ${item.modelName}`;
 													case "Bedrock KnowledgeBases":
 														return item.name;
 													case "Bedrock Agents":
@@ -317,6 +322,11 @@ const Header = ({
 					break;
 				case "Bedrock Video Models":
 					selectedObject = videoModels.find(
+						(item) => item.mode_selector === modeSelector,
+					);
+					break;
+				case "Imported Models":
+					selectedObject = importedModels.find(
 						(item) => item.mode_selector === modeSelector,
 					);
 					break;
@@ -429,6 +439,8 @@ const Header = ({
 					return `${selectedMode.modelName} (${selectedMode.modelId})`;
 				case "Bedrock Video Models":
 					return `${selectedMode.modelName} (${selectedMode.modelId})`;
+				case "Imported Models":
+					return `${selectedMode.modelName} (${selectedMode.modelId})`;
 				case "Bedrock KnowledgeBases":
 					return selectedMode.knowledgeBaseId;
 				case "Bedrock Agents":
@@ -466,6 +478,13 @@ const Header = ({
 				).filter((item) => item.is_active === true || !("is_active" in item)),
 			},
 			{
+				title: "Imported Models",
+				data: (importedModels
+					? importedModels
+					: JSON.parse(localStorage.getItem("local-imported-models"))
+				).filter((item) => item.is_active === true || !("is_active" in item)),
+			},
+			{
 				title: "Bedrock KnowledgeBases",
 				data: (bedrockKnowledgeBases
 					? bedrockKnowledgeBases
@@ -491,6 +510,7 @@ const Header = ({
 			models,
 			imageModels,
 			videoModels,
+			importedModels,
 			bedrockKnowledgeBases,
 			bedrockAgents,
 			promptFlows,
@@ -715,6 +735,7 @@ const Header = ({
 			{modelsLoaded &&
 				(!models || models.length === 0) &&
 				(!videoModels || videoModels.length === 0) &&
+				(!importedModels || importedModels.length === 0) &&
 				(!imageModels || imageModels.length === 0) && (
 					<Box
 						sx={{
