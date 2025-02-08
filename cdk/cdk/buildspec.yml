@@ -3,27 +3,28 @@ version: 0.2
 phases:
   build:
     commands:
+      - RANDOM_SUFFIX=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 6 | head -n 1)
+      - MODEL=$(basename $MODEL_URL)
+      - JOB_NAME="${MODEL}-import-job-${RANDOM_SUFFIX}"
       - |
-        # Define variables
-        S3_KEY="DeepSeek-R1-Distill-Llama-8B/"
-        
-        # Check if the folder exists in the S3 bucket
-        if aws s3 ls "s3://$S3_BUCKET/$S3_KEY" > /dev/null 2>&1; then
-          echo "Folder $S3_KEY already exists in bucket $S3_BUCKET. Exiting successfully."
+        if aws s3 ls "s3://$S3_BUCKET/$MODEL" > /dev/null 2>&1; then
+          echo "Folder $MODEL already exists in bucket $S3_BUCKET. Exiting successfully."
           aws codebuild stop-build --id $CODEBUILD_BUILD_ID
           exit 0
         fi
 
-      - |
-        # Proceed with the rest of the commands if the folder does not exist
-        sudo dnf update -y
-        sudo dnf install git-lfs -y
-        git lfs install
-        git clone --filter=blob:none --no-checkout https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-8B
-        cd DeepSeek-R1-Distill-Llama-8B
-        git checkout main
-        git lfs pull
-        cd ..
-        aws s3 sync --exclude '.git*' DeepSeek-R1-Distill-Llama-8B "s3://$S3_BUCKET/$S3_KEY/"
-      
-      
+      - sudo dnf update -y
+      - sudo dnf install git-lfs -y
+      - git lfs install
+      - git clone --filter=blob:none --no-checkout $MODEL_URL
+      - ls -la
+      - cd $MODEL
+      - git checkout main
+      - git lfs pull
+      - cd ..
+      - ls -la
+      - aws s3 sync --exclude '.git*' $MODEL s3://$S3_BUCKET/$MODEL
+      - | 
+        MODEL_DATA_SOURCE="{\"s3DataSource\": {\"s3Uri\": \"s3://$S3_BUCKET/$MODEL\"}}"
+      - | 
+        aws bedrock create-model-import-job --job-name "$JOB_NAME" --imported-model-name "$MODEL" --role-arn "$MODEL_IMPORT_ROLE_ARN" --model-data-source "$MODEL_DATA_SOURCE"
