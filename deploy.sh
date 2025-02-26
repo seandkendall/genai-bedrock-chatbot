@@ -154,6 +154,7 @@ start_docker_macos() {
     fi
 }
 aws_region=$(aws configure get region)
+aws_account_id=$(aws sts get-caller-identity --query Account --output text)
 application_name="GenAIBedrockChatbot-$aws_region"
 # Get the current git repository URL
 repo_url=$(git config --get remote.origin.url)
@@ -430,6 +431,32 @@ cp ./lambda_functions/conversations_layer/python/conversations/conversations.py 
 
 # Install Python dependencies
 python3 -m pip install -r requirements.txt
+
+#WORKAROUND FOR CDK BOOTSTRAP NOT CREATING AN ECR REPOSITORY#
+stack_output=$(aws cloudformation describe-stacks --stack-name CDKToolkit)
+image_repository_name=$(echo "$stack_output" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="ImageRepositoryName") | .OutputValue')
+if [ -n "$image_repository_name" ]; then
+    echo "Found ImageRepositoryName: $image_repository_name"
+    
+    # Check if the repository exists
+    if ! aws ecr describe-repositories --repository-names "$image_repository_name" 2>/dev/null; then
+        echo "Repository does not exist. Creating repository with immutable tags, AES256 encryption, and manual scanning..."
+        
+        # Create the repository with immutable tags, AES256 encryption, and manual scanning
+        aws ecr create-repository \
+            --repository-name "$image_repository_name" \
+            --image-tag-mutability "IMMUTABLE" \
+            --encryption-configuration "encryptionType=AES256" \
+            --image-scanning-configuration "scanOnPush=false"
+            
+        echo "Repository created successfully."
+    else
+        echo "Repository already exists."
+    fi
+else
+    echo "ImageRepositoryName not found in stack output"
+fi
+#END WORKAROUND FOR CDK BOOTSTRAP NOT CREATING AN ECR REPOSITORY#
 
 # Check if CDK bootstrap has been completed
 bootstrap_ref_file="bootstrap.ref"
