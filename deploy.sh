@@ -437,6 +437,28 @@ stack_output=$(aws cloudformation describe-stacks --stack-name CDKToolkit)
 image_repository_name=$(echo "$stack_output" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="ImageRepositoryName") | .OutputValue')
 if [ -n "$image_repository_name" ]; then
     echo "Found ImageRepositoryName: $image_repository_name"
+
+    policy_document='{
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "LambdaECRImageRetrievalPolicy",
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "lambda.amazonaws.com"
+          },
+          "Action": [
+            "ecr:BatchGetImage",
+            "ecr:GetDownloadUrlForLayer"
+          ],
+          "Condition": {
+            "StringLike": {
+              "aws:sourceArn": "arn:aws:lambda:'$aws_region':'$aws_account_id':function:*"
+            }
+          }
+        }
+      ]
+    }'
     
     # Check if the repository exists
     if ! aws ecr describe-repositories --repository-names "$image_repository_name" 2>/dev/null; then
@@ -448,6 +470,9 @@ if [ -n "$image_repository_name" ]; then
             --image-tag-mutability "IMMUTABLE" \
             --encryption-configuration "encryptionType=AES256" \
             --image-scanning-configuration "scanOnPush=false"
+        aws ecr set-repository-policy \
+            --repository-name "$image_repository_name" \
+            --policy-text "$policy_document"
             
         echo "Repository created successfully."
     else
