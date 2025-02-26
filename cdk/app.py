@@ -15,7 +15,7 @@ region = os.environ.get('CDK_DEFAULT_REGION')
 # cdk.Aspects.of(app).add(cdk_nag.AwsSolutionsChecks(verbose=True))
 chatbot_stack = ChatbotWebsiteStack(app, "ChatbotWebsiteStack")
 
-aws_application = 'None'
+aws_application = 'NoApplicationCreatedyet'
 if chatbot_stack.aws_application is not None and len(chatbot_stack.aws_application) > 1:
     aws_application = chatbot_stack.aws_application
 
@@ -24,7 +24,7 @@ codebuild_stack = CodeBuildStack(app, "ChatbotWebsiteStack-CodeBuildStack",
                                  custom_model_s3_bucket_name=custom_model_s3_bucket_name,
                                  imported_models=chatbot_stack.imported_models,
                                  project=f"genai-bedrock-chatbot-{region}",
-                                 aws_application=chatbot_stack.aws_application)
+                                 aws_application=aws_application)
 if deploy_service_catalog_application:
     application = appreg.Application(chatbot_stack,
                     "GenAIBedrockChatbot",
