@@ -14,6 +14,11 @@ region = os.environ.get('CDK_DEFAULT_REGION')
 # uncomment the following line to turn on AWS CDK NAG
 # cdk.Aspects.of(app).add(cdk_nag.AwsSolutionsChecks(verbose=True))
 chatbot_stack = ChatbotWebsiteStack(app, "ChatbotWebsiteStack")
+
+aws_application = 'None'
+if chatbot_stack.aws_application is not None and len(chatbot_stack.aws_application) > 1:
+    aws_application = chatbot_stack.aws_application
+
 custom_model_s3_bucket_name = chatbot_stack.custom_model_import_bucket.bucket_name
 codebuild_stack = CodeBuildStack(app, "ChatbotWebsiteStack-CodeBuildStack",
                                  custom_model_s3_bucket_name=custom_model_s3_bucket_name,
