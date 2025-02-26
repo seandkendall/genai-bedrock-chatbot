@@ -15,7 +15,7 @@ from load_utilities import (
 logger = Logger(service="BedrockConfig")
 metrics = Metrics()
 tracer = Tracer()
-ENABLE_CACHE = False
+ENABLE_CACHE = True
 
 
 
