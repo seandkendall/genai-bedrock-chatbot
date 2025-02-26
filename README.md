@@ -56,6 +56,12 @@ cd genai-bedrock-chatbot
 ./deploy-cicd.sh -a -d --allowlist @example.com,@example.ca --schedule daily
 ```
 
+**Option 6 (Adding --deepseek flag to deploy deepseek models as custom models):** 
+Deploy from a 'main' branch on each deploy using a domain allow-list, delete old CodeBuild resources first, deploy custom deepseek models (this incurs additional costs, on S3, CodeBuild and Bedrock)
+```bash
+./deploy-cicd.sh -d --allowlist @example.com,@example.ca --schedule daily --deepseek
+```
+
 On any of these options, you can also specify a flag for `--schedule daily` if you would like to redeploy the latest changes daily, otherwise weekly releases will be auto-deployed
 
 
