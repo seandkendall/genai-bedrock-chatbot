@@ -104,7 +104,8 @@ class CodeBuildStack(Stack):
             code_llama_instruct_hf_model_7b = {'model_url': "https://huggingface.co/codellama/CodeLlama-7b-Instruct-hf", 'compute_type': codebuild.ComputeType.LARGE}
             models = [deepseek_model_8b, deepseek_model_70b]
             for current_model in models:
-                model_name = current_model['model_url'].split("/")[-1]
+                model_name = current_model['model_url'].rsplit('/', maxsplit=1)[-1]
+                print(f'Deploying Model: {model_name} with S3 Bucket: {custom_model_s3_bucket_name} Using CodeBuild ARN: {codebuild_role.role_arn} Project: {project} and AWS Application: {aws_application}')
                 codebuild_project = codebuild.Project(
                     self, f"GenAIChatBotCMICodeBuildProject-{model_name}",
                     role=codebuild_role,
@@ -128,7 +129,7 @@ class CodeBuildStack(Stack):
                 )
                 codebuild_project_arns.append(codebuild_project.project_arn)
                 # one time schedule to execute in 2 minutes
-                deep_seek_deploy_schedule = scheduler.Schedule(
+                scheduler.Schedule(
                     self, f"CustomModelImportDeploySchedule-{model_name}",
                     target=scheduler_targets.CodeBuildStartBuild(
                         codebuild_project,
