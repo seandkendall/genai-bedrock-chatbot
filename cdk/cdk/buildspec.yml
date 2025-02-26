@@ -26,5 +26,15 @@ phases:
       - aws s3 sync --exclude '.git*' $MODEL s3://$S3_BUCKET/$MODEL
       - | 
         MODEL_DATA_SOURCE="{\"s3DataSource\": {\"s3Uri\": \"s3://$S3_BUCKET/$MODEL\"}}"
-      - | 
-        aws bedrock create-model-import-job --job-name "$JOB_NAME" --imported-model-name "$MODEL" --role-arn "$MODEL_IMPORT_ROLE_ARN" --model-data-source "$MODEL_DATA_SOURCE"
+      - |
+        TAGS="[]"
+        if [ -n "$PROJECT" ]; then
+          TAGS=$(echo "$TAGS" | jq ". + [{\"key\":\"project\",\"value\":\"$PROJECT\"}]")
+        fi
+        if [ -n "$AWSAPPLICATION" ]; then
+          TAGS=$(echo "$TAGS" | jq ". + [{\"key\":\"awsApplication\",\"value\":\"$AWSAPPLICATION\"}]")
+        fi
+        if [ -n "$MODEL_IDENTIFIER" ]; then
+          TAGS=$(echo "$TAGS" | jq ". + [{\"key\":\"modelIdentifier\",\"value\":\"$MODEL_IDENTIFIER\"}]")
+        fi
+      - aws bedrock create-model-import-job --job-name "$JOB_NAME" --imported-model-name "$MODEL" --role-arn "$MODEL_IMPORT_ROLE_ARN" --model-data-source "$MODEL_DATA_SOURCE" --job-tags "$TAGS" --imported-model-tags "$TAGS"

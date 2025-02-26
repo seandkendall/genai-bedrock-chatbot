@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 def delete_conversation_history(dynamodb,conversations_table_name,logger,session_id):
     """Function to delete conversation history from DDB"""
@@ -32,7 +32,7 @@ def query_existing_history(dynamodb,conversations_table_name,logger,session_id):
     except Exception as e:
         logger.exception(e)
         logger.error("Error querying existing history: " + str(e))
-        return False,'',[]        
+        return False,'',[]
     
 def load_and_send_conversation_history(session_id:str, connection_id:str, user_id:str, dynamodb,conversations_table_name,s3_client,conversation_history_bucket,logger, commons,apigateway_management_api):
     """Function to load and send conversation history"""
@@ -112,7 +112,7 @@ def save_token_usage(user_id, input_tokens,output_tokens,dynamodb,usage_table_na
     dynamodb.update_item(
                     TableName=usage_table_name,
                     Key={'user_id': {'S': user_id }},
-                    UpdateExpression=f"ADD input_tokens :input_tokens, output_tokens :output_tokens, message_count :message_count",
+                    UpdateExpression="ADD input_tokens :input_tokens, output_tokens :output_tokens, message_count :message_count",
                     ExpressionAttributeValues={
                         ':input_tokens': {'N': str(input_tokens)},
                         ':output_tokens': {'N': str(output_tokens)},

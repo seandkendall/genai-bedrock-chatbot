@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 
 class CodeBuildStack(Stack):
-    def __init__(self, scope: Construct, id: str, custom_model_s3_bucket_name: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, id: str, custom_model_s3_bucket_name: str,imported_models: str, project: str,aws_application: str,**kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
         deploy_deep_seek = False
@@ -40,10 +40,10 @@ class CodeBuildStack(Stack):
             bedrock_import_model_role_inline_policy.add_statements(
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
-                    actions=["s3:GetObject", "s3:ListBucket"],
+                    actions=["s3:*"],
                     resources=[
-                        "arn:aws:s3:::{custom_model_s3_bucket_name}",
-                        "arn:aws:s3:::{custom_model_s3_bucket_name}/*",
+                        f"arn:aws:s3:::{custom_model_s3_bucket_name}",
+                        f"arn:aws:s3:::{custom_model_s3_bucket_name}/*",
                     ],
                     conditions={
                         "StringEquals": {"aws:ResourceAccount": self.account}
@@ -57,7 +57,7 @@ class CodeBuildStack(Stack):
                 "BedrockImportModelRole",
                 assumed_by=iam.ServicePrincipal("bedrock.amazonaws.com"),
                 inline_policies={"InlinePolicy": bedrock_import_model_role_inline_policy},
-                max_session_duration=Duration.hours(1),
+                max_session_duration=Duration.hours(3),
             )
 
             # Attach the trust policy statement to the assume role policy
@@ -77,76 +77,86 @@ class CodeBuildStack(Stack):
             )
 
 
-            # Grant permissions to access the S3 bucket
-            s3.Bucket.from_bucket_name(self, "GenAIChatBotCustomModelImportTargetBucket", custom_model_s3_bucket_name).grant_read_write(codebuild_role)
+            # Grant codebuild_role permissions to access the S3 bucket with bucketname {custom_model_s3_bucket_name}
+            codebuild_role.add_to_policy(
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=["s3:*"],
+                    resources=[
+                        f"arn:aws:s3:::{custom_model_s3_bucket_name}",
+                        f"arn:aws:s3:::{custom_model_s3_bucket_name}/*",
+                    ],
+                )
+            )
             
 
             # Create CodeBuild Project
-            deepseek_model_8B_url= "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-8B"
-            deepseek_model_70B_url= "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
-            model_urls = [deepseek_model_8B_url, deepseek_model_70B_url]
-            codebuild_project = codebuild.Project(
-                self, "GenAIChatBotCustomModelImportCodeBuildProject",
-                role=codebuild_role,
-                build_spec=codebuild.BuildSpec.from_asset("cdk/buildspec.yml"),
-                environment=codebuild.BuildEnvironment(
-                    build_image=codebuild.LinuxBuildImage.from_code_build_image_id('aws/codebuild/amazonlinux-x86_64-standard:5.0'),
-                    compute_type=codebuild.ComputeType.LARGE,
-                    privileged=True,
-                    environment_variables={
-                        "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=custom_model_s3_bucket_name),
-                        "MODEL_URL": codebuild.BuildEnvironmentVariable(value=deepseek_model_8B_url),
-                        # "MODEL_URL": codebuild.BuildEnvironmentVariable(value=",".join(model_urls)),
-                        "ROLE_ARN": codebuild.BuildEnvironmentVariable(value=codebuild_role.role_arn),
-                        "MODEL_IMPORT_ROLE_ARN": codebuild.BuildEnvironmentVariable(value=bedrock_import_model_role.role_arn)
-                    }
-                )
-            )
-            scheduler_group_name = "ChatbotSchedulerOneTimeGroup"
+            codebuild_project_arns = []
+            scheduler_group_name = f"ChatbotSchedulerOneTimeGroup"
             scheduler_group = scheduler.Group(self, scheduler_group_name,
-                group_name=scheduler_group_name,
-                removal_policy=RemovalPolicy.DESTROY,
-            )
-            # one time schedule to execute in 2 minutes
-            deep_seek_deploy_schedule = scheduler.Schedule(
-                self, "DeepSeekDeploySchedule",
-                target=scheduler_targets.CodeBuildStartBuild(
-                    codebuild_project,
+                    group_name=scheduler_group_name,
+                    removal_policy=RemovalPolicy.DESTROY,
+                )
+            # Compute type lookup: https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_codebuild/ComputeType.html
+            deepseek_model_8b = {'model_url': "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-8B", 'compute_type': codebuild.ComputeType.LARGE}
+            deepseek_model_70b = {'model_url': "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-70B", 'compute_type': codebuild.ComputeType.X2_LARGE}
+            deepseek_model_r1 = {'model_url': "https://huggingface.co/deepseek-ai/DeepSeek-R1", 'compute_type': codebuild.ComputeType.X2_LARGE}
+            code_llama_instruct_hf_model_7b = {'model_url': "https://huggingface.co/codellama/CodeLlama-7b-Instruct-hf", 'compute_type': codebuild.ComputeType.LARGE}
+            models = [deepseek_model_8b, deepseek_model_70b]
+            for current_model in models:
+                model_name = current_model['model_url'].split("/")[-1]
+                codebuild_project = codebuild.Project(
+                    self, f"GenAIChatBotCMICodeBuildProject-{model_name}",
                     role=codebuild_role,
-                    retry_attempts=0,
-                ),
-                schedule=scheduler.ScheduleExpression.at(
-                    (datetime.now(timezone.utc) + timedelta(minutes=2))
-                ),
-                description="One-time schedule to trigger CodeBuild project immediately",
-                enabled=True,
-                group=scheduler_group
-            )
+                    timeout=Duration.hours(3),
+                    description=f"GenAI Chatbot CodeBuild Project for {model_name}",
+                    build_spec=codebuild.BuildSpec.from_asset("cdk/buildspec.yml"),
+                    environment=codebuild.BuildEnvironment(
+                        build_image=codebuild.LinuxBuildImage.from_code_build_image_id('aws/codebuild/amazonlinux-x86_64-standard:5.0'),
+                        compute_type=current_model['compute_type'],
+                        privileged=True,
+                        environment_variables={
+                            "S3_BUCKET": codebuild.BuildEnvironmentVariable(value=custom_model_s3_bucket_name),
+                            "MODEL_URL": codebuild.BuildEnvironmentVariable(value=current_model['model_url']),
+                            "MODEL_IDENTIFIER": codebuild.BuildEnvironmentVariable(value=('/'.join(current_model['model_url'].split('/')[3:]))),
+                            "ROLE_ARN": codebuild.BuildEnvironmentVariable(value=codebuild_role.role_arn),
+                            "MODEL_IMPORT_ROLE_ARN": codebuild.BuildEnvironmentVariable(value=bedrock_import_model_role.role_arn),
+                            "PROJECT": codebuild.BuildEnvironmentVariable(value=project),
+                            "AWSAPPLICATION": codebuild.BuildEnvironmentVariable(value=aws_application)
+                        }
+                    )
+                )
+                codebuild_project_arns.append(codebuild_project.project_arn)
+                # one time schedule to execute in 2 minutes
+                deep_seek_deploy_schedule = scheduler.Schedule(
+                    self, f"CustomModelImportDeploySchedule-{model_name}",
+                    target=scheduler_targets.CodeBuildStartBuild(
+                        codebuild_project,
+                        role=codebuild_role,
+                        retry_attempts=0,
+                    ),
+                    schedule=scheduler.ScheduleExpression.at(
+                        (datetime.now(timezone.utc) + timedelta(minutes=1))
+                    ),
+                    description="One-time schedule to trigger CodeBuild project",
+                    enabled=model_name not in imported_models,
+                    group=scheduler_group
+                )
             codebuild_role.add_to_policy(
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
                     actions=[
                         "codebuild:StartBuild","codebuild:StopBuild"
                     ],
-                    resources=[codebuild_project.project_arn]
+                    resources=codebuild_project_arns
                 )
             )
             codebuild_role.add_to_policy(
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
                     actions=[
-                        "bedrock:CreateModelImportJob","iam:PassRole"
+                        "bedrock:CreateModelImportJob","iam:PassRole","bedrock:TagResource"
                     ],
                     resources=["*"]
-                )
-            )
-            bucket_arn = s3.Bucket.from_bucket_name(self, "custom_model_s3_bucket", custom_model_s3_bucket_name).bucket_arn
-            codebuild_role.add_to_policy(
-                iam.PolicyStatement(
-                    effect=iam.Effect.ALLOW,
-                    actions=[
-                        "s3:ListBucket"
-                    ],
-                    resources=[bucket_arn]
                 )
             )

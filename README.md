@@ -285,6 +285,20 @@ npm-check -u -g
 
 [Learn more about npm-check](https://www.npmjs.com/package/npm-check)
 
+## Serverless, CDK & GenAI Patterns
+Here are a list of patterns you will see in this code to help you write your own serverless application on AWS:
+ 
+ 1. Use AWS CDK V2 for python to deploy AWS Lambda functions (both ARM_64 and X86_64) with Layers using the PythonLayerVersion construct
+ 2. Use AWS CDK V2 for python to deploy an AWS Lambda function using a Lambda Container Image, allowing you to package more than 250MB into a single Function. This pattern allows you to increase the function size to 10GB; however, you will no longer be able to see your code inside of the web-IDE
+ 3. Use AWS CDK V2 for python to Create EventBridge Scheduler, one-time schedules as well as recurring schedules
+ 4. Use AWS CDK V2 for python to create Amazon S3 buckets, Cloudfront Distributions (Using S3 and API Gateway as origins), DynamoDB Tables, APIGateway HTTP API's, Cognito User Pools (utilizing a pre-signup function to restrict users to certain domains)
+ 5. Use AWS CDK V2 for python to add custom policies to generated Lambda function Roles
+ 6. Connecting APIGateway HTTP API's and Websocket API's, AWS Lambda Functions, DynamoDB, S3, and Amazon Bedrock (for Generative AI) to build an interactive chatbot flow
+ 7. Automating an Amazon Bedrock custom model import from huggingface (Using DeepSeek)
+ 8. Building Agentic AI flows using Amazon Bedorck Agents
+ 9. Building data-rich generative AI experiences using Amazon Bedrock Knowledgebases
+ 10. Generating Images and Videos using Amazon Bedrock with AI Models such as Amazon Nova Reel, Amazon Nova Canvas, Stability AI - Stable Diffusion 3.5, and Luma AI Ray V2
+
 ## Useful Links
  - Bedrock Converse API Capabilities per model: [https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)
  - Amazon Nova User Guide: [https://docs.aws.amazon.com/pdfs/nova/latest/userguide/nova-ug.pdf](https://docs.aws.amazon.com/pdfs/nova/latest/userguide/nova-ug.pdf)

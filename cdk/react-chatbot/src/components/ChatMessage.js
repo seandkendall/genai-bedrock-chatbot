@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { memo, useMemo, useCallback } from "react";
 import {
 	Box,
@@ -29,7 +30,6 @@ const ChatMessage = memo(
 		content,
 		responseTime,
 		isStreaming,
-		isVideoStreaming,
 		timestamp,
 		outputTokenCount,
 		model,
@@ -39,13 +39,101 @@ const ChatMessage = memo(
 		prompt,
 		reactThemeMode,
 	}) => {
-		// Memoized helper functions
-		const formatContent = useCallback((content, outputTokenCount) => {
-			if (!outputTokenCount || outputTokenCount < 4096) return content;
+		
+		const parseDeepseekResponse = useCallback((content) => {
+			const sections = {
+			  user: '',
+			  think: '',
+			  response: ''
+			};
+		  
+			let currentSection = '';
+			const lines = content.split('\n');
+		  
+			const processPart = (part, sectionName) => {
+			  if (currentSection && currentSection !== sectionName) {
+				sections[currentSection] = sections[currentSection].trim();
+			  }
+			  currentSection = sectionName;
+			  if (part.trim()) {
+				sections[currentSection] += `${part.trim()}\n`;
+			  }
+			};
+		  
+			for (const line of lines) {
+			  const parts = line.split(/<\/?(?:user|think|system)>/i);
+			  
+			  for (let i = 0; i < parts.length; i++) {
+				const part = parts[i];
+				const lowerPart = part.toLowerCase();
+		  
+				if (lowerPart.includes('</user>')) {
+				  processPart(part.split('</user>')[0], 'user');
+				  currentSection = '';
+				} else if (lowerPart.includes('</think>')) {
+				  processPart(part.split('</think>')[0], 'think');
+				  currentSection = '';
+				} else if (lowerPart.includes('</system>')) {
+					processPart(part.split('</system>')[0], 'system');
+					currentSection = '';
+				} else if (lowerPart.includes('<user>')) {
+				  processPart(part.split('<user>')[1], 'user');
+				} else if (lowerPart.includes('<think>')) {
+				  processPart(part.split('<think>')[1], 'think');
+				} else if (lowerPart.includes('<system>')) {
+					processPart(part.split('<system>')[1], 'system');
+				} else if (currentSection) {
+				  sections[currentSection] += `${part.trim()}\n`;
+				} else {
+				  sections.response += `${part.trim()}\n`;
+				}
+			  }
+			}
+		  
+			// Trim whitespace from each section
+			for (const key of Object.keys(sections)) {
+			  sections[key] = sections[key].trim();
+			}
+		  
+			return sections;
+		  }, []);
 
-			const contentslice = content.slice(-100).trim();
-			return `${content}\n\r\n\r---\n\r**This response was too large and may have been cut short. If you would like to see the rest of this response, ask me this:** \n\n\nI did not receive your full last response. please re-send me the remainder of the final response starting from the text: \n\r\n\r"${contentslice}"`;
-		}, []);
+		const formatContent = useCallback((content, outputTokenCount) => {
+			let formattedContent = '';
+		  
+			// Check if content contains 'think', 'system' or 'user' tags
+			if (/<\/?(?:think|user|system)>/i.test(content)) {
+			  // Parse the Deepseek response
+			  const parsedContent = parseDeepseekResponse(content);
+		  
+			  // Combine the parsed sections into a single string, using Markdown syntax
+			  if (parsedContent.user) {
+				formattedContent += `## User Input Summary\n\n${parsedContent.user}\n\n`;
+			  }
+		  
+			  if (parsedContent.think) {
+				formattedContent += `## Thinking Process\n\n${parsedContent.think}\n\n`;
+			  }
+
+			  if (parsedContent.system) {
+				formattedContent += `## System\n\n${parsedContent.system}\n\n`;
+			  }
+		  
+			  if (parsedContent.response) {
+				formattedContent += `## Response\n\n${parsedContent.response}`;
+			  }
+		  
+			  formattedContent = formattedContent.trim();
+			} else {
+			  // If no tags are present, use the raw content
+			  formattedContent = content.trim();
+			}
+			return formattedContent;
+			// if (!outputTokenCount || outputTokenCount < 4096) return formattedContent;
+		  
+			// const contentslice = formattedContent.slice(-100).trim();
+			// return `${formattedContent}\n\n---\n\n**This response was too large and may have been cut short. If you would like to see the rest of this response, ask me this:**\n\n> I did not receive your full last response. Please re-send me the remainder of the final response starting from the text:\n>\n> "${contentslice}"`;
+		  }, [parseDeepseekResponse]);
 
 		const reformatFilename = useCallback((filename) => {
 			if (!filename) return "";
@@ -102,7 +190,7 @@ const ChatMessage = memo(
 		}, [content, hasError, raw_message, reformatFilename]);
 
 		const handleRefresh = useCallback(() => {
-			onSend(null, null, true);
+			onSend(null, null, true,false);
 		}, [onSend]);
 
 		const isAssistant = role === "Assistant" || role === "assistant";

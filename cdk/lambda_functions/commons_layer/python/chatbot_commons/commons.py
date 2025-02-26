@@ -57,6 +57,8 @@ def send_websocket_message(logger, apigateway_management_api, connection_id, mes
         >>> api_client = boto3.client('apigatewaymanagementapi', endpoint_url='https://example.execute-api.region.amazonaws.com/stage')
         >>> send_websocket_message(logger, api_client, 'abc123', {'type': 'message', 'content': 'Hello, WebSocket!'})
     """
+    if not connection_id:
+        return
     try:
         # Check if the WebSocket connection is open
         connection = apigateway_management_api.get_connection(ConnectionId=connection_id)
@@ -231,8 +233,6 @@ def get_ddb_config(table,ddb_cache,ddb_cache_timestamp,cache_duration,logger):
         dict: The configuration retrieved from DynamoDB or the cache.
               The returned dictionary has 'user' as the key, and the value is the configuration.
     """
-    logger.info("Getting DynamoDB config")
-
     # Check if the cache is valid
     if ddb_cache and ddb_cache_timestamp and (datetime.now(timezone.utc) - ddb_cache_timestamp) < timedelta(seconds=cache_duration):
         return ddb_cache
@@ -291,6 +291,8 @@ def generate_image_titan_nova(logger,bedrock,model_id, prompt, width, height, se
         error_message = e.response['Error']['Message']
         if e.response['Error']['Code'] == 'AccessDeniedException':
             logger.warn("No Model Access to: %s",model_id)
+        elif e.response['Error']['Code'] == 'ValidationException':
+            logger.warn("(Validation) No Model Access to: %s",model_id)
         else:
             logger.exception(e)
         return None,False,error_message
@@ -394,6 +396,8 @@ def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, heig
             error_message = e.response['Error']['Message']
             if e.response['Error']['Code'] == 'AccessDeniedException':
                 logger.warn("No Model Access to: %s",model_id)
+            elif e.response['Error']['Code'] == 'ValidationException':
+                logger.warn("(Validation) No Model Access to: %s",model_id)
             else:
                 logger.exception(e)
             return None,False,error_message
@@ -427,6 +431,8 @@ def generate_image_stable_diffusion(logger,bedrock,model_id, prompt, width, heig
             error_message = e.response['Error']['Message']
             if e.response['Error']['Code'] == 'AccessDeniedException':
                 logger.warn("No Model Access to: %s",model_id)
+            elif e.response['Error']['Code'] == 'ValidationException':
+                logger.warn("(Validation) No Model Access to: %s",model_id)
             else:
                 logger.exception(e)
             return None,False,error_message

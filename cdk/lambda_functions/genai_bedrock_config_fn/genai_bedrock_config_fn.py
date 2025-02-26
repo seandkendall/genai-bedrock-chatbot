@@ -1,6 +1,7 @@
 import json, os, boto3
 from datetime import datetime, timezone
 from chatbot_commons import commons
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from load_utilities import (
@@ -14,6 +15,7 @@ from load_utilities import (
 logger = Logger(service="BedrockConfig")
 metrics = Metrics()
 tracer = Tracer()
+ENABLE_CACHE = False
 
 
 
@@ -24,8 +26,15 @@ schedule_name = os.environ['SCHEDULE_NAME']
 schedule_group_name = os.environ['SCHEDULE_GROUP_NAME']
 
 cognito_client = boto3.client('cognito-idp')
-bedrock_client = boto3.client(service_name='bedrock')
-bedrock_agent_client = boto3.client(service_name='bedrock-agent')
+config = Config(
+    retries={
+        'total_max_attempts': 10,
+        'mode': 'standard'
+    }
+)
+bedrock_client = boto3.client('bedrock',config=config)
+bedrock_agent_client = boto3.client('bedrock-agent',config=config)
+bedrock_agent_runtime = boto3.client('bedrock-agent-runtime',config=config)
 s3_client = boto3.client('s3')
 events_client = boto3.client('scheduler')
 
@@ -89,7 +98,7 @@ def lambda_handler(event, context):
                 if action in action_map:
                     global load_prompt_flow_response, load_knowledgebase_response, load_agents_response, load_models_response
                     response_var = f"load_{action.split('_', 1)[1]}_response"
-                    if modelscan is False and response_var in globals() and globals()[response_var] is not None:
+                    if ENABLE_CACHE and modelscan is False and response_var in globals() and globals()[response_var] is not None:
                         return_obj[action] = globals()[response_var]
                     else:
                         # Call the mapped function and store the response in the corresponding global variable

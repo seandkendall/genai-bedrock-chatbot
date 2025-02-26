@@ -28,7 +28,6 @@ This is the first function to be called via websocket.  It will parse the messag
 which lambda function to call next, based on the selectedMode.category field in the input json
 
 You can see an example of the input json at /sample-json/1-message-from-browser.json
-
 """
 
 @tracer.capture_lambda_handler
@@ -43,12 +42,8 @@ def lambda_handler(event, context):
     for record in event['Records']:
         request_body = json.loads(record['body'])
         message_type = request_body.get('type', '')
-        connection_id = request_body.get('connection_id', '')
-        session_id = request_body.get('session_id', '')
         selected_mode = request_body.get('selected_mode', {})
         route_request(request_body,message_type,selected_mode)
-        # log all attribute/variable values
-        # print(f"message_type: {message_type} connection_id: {connection_id} session_id: {session_id} selected_mode: {selected_mode}")
         
 def route_request(request_body,message_type,selected_mode):    
     if message_type == 'load_conversation_list':

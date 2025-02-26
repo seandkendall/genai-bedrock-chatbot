@@ -26,6 +26,8 @@ const getCategoryIdentifier = (category) => {
 			return { text: "IMG", color: "#FA8072" }; // Salmon
 		case "Bedrock Video Models":
 			return { text: "VID", color: "#9C27B0" }; // Purple
+		case "Imported Models":
+			return { text: "IMP", color: "#008080" }; // Teal
 		default:
 			return { text: "", color: "#9E9E9E" }; // Grey
 	}

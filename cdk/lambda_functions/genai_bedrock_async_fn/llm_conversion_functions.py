@@ -6,7 +6,7 @@ import os
 import boto3
 from time import time
 from collections import deque
-from chatbot_commons import commons
+import commons
 from datetime import datetime, timezone
 from aws_lambda_powertools import Logger
 logger = Logger(service="BedrockAsyncLLMFunctions")
@@ -28,69 +28,6 @@ def process_message_history_converse(existing_history):
 
     return normalized_history
 
-def process_bedrock_response(apigateway_management_api,response_stream, prompt, connection_id, user_id, model_provider, model_name,new_conversation, session_id):
-    """Function to process a bedrock response and send the messages back to the websocket"""
-    result_text = ""
-    current_input_tokens = 0
-    current_output_tokens = 0
-    counter = 0
-    message_end_timestamp_utc = ''
-    message_stop_reason = ''
-    try:
-        for event in response_stream:
-            chunk = event.get('chunk', {})
-            if chunk.get('bytes'):
-                content_chunk = json.loads(chunk['bytes'].decode('utf-8'))
-                print('SDK: content_chunk')
-                print(content_chunk)
-                if 'generation' in content_chunk:
-                    msg_text = content_chunk['generation']
-                    result_text += msg_text
-                    if counter == 0:
-                        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                        'type': 'message_start',
-                        'message': {"model": model_name},
-                        'delta': {'text': msg_text},
-                        'message_id': counter
-                        })
-                    elif content_chunk['stop_reason'] is not None:
-                        # Send the message_stop event to the WebSocket client
-                        message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
-                        needs_code_end = False
-                        if result_text.count('```') % 2 != 0:
-                            needs_code_end = True
-                        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                            'type': 'message_stop',
-                            'session_id': session_id,
-                            'message_counter': counter,
-                            'message_stop_reason': message_stop_reason,
-                            'needs_code_end': needs_code_end,
-                            'new_conversation': new_conversation,
-                            'timestamp': message_end_timestamp_utc,
-                            'amazon_bedrock_invocation_metrics': {
-                                'inputTokenCount': current_input_tokens,
-                                'outputTokenCount': current_output_tokens
-                            },
-                        })
-                    else:
-                        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                            'type': 'content_block_delta',
-                            'delta': {'text': msg_text},
-                            'message_id': counter
-                        })
-                counter += 1
-
-    except Exception as e:
-        logger.error(f"Error processing Bedrock response (9926)")
-        logger.exception(e)
-        # Send an error message to the WebSocket client
-        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-            'type': 'error',
-            'error': str(e)
-        })
-
-    return result_text, current_input_tokens, current_output_tokens, message_end_timestamp_utc, message_stop_reason
-
 def process_bedrock_converse_response(apigateway_management_api, response, selected_model_id, connection_id, converse_content_with_s3_pointers, new_conversation, session_id):
     """Function to process a bedrock response and send the messages back to the websocket for converse API"""
     result_text = ""
@@ -102,8 +39,8 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
     stream = response.get('stream')
     
     if stream:
-        buffer = []  # Buffer to accumulate messages
-        char_count = 0  # Tracks the total number of characters in the buffer
+        buffer = []
+        char_count = 0
 
         for event in stream:
             if 'contentBlockDelta' in event:
@@ -167,7 +104,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                 'message_counter': counter
             })
             buffer.clear()
-            char_count = 0
+        
         
         logger.info(f"TokenCounts (Converse): {str(current_input_tokens)}/{str(current_output_tokens)}")
         # Send the message_stop event to the WebSocket client

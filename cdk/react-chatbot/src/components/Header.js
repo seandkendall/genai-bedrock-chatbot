@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState, useMemo } from "react";
 import useTimer from "../useTimer";
 import {
@@ -53,7 +54,6 @@ const Header = ({
 	bedrockAgents,
 	bedrockKnowledgeBases,
 	models,
-	kbModels,
 	imageModels,
 	videoModels,
 	importedModels,
@@ -526,12 +526,12 @@ const Header = ({
 					: JSON.parse(localStorage.getItem("local-models"))
 				).filter(
 					(item) =>
-						kbModels.some((model) => model.modelId === item.modelId) &&
-						(item.is_active === true || !("is_active" in item)),
+						models.some((model) => model.modelId === item.modelId) &&
+						(item.is_kb_model === true && (item.is_active === true || !("is_active" in item))),
 				),
 			},
 		],
-		[models, kbModels],
+		[models],
 	);
 
 	return (

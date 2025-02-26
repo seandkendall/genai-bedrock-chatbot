@@ -153,6 +153,8 @@ start_docker_macos() {
         echo "Docker Desktop is already running."
     fi
 }
+aws_region=$(aws configure get region)
+application_name="GenAIBedrockChatbot-$aws_region"
 # Get the current git repository URL
 repo_url=$(git config --get remote.origin.url)
 # Get the latest commit hash
@@ -422,6 +424,10 @@ if [ ! -d "./static-website-source" ]; then
     touch ./static-website-source/placeholder.txt
 fi
 
+#Move shared libs into Lambda Container Image Directories
+cp ./lambda_functions/commons_layer/python/chatbot_commons/commons.py ./lambda_functions/genai_bedrock_async_fn/commons.py
+cp ./lambda_functions/conversations_layer/python/conversations/conversations.py ./lambda_functions/genai_bedrock_async_fn/conversations.py
+
 # Install Python dependencies
 python3 -m pip install -r requirements.txt
 
@@ -462,12 +468,40 @@ else
 fi
 touch "$bootstrap_ref_file"
 
-# Deploy the CDK app
-cdk deploy --outputs-file outputs.json --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag --all
-if [ $? -ne 0 ]; then
-    echo "Error: CDK deployment failed. Exiting script."
-    exit 1
+# List bedrock imported models
+imported_models=""
+output=$(aws bedrock list-imported-models 2>&1)
+
+if [ $? -eq 0 ]; then
+    if echo "$output" | jq -e '.modelSummaries' >/dev/null 2>&1; then
+        imported_models=$(echo "$output" | jq -r '.modelSummaries[].modelName' | paste -sd "," -)
+    fi
 fi
+
+aws_application=""
+
+loop_count=0
+while [ -z "$aws_application" ] && [ $loop_count -lt 2 ]; do
+    if aws_application_output=$(aws servicecatalog-appregistry get-application --application "$application_name" 2>&1); then
+        aws_application=$(echo "$aws_application_output" | jq -r '.applicationTag.awsApplication')
+    else
+        if [ $loop_count -eq 1 ]; then
+            break
+        fi
+        aws_application=""
+    fi
+    # Deploy the CDK app
+    cdk deploy --outputs-file outputs.json --context imported_models="$imported_models" --context aws_application="$aws_application" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag --all
+    if [ $? -ne 0 ]; then
+        echo "Error: CDK deployment failed. Exiting script."
+        exit 1
+    fi    
+    loop_count=$((loop_count + 1))
+done
+
+# Remove shared lib files from Docker container image directory
+rm ./lambda_functions/genai_bedrock_async_fn/commons.py
+rm ./lambda_functions/genai_bedrock_async_fn/conversations.py
 
 #### START BUILDING REACT APP ####
 # Check if outputs.json exists

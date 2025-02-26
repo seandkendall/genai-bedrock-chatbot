@@ -182,18 +182,21 @@ const MessageInput = forwardRef(
 				}
 
 				if (isImage) {
-					let allowed_number_of_images = MAX_IMAGES
+					let allowed_number_of_images = MAX_IMAGES;
 					// if selectedMode.output_type lowercase = video
 					if (selectedMode.output_type.toLowerCase() === "video") {
-						allowed_number_of_images = 1
+						allowed_number_of_images = 1;
 					}
-					
+
 					if (
 						attachments.filter((a) => isImageFile(a)).length +
 							newAttachments.filter((a) => isImageFile(a)).length +
-							uploadedFileNames.filter((a) => isImageFile(a)).length >= allowed_number_of_images
+							uploadedFileNames.filter((a) => isImageFile(a)).length >=
+						allowed_number_of_images
 					) {
-						alert(`You can only attach up to ${allowed_number_of_images} images.`);
+						alert(
+							`You can only attach up to ${allowed_number_of_images} images.`,
+						);
 						continue;
 					}
 
@@ -263,25 +266,50 @@ const MessageInput = forwardRef(
 
 		const handleSend = async () => {
 			if (message.trim() || attachments.length > 0) {
+				let truncated = false;
+				let finalMessage = message.trim();
+
+				// Check if the message size exceeds 250 KB (250 * 1024 bytes)
+				const messageSizeInBytes = new TextEncoder().encode(
+					finalMessage,
+				).length;
+				if (messageSizeInBytes > 250 * 1024) {
+					// Truncate the message to fit within 250 KB
+					const maxAllowedBytes = 250 * 1024;
+					let currentBytes = 0;
+					let truncatedMessage = "";
+
+					for (const char of finalMessage) {
+						const charSize = new TextEncoder().encode(char).length;
+						if (currentBytes + charSize > maxAllowedBytes) break;
+						truncatedMessage += char;
+						currentBytes += charSize;
+					}
+
+					finalMessage = truncatedMessage;
+					truncated = true;
+				}
+
 				if (attachments.length > 0) {
 					setIsRefreshingMessage("Uploading Files to Conversation. ");
 					setIsRefreshing(true);
 				}
 				setIsDisabled(true);
+
 				const uploadedAttachments = await Promise.all(
 					attachments.map(uploadFileToS3),
 				);
-				onSend(
-					message.trim() ? message.trim() : "?",
-					uploadedAttachments,
-					false,
-				);
+
+				onSend(finalMessage ? finalMessage : "?", uploadedAttachments, false,truncated);
+
 				setIsRefreshing(false);
 				setMessage("");
 				setAttachments([]);
+
 				if (fileInputRef.current) {
 					fileInputRef.current.value = "";
 				}
+
 				if (inputRef.current) {
 					inputRef.current.value = "";
 				}
@@ -424,6 +452,7 @@ const MessageInput = forwardRef(
 						placeholder={getPlaceholderText(selectedMode, selectedKbMode)}
 						disabled={isDisabled()}
 						multiline
+						maxlength={254000}
 						maxRows={4}
 						fullWidth
 						variant="outlined"

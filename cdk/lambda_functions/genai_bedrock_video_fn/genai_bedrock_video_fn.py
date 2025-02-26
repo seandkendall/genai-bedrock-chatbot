@@ -6,6 +6,7 @@ import copy
 from datetime import datetime, timezone
 import boto3
 from aws_lambda_powertools import Logger, Metrics, Tracer
+from botocore.config import Config
 from chatbot_commons import commons
 from conversations import conversations
 
@@ -13,8 +14,13 @@ logger = Logger(service="BedrockVideo")
 metrics = Metrics()
 tracer = Tracer()
 MAX_IMAGES = 1
-
-bedrock_runtime = boto3.client(service_name="bedrock-runtime")
+config = Config(
+    retries={
+        'total_max_attempts': 20,
+        'mode': 'standard'
+    }
+)
+bedrock_runtime = boto3.client('bedrock-runtime',config=config)
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 s3_client = boto3.client('s3')
 dynamodb = boto3.client('dynamodb')

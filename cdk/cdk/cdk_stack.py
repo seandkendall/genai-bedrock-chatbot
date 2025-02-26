@@ -80,6 +80,9 @@ class ChatbotWebsiteStack(Stack):
         region = os.environ.get('CDK_DEFAULT_REGION')
         scheduler_group_name = "ChatbotSchedulerGroup"
         deploy_example_incidents_agent_input = self.node.try_get_context("deployExample")
+        self.aws_application = self.node.try_get_context("aws_application")
+        self.imported_models = self.node.try_get_context("imported_models")
+        
         deploy_example_incidents_agent = False
         if deploy_example_incidents_agent_input is not None and deploy_example_incidents_agent_input != "":
             if "y" in deploy_example_incidents_agent_input.lower() or "true" in deploy_example_incidents_agent_input.lower():
@@ -452,7 +455,7 @@ class ChatbotWebsiteStack(Stack):
         # Add permissions to the Lambda function's role
         config_function.add_to_role_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
-            actions=["bedrock:ListFlows", "bedrock:ListFlowAliases", "bedrock:ListAgents","bedrock:ListAgentAliases", "bedrock:ListKnowledgeBases"],
+            actions=["bedrock:*"],
             resources=["*"]
         ))
 
@@ -514,34 +517,32 @@ class ChatbotWebsiteStack(Stack):
                 principal=iam.ServicePrincipal("bedrock.amazonaws.com"),
                 source_arn=f"arn:aws:bedrock:{region}:{self.account}:agent/*"
             )
-
-        # Create the "genai_bedrock_fn_async" Lambda function
-        lambda_async_function = _lambda.Function(self, "genai_bedrock_fn_async",
-                                     runtime=_lambda.Runtime.PYTHON_3_12,
-                                     handler="genai_bedrock_async_fn.lambda_handler",
-                                     code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_async_fn/"),
-                                     timeout=Duration.seconds(900),
-                                     architecture=_lambda.Architecture.X86_64,
-                                     tracing=_lambda.Tracing.ACTIVE,
-                                     memory_size=3008,
-                                     layers=[boto3_layer, commons_layer,conversations_layer,lambda_insights_layer_x86],
-                                     log_retention=logs.RetentionDays.FIVE_DAYS,
-                                     environment={
-                                          "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
-                                          "CONVERSATION_HISTORY_BUCKET": conversation_history_bucket.bucket_name,
-                                          "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
-                                          "DYNAMODB_TABLE_CONFIG": dynamodb_configurations_table.table_name,
-                                          "DYNAMODB_TABLE_USAGE": dynamodb_bedrock_usage_table.table_name,
-                                          "REGION": region,
-                                          "ATTACHMENT_BUCKET_NAME": attachment_bucket.bucket_name,
-                                          "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
-                                          "S3_CUSTOM_MODEL_IMPORT_BUCKET_NAME": custom_model_import_bucket.bucket_name,
-                                          "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
-                                          "POWERTOOLS_SERVICE_NAME":"BEDROCK_ASYNC_SERVICE",
-                                     }
-                                     )
-        if pillow_layer is not None:
-            lambda_async_function.add_layers(pillow_layer)
+            
+        lambda_async_function = _lambda.DockerImageFunction(
+            self,
+            "LambdaAsyncFunction",
+            code=_lambda.DockerImageCode.from_image_asset(
+                directory="./lambda_functions/genai_bedrock_async_fn"
+            ),
+            memory_size=3008,
+            timeout=Duration.seconds(900),
+            architecture=_lambda.Architecture.X86_64,
+            environment={
+                "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
+                "CONVERSATION_HISTORY_BUCKET": conversation_history_bucket.bucket_name,
+                "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
+                "DYNAMODB_TABLE_CONFIG": dynamodb_configurations_table.table_name,
+                "DYNAMODB_TABLE_USAGE": dynamodb_bedrock_usage_table.table_name,
+                "REGION": region,
+                "ATTACHMENT_BUCKET_NAME": attachment_bucket.bucket_name,
+                "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
+                "S3_CUSTOM_MODEL_IMPORT_BUCKET_NAME": custom_model_import_bucket.bucket_name,
+                "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
+                "POWERTOOLS_SERVICE_NAME":"BEDROCK_ASYNC_SERVICE",
+            }
+        )
+        
+        
         lambda_async_function.apply_removal_policy(RemovalPolicy.DESTROY)
         websocket_api.grant_manage_connections(lambda_async_function)
         lambda_async_function.role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"))
@@ -554,7 +555,7 @@ class ChatbotWebsiteStack(Stack):
         dynamodb_bedrock_usage_table.grant_full_access(lambda_async_function)
         attachment_bucket.grant_read_write(lambda_async_function)
         image_bucket.grant_read_write(lambda_async_function)
-        
+
         # Create the "genai_bedrock_fn_conversations" Lambda function
         lambda_conversations_function = _lambda.Function(self, "genai_bedrock_fn_conversations",
                                      runtime=_lambda.Runtime.PYTHON_3_13,
@@ -712,8 +713,9 @@ class ChatbotWebsiteStack(Stack):
 
         # Create a REST API
         rest_api = apigw.RestApi(self, "ChatbotRestApi",
+            cloud_watch_role=True,
             description="RESTAPI for KendallChatbot",
-            deploy_options=apigw.StageOptions(stage_name="rest",metrics_enabled=True,tracing_enabled=True),
+            deploy_options=apigw.StageOptions(stage_name="rest",metrics_enabled=True,tracing_enabled=True,logging_level=apigw.MethodLoggingLevel.INFO),
             default_cors_preflight_options=apigw.CorsOptions(
                 allow_origins=apigw.Cors.ALL_ORIGINS,
                 allow_methods=apigw.Cors.ALL_METHODS
@@ -926,7 +928,7 @@ class ChatbotWebsiteStack(Stack):
         )
         identity_pool = IdentityPool(
             self,
-            "ChatBotRUMIdentityPool",
+            "ChatBotRUMIdtyPool",
             allow_unauthenticated_identities=True,
             unauthenticated_role=guest_role,
         )
@@ -981,8 +983,8 @@ class ChatbotWebsiteStack(Stack):
         CfnOutput(self, "RUMAppMonitorARN", value=app_monitor_arn)
         CfnOutput(self, "rum_identity_pool_id",value=identity_pool.identity_pool_id)
         CfnOutput(self, "rum_application_id",value=identity_pool.identity_pool_id)
-        #END OF AWS RUM            
-
+        #END OF AWS RUM    
+        
         # Construct the log group ARNs for all Lambda functions
         log_group_arns = [
             Fn.sub("~'arn*3aaws*3alogs*3a${AWS::Region}*3a${AWS::AccountId}*3alog-group*3a${LogGroupName}*3a*2a",
