@@ -105,7 +105,7 @@ create_or_update_role \
     "codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
     '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codebuild.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
     "codebuild-base-policy" \
-    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["ecr:*","ssm:*","apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
+    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["ecr:*","dynamodb:*","ssm:*","apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
 
 # Create CodeBuild project
 echo "Creating CodeBuild project..."
@@ -220,7 +220,7 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --source "$source_config" \
     --description "Build and deploy genai-bedrock-chatbot" \
     --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
-    --environment "{\"type\": \"ARM_CONTAINER\", \"image\": \"aws/codebuild/amazonlinux2-aarch64-standard:3.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
+    --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/amazonlinux2-aarch64-standard:3.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
     --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role"
 
 sleep 1
