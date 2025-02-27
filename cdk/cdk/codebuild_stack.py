@@ -1,5 +1,5 @@
 from aws_cdk import (
-    Stack,
+    NestedStack,
     aws_codebuild as codebuild,
     aws_iam as iam,
     aws_s3 as s3,
@@ -11,7 +11,7 @@ from constructs import Construct
 from datetime import datetime, timedelta, timezone
 
 
-class CodeBuildStack(Stack):
+class CodeBuildStack(NestedStack):
     def __init__(self, scope: Construct, id: str, custom_model_s3_bucket_name: str,imported_models: str, project: str,aws_application: str,**kwargs) -> None:
         super().__init__(scope, id, **kwargs)
         print(f'Deploying CodeBuildStack with inputs: custom_model_s3_bucket_name= {custom_model_s3_bucket_name} imported_models={imported_models} project={project} aws_application={aws_application}')

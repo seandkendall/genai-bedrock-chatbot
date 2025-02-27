@@ -1,3 +1,6 @@
+
+from .codebuild_stack import CodeBuildStack
+import aws_cdk as cdk
 from aws_cdk import ( # type: ignore
     Stack, Duration, CfnOutput,Fn,
     aws_s3 as s3,
@@ -21,14 +24,14 @@ from aws_cdk import ( # type: ignore
     aws_scheduler_targets_alpha as scheduler_targets,
     aws_lambda_event_sources as lambda_event_sources,
     aws_rum as rum,
-    aws_ecr_assets as ecr_assets
+    aws_ecr_assets as ecr_assets,
 )
-from aws_cdk.aws_cognito_identitypool_alpha import (  
-    IdentityPool,  
-    IdentityPoolAuthenticationProviders,  
-    IdentityPoolRoleMapping,  
-    IdentityPoolProviderUrl,  
-    UserPoolAuthenticationProvider,  
+from aws_cdk.aws_cognito_identitypool_alpha import (
+    IdentityPool,
+    IdentityPoolAuthenticationProviders,
+    IdentityPoolRoleMapping,
+    IdentityPoolProviderUrl,
+    UserPoolAuthenticationProvider,
 )    
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -82,7 +85,7 @@ class ChatbotWebsiteStack(Stack):
         scheduler_group_name = "ChatbotSchedulerGroup"
         deploy_example_incidents_agent_input = self.node.try_get_context("deployExample")
         self.aws_application = self.node.try_get_context("aws_application")
-        self.imported_models = self.node.try_get_context("imported_models")
+        imported_models = self.node.try_get_context("imported_models")
         
         deploy_example_incidents_agent = False
         if deploy_example_incidents_agent_input is not None and deploy_example_incidents_agent_input != "":
@@ -170,7 +173,6 @@ class ChatbotWebsiteStack(Stack):
                            removal_policy=RemovalPolicy.DESTROY,
                            auto_delete_objects=True,
                            enforce_ssl=True)
-        self.custom_model_import_bucket = custom_model_import_bucket
         # Add this after the existing S3 bucket definitions
         image_bucket = s3.Bucket(self, "GeneratedImagesBucket",
             removal_policy=RemovalPolicy.DESTROY,
@@ -1014,3 +1016,18 @@ class ChatbotWebsiteStack(Stack):
         CfnOutput(self, "websocket_api_endpoint", value=websocket_api_endpoint+'/ws')
         CfnOutput(self, "RestApiUrl", value=rest_api.url)
         CfnOutput(self, "CloudWatchLogsLiveTailURL",value=cloudwatch_logs_url,description="URL to CloudWatch Logs live tail screen for all Lambda functions")
+        
+        # Nested Stack:
+        codebuild_stack = CodeBuildStack(
+            self,
+            "CodeBuildNestedStack",
+            custom_model_s3_bucket_name=custom_model_import_bucket.bucket_name,
+            imported_models=imported_models if imported_models else "",
+            project=f"genai-bedrock-chatbot-{region}",
+            aws_application=self.aws_application if self.aws_application else "NoApplicationCreatedyet"
+        )
+        cdk.Tags.of(codebuild_stack).add("auto-delete", "false")
+        cdk.Tags.of(codebuild_stack).add("auto-stop", "false")
+        cdk.Tags.of(codebuild_stack).add("project", f"genai-bedrock-chatbot-{region}")
+        if self.aws_application is not None and len(self.aws_application) > 1:
+            cdk.Tags.of(codebuild_stack).add("awsApplication", self.aws_application)
