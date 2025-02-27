@@ -1,10 +1,10 @@
 # ARN Lookup: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versionsARM.html
 lambda_insights_layers_arm64 = {
-    "us-east-1": "arn:aws:lambda:us-east-1:580247275435:layer:LambdaInsightsExtension-Arm64:20",
-    "us-east-2": "arn:aws:lambda:us-east-2:580247275435:layer:LambdaInsightsExtension-Arm64:22",
-    "us-west-1": "arn:aws:lambda:us-west-1:580247275435:layer:LambdaInsightsExtension-Arm64:18",
-    "us-west-2": "arn:aws:lambda:us-west-2:580247275435:layer:LambdaInsightsExtension-Arm64:20",
-    "af-south-1": "arn:aws:lambda:af-south-1:012438385374:layer:LambdaInsightsExtension-Arm64:18",
+    "us-east-1": "arn:aws:lambda:us-east-1:580247275435:layer:LambdaInsightsExtension-Arm64:22",
+    "us-east-2": "arn:aws:lambda:us-east-2:580247275435:layer:LambdaInsightsExtension-Arm64:24",
+    "us-west-1": "arn:aws:lambda:us-west-1:580247275435:layer:LambdaInsightsExtension-Arm64:20",
+    "us-west-2": "arn:aws:lambda:us-west-2:580247275435:layer:LambdaInsightsExtension-Arm64:22",
+    "af-south-1": "arn:aws:lambda:af-south-1:012438385374:layer:LambdaInsightsExtension-Arm64:20",
     "ap-east-1": "arn:aws:lambda:ap-east-1:519774774795:layer:LambdaInsightsExtension-Arm64:18",
     "ap-south-2": "arn:aws:lambda:ap-south-2:891564319516:layer:LambdaInsightsExtension-Arm64:6",
     "ap-southeast-3": "arn:aws:lambda:ap-southeast-3:439286490199:layer:LambdaInsightsExtension-Arm64:18",
@@ -29,11 +29,11 @@ lambda_insights_layers_arm64 = {
 }
 
 lambda_insights_layers_x86 = {
-    "us-east-1": "arn:aws:lambda:us-east-1:580247275435:layer:LambdaInsightsExtension:53",
-    "us-east-2": "arn:aws:lambda:us-east-2:580247275435:layer:LambdaInsightsExtension:53",
-    "us-west-1": "arn:aws:lambda:us-west-1:580247275435:layer:LambdaInsightsExtension:53",
-    "us-west-2": "arn:aws:lambda:us-west-2:580247275435:layer:LambdaInsightsExtension:53",
-    "af-south-1": "arn:aws:lambda:af-south-1:012438385374:layer:LambdaInsightsExtension:44",
+    "us-east-1": "arn:aws:lambda:us-east-1:580247275435:layer:LambdaInsightsExtension:55",
+    "us-east-2": "arn:aws:lambda:us-east-2:580247275435:layer:LambdaInsightsExtension:55",
+    "us-west-1": "arn:aws:lambda:us-west-1:580247275435:layer:LambdaInsightsExtension:55",
+    "us-west-2": "arn:aws:lambda:us-west-2:580247275435:layer:LambdaInsightsExtension:55",
+    "af-south-1": "arn:aws:lambda:af-south-1:012438385374:layer:LambdaInsightsExtension:45",
     "ap-east-1": "arn:aws:lambda:ap-east-1:519774774795:layer:LambdaInsightsExtension:44",
     "ap-south-2": "arn:aws:lambda:ap-south-2:891564319516:layer:LambdaInsightsExtension:26",
     "ap-southeast-3": "arn:aws:lambda:ap-southeast-3:439286490199:layer:LambdaInsightsExtension:30",

@@ -21,6 +21,7 @@ from aws_cdk import ( # type: ignore
     aws_scheduler_targets_alpha as scheduler_targets,
     aws_lambda_event_sources as lambda_event_sources,
     aws_rum as rum,
+    aws_ecr_assets as ecr_assets
 )
 from aws_cdk.aws_cognito_identitypool_alpha import (  
     IdentityPool,  
@@ -522,8 +523,11 @@ class ChatbotWebsiteStack(Stack):
             self,
             "LambdaAsyncFunction",
             code=_lambda.DockerImageCode.from_image_asset(
-                directory="./lambda_functions/genai_bedrock_async_fn"
+                directory="./lambda_functions/genai_bedrock_async_fn",
+                platform=ecr_assets.Platform.LINUX_ARM64
             ),
+            tracing=_lambda.Tracing.ACTIVE,
+            log_retention=logs.RetentionDays.FIVE_DAYS,
             memory_size=3008,
             timeout=Duration.seconds(900),
             architecture=_lambda.Architecture.X86_64,
