@@ -131,6 +131,8 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
+      - docker run --privileged --rm tonistiigi/binfmt --install all
+      - docker buildx create --use
       - git checkout $branch_name
       - cd cdk
       - cdk --version
@@ -160,6 +162,8 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
+      - docker run --privileged --rm tonistiigi/binfmt --install all
+      - docker buildx create --use    
       - auto_deploy_branch=\$(git branch -r | grep -m1 'origin/feature_.*_autodeploy' | sed 's/.*origin\\///' || echo '')
       - |
         if [ -n "\$auto_deploy_branch" ]; then 
@@ -195,6 +199,8 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
+      - docker run --privileged --rm tonistiigi/binfmt --install all
+      - docker buildx create --use    
       - cd cdk
       - cdk --version
       - python3 -m venv .env
