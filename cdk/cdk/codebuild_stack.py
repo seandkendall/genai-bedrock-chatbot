@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 class CodeBuildStack(Stack):
     def __init__(self, scope: Construct, id: str, custom_model_s3_bucket_name: str,imported_models: str, project: str,aws_application: str,**kwargs) -> None:
         super().__init__(scope, id, **kwargs)
-
+        print(f'Deploying CodeBuildStack with inputs: custom_model_s3_bucket_name= {custom_model_s3_bucket_name} imported_models={imported_models} project={project} aws_application={aws_application}')
         deploy_deep_seek = False
         deploy_deep_seek_input = self.node.try_get_context("deployDeepSeek")
         if deploy_deep_seek_input is not None and deploy_deep_seek_input != "":

@@ -22,7 +22,9 @@ imported_models = ""
 if chatbot_stack.imported_models is not None and len(chatbot_stack.imported_models) > 1:
     imported_models = chatbot_stack.imported_models    
 
-custom_model_s3_bucket_name = chatbot_stack.custom_model_import_bucket.bucket_name
+custom_model_import_bucket = chatbot_stack.custom_model_import_bucket
+custom_model_s3_bucket_name = custom_model_import_bucket.bucket_name
+
 codebuild_stack = CodeBuildStack(app, "ChatbotWebsiteStack-CodeBuildStack",
                                  custom_model_s3_bucket_name=custom_model_s3_bucket_name,
                                  imported_models=imported_models,
