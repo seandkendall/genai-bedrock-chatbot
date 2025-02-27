@@ -110,22 +110,21 @@ class ChatbotWebsiteStack(Stack):
         boto3_layer = lambda_python.PythonLayerVersion(
             self, "Boto3Layer",
             entry="lambda_functions/python_layer",
-            # bundling=lambda_python.BundlingOptions(image=),
-            compatible_runtimes=[_lambda.Runtime.PYTHON_3_13],
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12,_lambda.Runtime.PYTHON_3_13],
             compatible_architectures=[_lambda.Architecture.ARM_64,_lambda.Architecture.X86_64],
             description="Boto3 library with  PyJWT django pytz requests used for arm64/3.12"
         )
         commons_layer = _lambda.LayerVersion(
             self, "KendallChatCommons",
             code=_lambda.Code.from_asset("lambda_functions/commons_layer"),
-            compatible_runtimes=[_lambda.Runtime.PYTHON_3_13],
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12,_lambda.Runtime.PYTHON_3_13],
             compatible_architectures=[_lambda.Architecture.ARM_64,_lambda.Architecture.X86_64],
             description="KendallChat Commons: Making all the code more simple and reusable"
         )
         conversations_layer = _lambda.LayerVersion(
             self, "KendallChatConversations",
             code=_lambda.Code.from_asset("lambda_functions/conversations_layer"),
-            compatible_runtimes=[_lambda.Runtime.PYTHON_3_13],
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12,_lambda.Runtime.PYTHON_3_13],
             compatible_architectures=[_lambda.Architecture.ARM_64,_lambda.Architecture.X86_64],
             description="KendallChat Conversations: Making all the code more simple and reusable in relation to loading and deleting conversations"
         )
@@ -400,7 +399,7 @@ class ChatbotWebsiteStack(Stack):
         
         # Create the Lambda function for video generation
         video_generation_function = _lambda.Function(self, "VideoGenerationFunction",
-            runtime=_lambda.Runtime.PYTHON_3_13,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             handler="genai_bedrock_video_fn.lambda_handler",
             code=_lambda.Code.from_asset("lambda_functions/genai_bedrock_video_fn/"),
             timeout=Duration.seconds(900),
@@ -525,7 +524,6 @@ class ChatbotWebsiteStack(Stack):
             "LambdaAsyncFunction",
             code=_lambda.DockerImageCode.from_image_asset(
                 directory="./lambda_functions/genai_bedrock_async_fn",
-                platform=ecr_assets.Platform.LINUX_ARM64
             ),
             tracing=_lambda.Tracing.ACTIVE,
             log_retention=logs.RetentionDays.FIVE_DAYS,
