@@ -131,7 +131,7 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
-      - docker run --privileged --rm tonistiigi/binfmt --install all
+      - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
       - docker buildx create --use
       - git checkout $branch_name
       - cd cdk
@@ -162,7 +162,7 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
-      - docker run --privileged --rm tonistiigi/binfmt --install all
+      - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
       - docker buildx create --use    
       - auto_deploy_branch=\$(git branch -r | grep -m1 'origin/feature_.*_autodeploy' | sed 's/.*origin\\///' || echo '')
       - |
@@ -199,7 +199,7 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
-      - docker run --privileged --rm tonistiigi/binfmt --install all
+      - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
       - docker buildx create --use    
       - cd cdk
       - cdk --version
