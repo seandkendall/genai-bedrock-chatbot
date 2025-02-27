@@ -143,6 +143,7 @@ class CodeBuildStack(Stack):
                     enabled=model_name not in imported_models,
                     group=scheduler_group
                 )
+                print(f'Model {model_name} Deployed')
             codebuild_role.add_to_policy(
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
@@ -161,3 +162,4 @@ class CodeBuildStack(Stack):
                     resources=["*"]
                 )
             )
+            print('CodeBuild Stack Deployed/Completed')
