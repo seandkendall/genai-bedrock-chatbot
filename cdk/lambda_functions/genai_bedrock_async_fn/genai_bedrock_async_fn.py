@@ -339,10 +339,7 @@ def get_title_from_message(messages: list, selected_model_id: str,connection_id:
         'title': chat_title['title']
     })
     return chat_title['title']
-
     
-
-              
 @tracer.capture_method
 def download_s3_content(item, content_type):
     """
