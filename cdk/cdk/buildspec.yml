@@ -1,0 +1,40 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - RANDOM_SUFFIX=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 6 | head -n 1)
+      - MODEL=$(basename $MODEL_URL)
+      - JOB_NAME="${MODEL}-import-job-${RANDOM_SUFFIX}"
+      - |
+        if aws s3 ls "s3://$S3_BUCKET/$MODEL" > /dev/null 2>&1; then
+          echo "Folder $MODEL already exists in bucket $S3_BUCKET. Exiting successfully."
+          aws codebuild stop-build --id $CODEBUILD_BUILD_ID
+          exit 0
+        fi
+
+      - sudo dnf update -y
+      - sudo dnf install git-lfs -y
+      - git lfs install
+      - git clone --filter=blob:none --no-checkout $MODEL_URL
+      - ls -la
+      - cd $MODEL
+      - git checkout main
+      - git lfs pull
+      - cd ..
+      - ls -la
+      - aws s3 sync --exclude '.git*' $MODEL s3://$S3_BUCKET/$MODEL
+      - | 
+        MODEL_DATA_SOURCE="{\"s3DataSource\": {\"s3Uri\": \"s3://$S3_BUCKET/$MODEL\"}}"
+      - |
+        TAGS="[]"
+        if [ -n "$PROJECT" ]; then
+          TAGS=$(echo "$TAGS" | jq ". + [{\"key\":\"project\",\"value\":\"$PROJECT\"}]")
+        fi
+        if [ -n "$AWSAPPLICATION" ]; then
+          TAGS=$(echo "$TAGS" | jq ". + [{\"key\":\"awsApplication\",\"value\":\"$AWSAPPLICATION\"}]")
+        fi
+        if [ -n "$MODEL_IDENTIFIER" ]; then
+          TAGS=$(echo "$TAGS" | jq ". + [{\"key\":\"modelIdentifier\",\"value\":\"$MODEL_IDENTIFIER\"}]")
+        fi
+      - aws bedrock create-model-import-job --job-name "$JOB_NAME" --imported-model-name "$MODEL" --role-arn "$MODEL_IMPORT_ROLE_ARN" --model-data-source "$MODEL_DATA_SOURCE" --job-tags "$TAGS" --imported-model-tags "$TAGS"

@@ -9,6 +9,7 @@ display_help() {
     echo "  -h, --help                 Display this help message"
     echo "  -d                         Delete existing resources"
     echo "  -a                         Enable auto-deploy branch detection"
+    echo "  --deepseek                 Deploy DeepSeek as a Custom Model Import in Bedrock"
     echo "  --deploy-agents-example    Deploy agents example"
     echo "  --branch BRANCH_NAME       Specify a branch to use"
     echo "  --schedule SCHEDULE        Set the deployment schedule (daily or weekly, default: weekly)"
@@ -35,6 +36,7 @@ while [[ $# -gt 0 ]]; do
         -d) delete_flag=true; shift;;
         -a) auto_deploy_branch=true; shift;;
         --deploy-agents-example) deploy_agents_example=true; shift;;
+        --deepseek) deepseek=true; shift;;
         --branch) branch_name="$2"; shift 2;;
         --schedule) schedule="$2"; shift 2;;
         --allowlist) allowlist_pattern="$2"; shift 2;;
@@ -61,11 +63,11 @@ create_eventbridge_rule() {
 # Function to delete existing resources
 delete_resources() {
     echo "Deleting existing resources..."
-    aws events remove-targets --rule "$CODEBUILD_PROJECT_NAME-trigger" --ids "1"
-    aws events delete-rule --name "$CODEBUILD_PROJECT_NAME-trigger"
-    aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 
-    aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-base-policy"
-    aws iam delete-role --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role"
+    aws events remove-targets --rule "$CODEBUILD_PROJECT_NAME-trigger" --ids "1" 2>/dev/null || true
+    aws events delete-rule --name "$CODEBUILD_PROJECT_NAME-trigger" 2>/dev/null || true
+    aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 2>/dev/null || true
+    aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-base-policy" 2>/dev/null || true
+    aws iam delete-role --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" 2>/dev/null || true
 }
 
 # Check for delete flag
@@ -103,12 +105,14 @@ create_or_update_role \
     "codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
     '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codebuild.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
     "codebuild-base-policy" \
-    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["ecr:*","ssm:*","apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
+    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["ecr:*","dynamodb:*","ssm:*","apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
 
 # Create CodeBuild project
 echo "Creating CodeBuild project..."
 source_config="{\"type\": \"GITHUB\", \"location\": \"$REPO_URL\""
 deploy_agents_example_option=$([ "$deploy_agents_example" = true ] && echo " --deploy-agents-example " || echo "")
+deploy_deepseek_option=$([ "$deepseek" = true ] && echo " --deepseek " || echo "")
+
 allowlist_option=$([ -n "$allowlist_pattern" ] && echo "--allowlist $allowlist_pattern" || echo "")
 
 if [ -n "$branch_name" ]; then
@@ -127,6 +131,8 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
+      - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
+      - docker buildx create --use
       - git checkout $branch_name
       - cd cdk
       - cdk --version
@@ -138,7 +144,7 @@ phases:
     commands:
       - cd ..
       - chmod +x deploy.sh
-      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
+      - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
 EOF
 elif [ "$auto_deploy_branch" = true ]; then
     # Use auto-deploy branch detection
@@ -156,6 +162,8 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
+      - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
+      - docker buildx create --use    
       - auto_deploy_branch=\$(git branch -r | grep -m1 'origin/feature_.*_autodeploy' | sed 's/.*origin\\///' || echo '')
       - |
         if [ -n "\$auto_deploy_branch" ]; then 
@@ -173,7 +181,7 @@ phases:
     commands:
       - cd ..
       - chmod +x deploy.sh
-      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
+      - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
 EOF
 else
     # Use auto-deploy branch detection
@@ -191,6 +199,8 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
+      - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
+      - docker buildx create --use    
       - cd cdk
       - cdk --version
       - python3 -m venv .env
@@ -201,7 +211,7 @@ phases:
     commands:
       - cd ..
       - chmod +x deploy.sh
-      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
+      - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
 EOF
 fi
 
@@ -214,8 +224,9 @@ source_config="$source_config, \"buildspec\": $buildspec_escaped}"
 # Create the CodeBuild project
 aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     --source "$source_config" \
+    --description "Build and deploy genai-bedrock-chatbot" \
     --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
-    --environment "{\"type\": \"ARM_CONTAINER\", \"image\": \"aws/codebuild/amazonlinux2-aarch64-standard:3.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
+    --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/amazonlinux2-x86_64-standard:5.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
     --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role"
 
 sleep 1

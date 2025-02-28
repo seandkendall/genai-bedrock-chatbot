@@ -13,8 +13,6 @@ const MAX_CONTENT_ITEMS = 20;
 const MAX_IMAGES = 20;
 const MAX_VIDEOS = 1;
 const MAX_DOCUMENTS = 5;
-const MAX_IMAGE_SIZE = 3.75 * 1024 * 1024; // 3.75 MB
-const MAX_IMAGE_DIMENSION = 8000; // 8000 px
 const MAX_DOCUMENT_SIZE = 4.5 * 1024 * 1024; // 4.5 MB
 const MAX_VIDEO_SIZE = 1024 * 1024 * 1024; // 1 GB
 const ALLOWED_DOCUMENT_TYPES = [
@@ -184,38 +182,32 @@ const MessageInput = forwardRef(
 				}
 
 				if (isImage) {
-					let allowed_number_of_images = MAX_IMAGES
+					let allowed_number_of_images = MAX_IMAGES;
 					// if selectedMode.output_type lowercase = video
 					if (selectedMode.output_type.toLowerCase() === "video") {
-						allowed_number_of_images = 1
+						allowed_number_of_images = 1;
 					}
-					
+
 					if (
 						attachments.filter((a) => isImageFile(a)).length +
 							newAttachments.filter((a) => isImageFile(a)).length +
-							uploadedFileNames.filter((a) => isImageFile(a)).length >= allowed_number_of_images
+							uploadedFileNames.filter((a) => isImageFile(a)).length >=
+						allowed_number_of_images
 					) {
-						alert(`You can only attach up to ${allowed_number_of_images} images.`);
+						alert(
+							`You can only attach up to ${allowed_number_of_images} images.`,
+						);
 						continue;
 					}
 
-					// if (file.size > MAX_IMAGE_SIZE) {
-					// 	alert(`Image size must be no more than 3.75 MB: ${file.name}`);
-					// 	continue;
-					// }
-
 					try {
-						// const dimensions = await getImageDimensions(file);
-						// if (
-						// 	dimensions.width > MAX_IMAGE_DIMENSION ||
-						// 	dimensions.height > MAX_IMAGE_DIMENSION
-						// ) {
-						// 	alert(
-						// 		`Image dimensions must be no more than 8000x8000 pixels: ${file.name}`,
-						// 	);
-						// 	continue;
-						// }
-						newAttachments.push(file);
+						if (file.name === "image.jpg") {
+							const timestamp = Date.now();
+							const newFileName = `image-${timestamp}-${newAttachments.length}.jpg`;
+							newAttachments.push(new File([file], newFileName, {type: file.type,}));
+						}else{
+							newAttachments.push(file);
+						}
 					} catch (error) {
 						console.error("Error processing image:", error);
 						alert(`Error processing image: ${file.name}`);
@@ -265,18 +257,6 @@ const MessageInput = forwardRef(
 			]);
 		};
 
-		const getImageDimensions = (file) => {
-			return new Promise((resolve, reject) => {
-				const img = new Image();
-				img.onload = () => {
-					URL.revokeObjectURL(img.src);
-					resolve({ width: img.width, height: img.height });
-				};
-				img.onerror = reject;
-				img.src = URL.createObjectURL(file);
-			});
-		};
-
 		const handleFileChange = (event) => {
 			const files = Array.from(event.target.files);
 			handleFiles(files);
@@ -292,25 +272,50 @@ const MessageInput = forwardRef(
 
 		const handleSend = async () => {
 			if (message.trim() || attachments.length > 0) {
+				let truncated = false;
+				let finalMessage = message.trim();
+
+				// Check if the message size exceeds 250 KB (250 * 1024 bytes)
+				const messageSizeInBytes = new TextEncoder().encode(
+					finalMessage,
+				).length;
+				if (messageSizeInBytes > 250 * 1024) {
+					// Truncate the message to fit within 250 KB
+					const maxAllowedBytes = 250 * 1024;
+					let currentBytes = 0;
+					let truncatedMessage = "";
+
+					for (const char of finalMessage) {
+						const charSize = new TextEncoder().encode(char).length;
+						if (currentBytes + charSize > maxAllowedBytes) break;
+						truncatedMessage += char;
+						currentBytes += charSize;
+					}
+
+					finalMessage = truncatedMessage;
+					truncated = true;
+				}
+
 				if (attachments.length > 0) {
 					setIsRefreshingMessage("Uploading Files to Conversation. ");
 					setIsRefreshing(true);
 				}
 				setIsDisabled(true);
+
 				const uploadedAttachments = await Promise.all(
 					attachments.map(uploadFileToS3),
 				);
-				onSend(
-					message.trim() ? message.trim() : "?",
-					uploadedAttachments,
-					false,
-				);
+
+				onSend(finalMessage ? finalMessage : "?", uploadedAttachments, false,truncated);
+
 				setIsRefreshing(false);
 				setMessage("");
 				setAttachments([]);
+
 				if (fileInputRef.current) {
 					fileInputRef.current.value = "";
 				}
+
 				if (inputRef.current) {
 					inputRef.current.value = "";
 				}
@@ -453,6 +458,7 @@ const MessageInput = forwardRef(
 						placeholder={getPlaceholderText(selectedMode, selectedKbMode)}
 						disabled={isDisabled()}
 						multiline
+						maxlength={254000}
 						maxRows={4}
 						fullWidth
 						variant="outlined"

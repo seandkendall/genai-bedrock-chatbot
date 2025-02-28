@@ -28,7 +28,6 @@ This is the first function to be called via websocket.  It will parse the messag
 which lambda function to call next, based on the selectedMode.category field in the input json
 
 You can see an example of the input json at /sample-json/1-message-from-browser.json
-
 """
 
 @tracer.capture_lambda_handler
@@ -43,12 +42,8 @@ def lambda_handler(event, context):
     for record in event['Records']:
         request_body = json.loads(record['body'])
         message_type = request_body.get('type', '')
-        connection_id = request_body.get('connection_id', '')
-        session_id = request_body.get('session_id', '')
         selected_mode = request_body.get('selected_mode', {})
         route_request(request_body,message_type,selected_mode)
-        # log all attribute/variable values
-        # print(f"message_type: {message_type} connection_id: {connection_id} session_id: {session_id} selected_mode: {selected_mode}")
         
 def route_request(request_body,message_type,selected_mode):    
     if message_type == 'load_conversation_list':
@@ -59,7 +54,9 @@ def route_request(request_body,message_type,selected_mode):
     elif selected_mode.get('category') == 'Bedrock Models':
         # Invoke genai_bedrock_async_fn
         lambda_client.invoke(FunctionName=bedrock_function_name, InvocationType='Event', Payload=json.dumps(request_body))
-        # Process the response from lambda_fn_async
+    elif selected_mode.get('category') == 'Imported Models':
+        # Invoke genai_bedrock_async_fn
+        lambda_client.invoke(FunctionName=bedrock_function_name, InvocationType='Event', Payload=json.dumps(request_body))
     elif selected_mode.get('category') == 'Bedrock Image Models':
         lambda_client.invoke(FunctionName=image_generation_function_name, InvocationType='Event', Payload=json.dumps(request_body))
     elif selected_mode.get('category') == 'Bedrock Video Models':

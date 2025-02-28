@@ -1,6 +1,7 @@
 import json, boto3, os
 from datetime import datetime, timezone
 from aws_lambda_powertools import Logger, Metrics, Tracer
+from botocore.config import Config
 from chatbot_commons import commons
 from conversations import conversations
 from botocore.exceptions import ClientError
@@ -9,9 +10,6 @@ import string
 import jwt
 import copy
 
-
-# Initialize Bedrock client
-bedrock = boto3.client(service_name="bedrock-agent-runtime")
 dynamodb = boto3.client('dynamodb')
 s3_client = boto3.client('s3')
 table_name = os.environ.get('DYNAMODB_TABLE')
@@ -29,7 +27,14 @@ tracer = Tracer()
 
 # AWS API Gateway Management API client
 apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
-bedrock_agent_client = boto3.client(service_name='bedrock-agent')
+config = Config(
+    retries={
+        'total_max_attempts': 10,
+        'mode': 'standard'
+    }
+)
+bedrock_agent_runtime = boto3.client('bedrock-agent-runtime',config=config)
+bedrock_agent_client = boto3.client('bedrock-agent',config=config)
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
@@ -121,12 +126,12 @@ def process_websocket_message(request_body, force_null_kb_session_id):
             }
 
             if not kb_session_id or kb_session_id == 'null':
-                response = bedrock.retrieve_and_generate(
+                response = bedrock_agent_runtime.retrieve_and_generate(
                     input={'text': prompt},
                     retrieveAndGenerateConfiguration=retrieveAndGenerateConfigurationData,
                 )
             else:
-                response = bedrock.retrieve_and_generate(
+                response = bedrock_agent_runtime.retrieve_and_generate(
                     input={'text': prompt},
                     retrieveAndGenerateConfiguration=retrieveAndGenerateConfigurationData,
                     sessionId=kb_session_id,
@@ -143,7 +148,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
             response_stream_key = 'completion'
             selected_agent_id = selected_mode.get('agentId')
             selected_agent_alias_id = selected_mode.get('agentAliasId')
-            response = bedrock.invoke_agent(
+            response = bedrock_agent_runtime.invoke_agent(
                     agentAliasId=selected_agent_alias_id,
                     agentId=selected_agent_id,
                     enableTrace=True,
@@ -162,7 +167,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
             response_stream_key = 'responseStream'
             flow_alias_id = selected_mode.get('id')
             flow_id = selected_mode.get('flowId')
-            response = bedrock.invoke_flow(
+            response = bedrock_agent_runtime.invoke_flow(
                     flowAliasIdentifier=flow_alias_id,
                     flowIdentifier=flow_id,
                     inputs=[
@@ -184,6 +189,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
             
 @tracer.capture_method        
 def process_bedrock_knowledgebase_response(response, message_id, connection_id, session_id,backend_type,chat_title,new_conversation):
+    
     counter = 0
     commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                         'type': 'message_start',

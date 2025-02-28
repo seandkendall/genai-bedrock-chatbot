@@ -4,7 +4,7 @@ Browser -> API Gateway websocket -> genai_bedrock_router_fn -> other lambda func
 
 # Which function will you be routed to?
 
-genai_bedrock_agents_client_fn - If you're using Bedrock Agents, Bedrock Prompt Flows, or Bedrock Knowledge Bases, you will be routed to genai_bedrock_agents_client_fn
+genai_bedrock_agents_client_fn - If you're using Bedrock Agents, Bedrock Prompt Flows, or Bedrock KnowledgeBases, you will be routed to genai_bedrock_agents_client_fn
 
 genai_bedrock_async_fn - If you're using a Large Language Model by itself, such as plain old Claude 3.5 Sonnetv2, or the latest flavor of Llama, you will be routed to genai_bedrock_async_fn
 

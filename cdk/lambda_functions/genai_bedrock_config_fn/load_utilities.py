@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone, timedelta
 from aws_lambda_powertools import Logger
 from chatbot_commons import commons
+from botocore.exceptions import ClientError
 
 logger = Logger(service="BedrockConfigLoadUtilities")
 
@@ -37,7 +38,6 @@ def load_knowledge_bases(bedrock_agent_client, table):
                 kb['output_type'] = 'TEXT'
                 kb['category'] = 'Bedrock KnowledgeBases'
                 ret.append(kb)
-
         return {
             'type': 'load_knowledge_bases',
             'knowledge_bases': ret
@@ -143,28 +143,60 @@ def load_prompt_flows(bedrock_agent_client, table):
 
 def load_models(bedrock_client, table):
     try:
-        foundation_model_response = bedrock_client.list_foundation_models(byInferenceType='ON_DEMAND')
+        # Remove unwanted models from foundation models
+        foundation_model_response = bedrock_client.list_foundation_models() # removed byInferenceType='ON_DEMAND'
+        foundation_model_response['modelSummaries'] = [
+            model for model in foundation_model_response['modelSummaries']
+            if 'ON_DEMAND' in model['inferenceTypesSupported'] or 'INFERENCE_PROFILE' in model['inferenceTypesSupported']
+        ]
+        
+        # query imported and inference profile models
+        list_imported_models_response = bedrock_client.list_imported_models()
         inference_profile_response = bedrock_client.list_inference_profiles()
         
         # Create a mapping of model ARNs to inference profile information
+        # this is a list of model ARN's each pointing to an inference profile ARN and inference profile name 
         inference_profile_map = {}
-        for profile in inference_profile_response['inferenceProfileSummaries']:
-            for model in profile['models']:
+        for inference_profile in inference_profile_response['inferenceProfileSummaries']:
+            for model in inference_profile['models']:
                 inference_profile_map[model['modelArn']] = {
-                    'inferenceProfileArn': profile['inferenceProfileArn'],
-                    'inferenceProfileName': profile['inferenceProfileName']
+                    'inferenceProfileArn': inference_profile['inferenceProfileArn'],
+                    'inferenceProfileName': inference_profile['inferenceProfileName']
                 }
-        
-        # Update foundation models with inference profile information
+                
+
+        bedrock_text_models = []
+        #construct bedrock_text_models array:  add foundation models that dont map to an inference profile
         for model in foundation_model_response['modelSummaries']:
+            if model['modelArn'] not in inference_profile_map:
+                bedrock_text_models.append(model)
+        #construct bedrock_text_models array: add imported models
+        for model in list_imported_models_response['modelSummaries']:
             original_model_arn = model['modelArn']
             if original_model_arn in inference_profile_map:
                 model['originalModelArn'] = original_model_arn
                 model['originalModelName'] = model['modelName']
                 model['modelArn'] = inference_profile_map[original_model_arn]['inferenceProfileArn']
                 model['modelName'] = inference_profile_map[original_model_arn]['inferenceProfileName']
-
-        # Filter and process text models
+                list_imported_models_response['modelSummaries'].append(model)
+        # add inference profiles models to bedrock_text_models array
+        for model in inference_profile_response['inferenceProfileSummaries']:
+            model['modelArn'] = model['inferenceProfileArn']
+            model['modelName'] = model['inferenceProfileName']
+            model['modelId'] = model['inferenceProfileId']
+            #for each model in models, find record in foundation_model_response['modelSummaries'] by modelArn
+            for model_arn in model['models']:
+                for foundation_model in foundation_model_response['modelSummaries']:
+                    if foundation_model['modelArn'] == model_arn['modelArn']:
+                        model['providerName'] = foundation_model['providerName']
+                        model['inputModalities'] = foundation_model['inputModalities']
+                        model['outputModalities'] = foundation_model['outputModalities']
+                        model['modelLifecycle'] = {'status':'ACTIVE'}
+                        model['inferenceTypesSupported'] = foundation_model['inferenceTypesSupported']
+                        model['responseStreamingSupported'] = foundation_model['responseStreamingSupported']
+                        break
+            bedrock_text_models.append(model)
+        
         text_models = [
             {
                 'providerName': model['providerName'],
@@ -174,8 +206,20 @@ def load_models(bedrock_client, table):
                 'mode_selector': model['modelArn'],
                 'mode_selector_name': model['modelName'],
             }
-            for model in foundation_model_response['modelSummaries']
-            if 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and 'ON_DEMAND' in model['inferenceTypesSupported']
+            for model in bedrock_text_models
+            if 'TEXT' in model['inputModalities'] and 'TEXT' in model['outputModalities'] and model['modelLifecycle']['status'] == 'ACTIVE' and ('ON_DEMAND' in model['inferenceTypesSupported'] or 'INFERENCE_PROFILE' in model['inferenceTypesSupported'])
+        ]
+        # Filter and process text models
+        imported_models = [
+            {
+                'providerName': model['modelArchitecture'],
+                'modelName': model['modelName'],
+                'modelId': model['modelArn'],
+                'modelArn': model['modelArn'],
+                'mode_selector': model['modelArn'],
+                'mode_selector_name': model['modelName'],
+            }
+            for model in list_imported_models_response['modelSummaries']
         ]
 
         # Filter and process image models
@@ -211,6 +255,7 @@ def load_models(bedrock_client, table):
         available_video_models = keep_latest_versions(video_models)
 
         available_text_models_return = []
+        available_imported_models_return = []
         available_image_models_return = []
         available_video_models_return = []
         # Update the models with DynamoDB config
@@ -219,6 +264,7 @@ def load_models(bedrock_client, table):
             model_identifier = model.get('originalModelArn', model['modelId'])
             if ddb_config.get(model_identifier, {}).get('access_granted', False):
                 model['is_active'] = True
+                model['is_kb_model'] = ddb_config.get(model['modelId'], {}).get('is_kb_model', False)
                 model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
                 model['allow_input_video'] = ddb_config.get(model['modelId'], {}).get('VIDEO', False)
                 model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
@@ -248,14 +294,18 @@ def load_models(bedrock_client, table):
                 model['video_helper_image_model_id'] = ddb_config.get(model['modelId'], {}).get('video_helper_image_model_id', None)
                 model['category'] = 'Bedrock Video Models'
                 available_video_models_return.append(model)
-            
-            
+        for model in imported_models:
+            model_identifier = model.get('originalModelArn', model['modelId'])
+            if ddb_config.get(model_identifier, {}).get('access_granted', False):
+                model['is_active'] = True
+                model['allow_input_image'] = ddb_config.get(model['modelId'], {}).get('IMAGE', False)
+                model['allow_input_video'] = ddb_config.get(model['modelId'], {}).get('VIDEO', False)
+                model['allow_input_document'] = ddb_config.get(model['modelId'], {}).get('DOCUMENT', False)
+                model['output_type'] = 'TEXT'
+                model['category'] = 'Imported Models'
+                available_imported_models_return.append(model)
         
-        # Load the kb_models from the JSON file    
-        with open('./bedrock_supported_kb_models.json', 'r') as f:
-            kb_models = json.load(f)
-        
-        return {'type': 'load_models', 'text_models': available_text_models_return, 'video_models': available_video_models_return, 'image_models': available_image_models_return, 'kb_models': kb_models}
+        return {'type': 'load_models', 'imported_models':available_imported_models_return,'text_models': available_text_models_return, 'video_models': available_video_models_return, 'image_models': available_image_models_return}
     except Exception as e:
         logger.exception(e)
         logger.error(f"Error loading models: {str(e)}")

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useRef, forwardRef, memo } from 'react';
 import ChatMessage from './ChatMessage';
 import { Box } from '@mui/material';
@@ -5,6 +6,7 @@ import { Box } from '@mui/material';
 const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages, appSessionid, loadConversationHistory,loadConversationList, onSend,requireConversationLoad,setRequireConversationLoad,setAppSessionId,selectedChatId,reactThemeMode,websocketConnectionId }, ref) => {
   const lastMessageRef = useRef(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useEffect(() => {
       if (requireConversationLoad && websocketConnectionId !== null) {
         if (appSessionid && appSessionid !== '') {
@@ -23,7 +25,8 @@ const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages
       }
   }, [selectedMode, user, appSessionid,websocketConnectionId]);
   
-  useEffect(() => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+    useEffect(() => {
     lastMessageRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 

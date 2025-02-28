@@ -1,0 +1,9 @@
+boto3>=1.37.4
+PyJWT
+django
+pytz
+requests
+pillow
+aws-lambda-powertools[all]
+transformers
+jinja2

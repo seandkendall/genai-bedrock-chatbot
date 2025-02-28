@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { websocketUrl } from "./variables.js";
 import React, {
 	useState,
@@ -115,11 +116,11 @@ const App = memo(({ signOut, user, awsRum }) => {
 			? JSON.parse(localStorage.getItem("local-video-models"))
 			: [],
 	); //local-video-models
-	const [kbModels, setKbModels] = useState(
-		localStorage.getItem("local-kb-models")
-			? JSON.parse(localStorage.getItem("local-kb-models"))
+	const [importedModels, setImportedModels] = useState(
+		localStorage.getItem("local-imported-models")
+			? JSON.parse(localStorage.getItem("local-imported-models"))
 			: [],
-	); //local-kb-models
+	); //local-imported-models
 	const [promptFlows, setPromptFlows] = useState(
 		localStorage.getItem("local-prompt-flows")
 			? JSON.parse(localStorage.getItem("local-prompt-flows"))
@@ -161,6 +162,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		reconnectInterval: (attemptNumber) =>
 			Math.min(1000 * 2 ** attemptNumber, 30000), // Exponential backoff up to 30 seconds
 	});
+	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	useEffect(() => {
 		if (readyState === WebSocket.OPEN) {
 			sendMessage(JSON.stringify({ type: "ping" }));
@@ -194,9 +196,9 @@ const App = memo(({ signOut, user, awsRum }) => {
 			localStorage.setItem("local-video-models", JSON.stringify(videoModels));
 	}, [videoModels]);
 	useEffect(() => {
-		if (kbModels && kbModels.length > 0)
-			localStorage.setItem("local-kb-models", JSON.stringify(kbModels));
-	}, [kbModels]);
+		if (importedModels && importedModels.length > 0)
+			localStorage.setItem("local-imported-models", JSON.stringify(importedModels));
+	}, [importedModels]);
 
 	//persist prompt flows to local storage if changed
 	useEffect(() => {
@@ -230,7 +232,11 @@ const App = memo(({ signOut, user, awsRum }) => {
 		}
 			
 	}, [websocketConnectionId]);
-
+	const triggerInfoErrorPopupMessage = (msgText,type) => {
+		setPopupMessage(msgText);
+		setPopupType(type);
+		setShowPopup(true);
+	};
 	const localSignOut = () => {
 		localStorage.clear();
 		signOut();
@@ -316,16 +322,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 					: "unknown";
 				// if selectedOutputType is null or empty or equal to unknown
 				if (!selectedOutputType || selectedOutputType === "Unknown") {
-					setPopupMessage("I have created a new chat for you.");
+					triggerInfoErrorPopupMessage("I have created a new chat for you.","success");
 				} else {
-					setPopupMessage(
-						`You were currently interacting with a model capable of outputting ${selectedOutputType} and are now switching to an output type of ${newOutputType}. I have created a new chat for you.`,
-					);
+					triggerInfoErrorPopupMessage(`You were currently interacting with a model capable of outputting ${selectedOutputType} and are now switching to an output type of ${newOutputType}. I have created a new chat for you.`,"success");
 				}
-
-				setPopupType("success");
-				setShowPopup(true);
-				setTimeout(() => setShowPopup(false), 3000);
 				handleNewChat();
 			}
 		}
@@ -484,21 +484,17 @@ const App = memo(({ signOut, user, awsRum }) => {
 			)
 		) {
 			popupMsg = errormessage;
+			triggerInfoErrorPopupMessage(popupMsg,"error");
 		} else if (errormessage.includes("throttlingException") || errormessage.includes("ThrottlingException")) {
-			popupMsg =
-				"Sorry, we encountered a throttling issue. Please try resubmitting your message.";
+			triggerInfoErrorPopupMessage("Sorry, we encountered a throttling issue. Please try resubmitting your message.","error");
 		} else if (errormessage.includes("AUP or AWS Responsible AI")) {
-			popupMsg =
-				"This request has been blocked by our content filters because the generated image(s) may conflict with our AUP or AWS Responsible AI Policy. Please try again.";
+			triggerInfoErrorPopupMessage("This request has been blocked by our content filters because the generated image(s) may conflict with our AUP or AWS Responsible AI Policy. Please try again.","error");
+		}else{
+			triggerInfoErrorPopupMessage(popupMsg,"error");
 		}
 
 		setIsDisabled(false);
-		setPopupMessage(popupMsg);
-		setPopupType("error");
-		setShowPopup(true);
-		setTimeout(() => setShowPopup(false), 3000);
-
-		console.error("WebSocket error:", errormessage);
+		console.error("WebSocket error:", popupMsg);
 	};
 
 	function reformat_attachments(attachments) {
@@ -542,7 +538,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		}
 	};
 
-	const onSend = async (message, attachments, retryPreviousMessage) => {
+	const onSend = async (message, attachments, retryPreviousMessage,truncated) => {
 		// if appsessionid is null then setappsessionid
 		let newAppSessionid;
 		if (!appSessionid) {
@@ -620,9 +616,13 @@ const App = memo(({ signOut, user, awsRum }) => {
 			data.selectedKbMode = selectedKbMode;
 		}
 		const reformatted_attachments = reformat_attachments(attachments);
+		let truncated_message = "";
+		if (truncated) {
+			truncated_message = "\n\n* Max message size is 250MB. Your input has been truncated to this size. *"
+		}
 		const messageWithTime = {
 			role: "user",
-			content: [{ text: message }, ...reformatted_attachments],
+			content: [{text: message ? `${message}${truncated_message || ''}` : truncated_message || ''}, ...reformatted_attachments],
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
 		};
@@ -900,8 +900,8 @@ const App = memo(({ signOut, user, awsRum }) => {
 					setVideoModels(
 						filter_active_models(message.load_models.video_models),
 					);
-				if (message.load_models.kb_models)
-					setKbModels(message.load_models.kb_models);
+				if (message.load_models.imported_models)
+					setImportedModels(message.load_models.imported_models);
 				if (message.load_knowledge_bases?.knowledge_bases)
 					setBedrockKnowledgeBases(
 						message.load_knowledge_bases.knowledge_bases,
@@ -938,6 +938,9 @@ const App = memo(({ signOut, user, awsRum }) => {
 						// console.log(`pong received at ${new Date().toISOString()} with connection_id: ${message?.connection_id}`)
 						message.connection_id &&
 								setWebsocketConnectionId(message.connection_id);
+					} else if (messageString.includes("model_not_ready")) {
+						console.log('Model Not Ready')
+						triggerInfoErrorPopupMessage("Custom Model Starting. Please wait while we retry","success");
 					} else if (messageString.includes("no_conversation_to_load")) {
 						setIsRefreshing(false);
 					} else if (messageString.includes("Access Token has expired")) {
@@ -1192,11 +1195,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 
 	const handleDeleteChat = (chatId) => {
 		//Show Message to user, telling them the chat was deleted
-		setPopupMessage("Chat/Conversation Deleted");
-		setPopupType("success");
-		setShowPopup(true);
-		setTimeout(() => setShowPopup(false), 3000);
-
+		triggerInfoErrorPopupMessage("Chat/Conversation Deleted","success");
 		//logic for handling the current loaded chat
 		if (selectedChatId === chatId) {
 			setAppSessionId(`session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`);
@@ -1246,6 +1245,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		}
 	};
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	useEffect(() => {
 		if (isDragging) {
 			document.addEventListener("mousemove", handleMouseMove);
@@ -1263,7 +1263,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 
 	const getModeObjectFromModelID = (category,selectedModelId) => {
 		let selectedObject = null;
-		if (category === "Bedrock Models") {
+		if (category === "Bedrock Models" || category === "Imported Models" || category === "Bedrock KnowledgeBases") {
 			selectedObject = models.find((item) => item.modelId === selectedModelId);
 			if (!selectedObject) {
 				selectedObject = models.find((item) => item.modelArn === selectedModelId);
@@ -1286,10 +1286,15 @@ const App = memo(({ signOut, user, awsRum }) => {
 					(item) => item.modelArn === selectedModelId,
 				);
 			}
-		} else if (category === "Bedrock Knowledge Bases") {
-			selectedObject = kbModels.find(
-				(item) => item.knowledgeBaseId === selectedModelId,
+		} else if (category === "Imported Models") {
+			selectedObject = importedModels.find(
+				(item) => item.modelId === selectedModelId,
 			);
+			if (!selectedObject) {
+				selectedObject = importedModels.find(
+					(item) => item.modelArn === selectedModelId,
+				);
+			}
 		} else if (category === "Prompt Flows") {
 			selectedObject = promptFlows.find(
 				(item) => item.flowAliasId === selectedModelId,
@@ -1336,7 +1341,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 					models={models}
 					imageModels={imageModels}
 					videoModels={videoModels}
-					kbModels={kbModels}
+					importedModels={importedModels}
 					promptFlows={promptFlows}
 					selectedKbMode={selectedKbMode}
 					onSelectedKbMode={onSelectedKbMode}
@@ -1378,7 +1383,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 							getModeObjectFromModelID={getModeObjectFromModelID}
 							setKBSessionId={setKBSessionId}
 							onSelectedKbMode={onSelectedKbMode}
-							kbModels={kbModels}
 							bedrockKnowledgeBases={bedrockKnowledgeBases}
 							setExpandedCategories={setExpandedCategories}
 							isDisabled={isDisabled}

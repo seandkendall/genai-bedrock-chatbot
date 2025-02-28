@@ -1,11 +1,8 @@
 # AWS Chatbot Application with Bedrock Agents and Claude-3
 <!-- MD formats here: https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax -->
 
-> [!TIP]
-> [Tldr; Click here for the quick deploy guide](#quick-deploy-solution-link)
-
 <details open>
-<summary>Tdlr; Quick Deploy Solution (With CI/CD)</summary>
+<summary>Quick Deploy Solution (With CI/CD)</summary>
 <a name="quick-deploy-solution-link"></a>
 
 # Quick Deploy Guide
@@ -26,7 +23,7 @@ This terminal is already configured to execute commands againt your AWS account
 
 3. Clone the git repository and "Change Directory" into the cloned git repository (commands below)
 ```bash
-git clone https://github.com/seandkendall/genai-bedrock-chatbot.git --depth 1
+git clone https://github.com/seandkendall/genai-bedrock-chatbot.git
 cd genai-bedrock-chatbot
 ```
 4. Finally run the ./deploy-cicd.sh script which will create a CodeBuild project, and automatically deploy the Chatbot
@@ -56,6 +53,12 @@ cd genai-bedrock-chatbot
 ./deploy-cicd.sh -a -d --allowlist @example.com,@example.ca --schedule daily
 ```
 
+**Option 6 (Adding --deepseek flag to deploy deepseek models as custom models):** 
+Deploy from a 'main' branch on each deploy using a domain allow-list, delete old CodeBuild resources first, deploy custom deepseek models (this incurs additional costs, on S3, CodeBuild and Bedrock)
+```bash
+./deploy-cicd.sh -d --allowlist @example.com,@example.ca --schedule daily --deepseek
+```
+
 On any of these options, you can also specify a flag for `--schedule daily` if you would like to redeploy the latest changes daily, otherwise weekly releases will be auto-deployed
 
 
@@ -73,47 +76,32 @@ Your Chatbot URL is the URL value beside 'AWSChatBotURL'
 
 </details>
 
-> [!WARNING]
-> Cloud9 is only available in older AWS accounts. If you do not have access to Cloud9, try deploying this solution locally or with [CI/CD](#quick-deploy-solution)
-> [Learn More About Cloud9](https://aws.amazon.com/blogs/devops/how-to-migrate-from-aws-cloud9-to-aws-ide-toolkits-or-aws-cloudshell/)
-
-<details>
-<summary> Cloud9 Non-CI/CD Deployment (If you still have access) </summary>
-Use [Cloud9](https://aws.amazon.com/pm/cloud9) for a fast start, using any instance size larger than a 'small' size.
- 
-Not all AWS accounts (Speficically new AWS accounts) have access to Cloud9 since the anouncement:
-
-*AWS Cloud9 is no longer available to new customers. Existing customers of AWS Cloud9 can continue to use the service as normal [Learn More](https://aws.amazon.com/blogs/devops/how-to-migrate-from-aws-cloud9-to-aws-ide-toolkits-or-aws-cloudshell/)*
-
-If this is the case for you, please try deploying local, and feel free to reach out to me for guidance.
-
-clone this repo + run setup.sh and deploy.sh: 
-
-```bash
-git clone https://github.com/seandkendall/genai-bedrock-chatbot.git --depth 1
-cd genai-bedrock-chatbot
-./setup.sh
-./deploy.sh
-```
-
-</details>
-
 <details>
 <summary>Local Deploy (Works on Mac + Linux)</summary>
 clone this repo + run setup.sh and deploy.sh: 
 
 ```bash
-git clone https://github.com/seandkendall/genai-bedrock-chatbot.git --depth 1
+git clone https://github.com/seandkendall/genai-bedrock-chatbot.git
 cd genai-bedrock-chatbot
 ./setup.sh
-./deploy.sh
+./deploy.sh --redeploy
+```
+
+Or if you want to also Deploy the DeepSeek imported models:
+```bash
+git clone https://github.com/seandkendall/genai-bedrock-chatbot.git
+cd genai-bedrock-chatbot
+./setup.sh
+./deploy.sh --redeploy --deepseek
 ```
 
 </details>
 
 ### What is this GenAI Serverless ChatBot?
 
-This is a serverless application that provides a chatbot interface using Serverless AWS services and multiple Large Language Models (LLM) provided by Amazon Bedrock such as Anthropic Claude 3 Sonnet, Anthropic Claude 3.5 Sonnet, Anthropic Claude 3 Opus, Amazon Titan models (including Titan Text G1 - Lite, Titan Text G1 - Express, Titan Image Generator G1 and Titan Image Generator G1 v2 for Image generation), Meta Llama models (including but not limited to Llama 2, Llama 3, Llama 3.1 and Llama 3.2 models and model variants), Mistral AI models, Stability AI models (such as SDXL 1.0, SD3 Large 1.0, Stable Image Core 1.0, Stable Image Ultra 1.0). The code was built using the [Converse API](https://aws.amazon.com/about-aws/whats-new/2024/05/amazon-bedrock-new-converse-api/) which allows the Chatbot to automatically work with new LLM (Large Language Models) introduced to Amazon Bedrock. 
+This is a serverless application that provides a chatbot interface using Serverless AWS services and multiple Large Language Models (LLM) provided by Amazon Bedrock such as Anthropic Claude 3 Sonnet, Anthropic Claude 3.5/3.7 Sonnet, Anthropic Claude 3 Opus, Amazon Titan models (including Nova Lite, Nova Micro, Nova Pro, Nova Reel {for video generation}, Nova Canvas {for Image generation}), Meta Llama models (including but not limited to Llama 2, Llama 3, Llama 3.1 and Llama 3.2 models and model variants), Mistral AI models, Stability AI models (such as SDXL 1.0, SD3 Large 1.0, Stable Image Core 1.0, Stable Image Ultra 1.0), Luma AI models such as Luma Ray 2 for video generation. 
+
+The code was built using the [Converse API](https://aws.amazon.com/about-aws/whats-new/2024/05/amazon-bedrock-new-converse-api/) which allows the Chatbot to automatically work with new LLM (Large Language Models) introduced to Amazon Bedrock. 
 
 The application features multiple modes allowing you to interact directly with Large Language Models or integrate your data by creating a Bedrock KnowledgeBase. If you would like more complex functionality, this demo also support Amazon Bedrock Agents allowing you to orchestrate between LLM Knowledge, Bedrock KnowledgeBases and Function calling with integrations to AWS Lambda. 
 
@@ -141,7 +129,6 @@ The application utilizes the following AWS services:
 - **AWS Cognito**: User authentication and management.
 - **AWS Bedrock**: Bedrock Agents, Bedrock KnowledgeBases, Bedrock Prompt Flows and Bedrock Runtime for large language model interactions.
 - **AWS CodeDeploy (Optional)**: Used as CI/CD pipeline to automatically deploy the application without the need for a local environment or Cloud9
-- **AWS Cloud9 (Optional)**: If available in your AWS account, this can be used as a Cloud IDE, preventing the ned to set-up a local Dev environment
 
 ![Architecture diagram](./readme-images/bedrock-chatbot-archietcture.png)
 
@@ -225,7 +212,7 @@ To deploy the application on your local machine, follow these steps:
 1. Clone the repository:
 
    ```
-   git clone https://github.com/seandkendall/genai-bedrock-chatbot --depth 1
+   git clone https://github.com/seandkendall/genai-bedrock-chatbot
    cd genai-bedrock-chatbot
    ```
 
@@ -284,6 +271,20 @@ npm-check -u -g
 ```
 
 [Learn more about npm-check](https://www.npmjs.com/package/npm-check)
+
+## Serverless, CDK & GenAI Patterns
+Here are a list of patterns you will see in this code to help you write your own serverless application on AWS:
+ 
+ 1. Use AWS CDK V2 for python to deploy AWS Lambda functions (both ARM_64 and X86_64) with Layers using the PythonLayerVersion construct
+ 2. Use AWS CDK V2 for python to deploy an AWS Lambda function using a Lambda Container Image, allowing you to package more than 250MB into a single Function. This pattern allows you to increase the function size to 10GB; however, you will no longer be able to see your code inside of the web-IDE
+ 3. Use AWS CDK V2 for python to Create EventBridge Scheduler, one-time schedules as well as recurring schedules
+ 4. Use AWS CDK V2 for python to create Amazon S3 buckets, Cloudfront Distributions (Using S3 and API Gateway as origins), DynamoDB Tables, APIGateway HTTP API's, Cognito User Pools (utilizing a pre-signup function to restrict users to certain domains)
+ 5. Use AWS CDK V2 for python to add custom policies to generated Lambda function Roles
+ 6. Connecting APIGateway HTTP API's and Websocket API's, AWS Lambda Functions, DynamoDB, S3, and Amazon Bedrock (for Generative AI) to build an interactive chatbot flow
+ 7. Automating an Amazon Bedrock custom model import from huggingface (Using DeepSeek)
+ 8. Building Agentic AI flows using Amazon Bedorck Agents
+ 9. Building data-rich generative AI experiences using Amazon Bedrock Knowledgebases
+ 10. Generating Images and Videos using Amazon Bedrock with AI Models such as Amazon Nova Reel, Amazon Nova Canvas, Stability AI - Stable Diffusion 3.5, and Luma AI Ray V2
 
 ## Useful Links
  - Bedrock Converse API Capabilities per model: [https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)

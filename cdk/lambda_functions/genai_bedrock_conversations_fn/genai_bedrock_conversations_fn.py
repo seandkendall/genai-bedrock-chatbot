@@ -25,7 +25,6 @@ s3_client = boto3.client('s3')
 conversation_history_bucket = os.environ['CONVERSATION_HISTORY_BUCKET']
 conversations_table_name = os.environ['CONVERSATIONS_DYNAMODB_TABLE']
 conversations_table = boto3.resource('dynamodb').Table(conversations_table_name)
-attachment_bucket = os.environ['ATTACHMENT_BUCKET']
 image_bucket = os.environ['S3_IMAGE_BUCKET_NAME']
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 usage_table_name = os.environ['DYNAMODB_TABLE_USAGE']

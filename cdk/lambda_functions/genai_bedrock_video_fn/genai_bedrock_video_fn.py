@@ -6,6 +6,7 @@ import copy
 from datetime import datetime, timezone
 import boto3
 from aws_lambda_powertools import Logger, Metrics, Tracer
+from botocore.config import Config
 from chatbot_commons import commons
 from conversations import conversations
 
@@ -13,8 +14,13 @@ logger = Logger(service="BedrockVideo")
 metrics = Metrics()
 tracer = Tracer()
 MAX_IMAGES = 1
-
-bedrock_runtime = boto3.client(service_name="bedrock-runtime")
+config = Config(
+    retries={
+        'total_max_attempts': 20,
+        'mode': 'standard'
+    }
+)
+bedrock_runtime = boto3.client('bedrock-runtime',config=config)
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 s3_client = boto3.client('s3')
 dynamodb = boto3.client('dynamodb')
@@ -23,7 +29,7 @@ cloudfront_domain = os.environ['CLOUDFRONT_DOMAIN']
 conversations_table_name = os.environ['CONVERSATIONS_DYNAMODB_TABLE']
 conversations_table = boto3.resource('dynamodb').Table(conversations_table_name)
 conversation_history_bucket = os.environ['CONVERSATION_HISTORY_BUCKET']
-attachment_bucket = os.environ['ATTACHMENT_BUCKET']
+attachment_bucket_name = os.environ['ATTACHMENT_BUCKET_NAME']
 
 apigateway_management_api = boto3.client('apigatewaymanagementapi', 
                                          endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
@@ -80,7 +86,7 @@ def lambda_handler(event, context):
             return {'statusCode': 400}
         required_image_width = 1280
         required_image_height = 720
-        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, [],required_image_width,required_image_height,bedrock_runtime,image_model_id)
+        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket_name,logger,s3_client, [],required_image_width,required_image_height,bedrock_runtime,image_model_id)
         if error_message and len(error_message) > 1:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'error',

@@ -3,20 +3,26 @@ import os
 import copy
 import re
 import sys
+import time
 import base64
 from datetime import datetime, timezone
+import time
 import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
-from chatbot_commons import commons
-from conversations import conversations
+from botocore.config import Config
+import commons
+import conversations
 #use AWS powertools for logging
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from llm_conversion_functions import (
     process_message_history_converse,
     process_bedrock_converse_response,
-    process_bedrock_converse_response_for_title,
+    process_bedrock_converse_response_for_title
 )
+from transformers import AutoTokenizer
+
+
 logger = Logger(service="BedrockAsync")
 metrics = Metrics()
 tracer = Tracer()
@@ -27,11 +33,12 @@ config_table_name = os.environ.get('DYNAMODB_TABLE_CONFIG')
 config_table = boto3.resource('dynamodb').Table(config_table_name)
 s3_client = boto3.client('s3')
 conversation_history_bucket = os.environ['CONVERSATION_HISTORY_BUCKET']
-attachment_bucket = os.environ['ATTACHMENT_BUCKET']
-image_bucket = os.environ['S3_IMAGE_BUCKET_NAME']
+attachment_bucket_name = os.environ['ATTACHMENT_BUCKET_NAME']
+image_bucket_name = os.environ['S3_IMAGE_BUCKET_NAME']
 WEBSOCKET_API_ENDPOINT = os.environ['WEBSOCKET_API_ENDPOINT']
 conversations_table_name = os.environ['CONVERSATIONS_DYNAMODB_TABLE']
 conversations_table = boto3.resource('dynamodb').Table(conversations_table_name)
+s3_custom_model_import_bucket_name = os.environ['S3_CUSTOM_MODEL_IMPORT_BUCKET_NAME']
 usage_table_name = os.environ['DYNAMODB_TABLE_USAGE']
 region = os.environ['REGION']
 # models that do not support a system prompt (also includes all amazon models)
@@ -41,7 +48,7 @@ SYSTEM_PROMPT_EXCLUDED_MODELS = (
                     'mistral.mistral-7b-instruct-v0:2',
                     'mistral.mixtral-8x7b-instruct-v0:1'
                 )
-
+tokenizer_cache = {}
 # Constants
 MAX_DDB_SIZE = 400 * 1024  # 400KB
 DDB_SIZE_THRESHOLD = 0.8
@@ -50,10 +57,18 @@ S3_KEY_FORMAT = "{prefix}/{session_id}.json"
 MAX_CONTENT_ITEMS = 20
 MAX_IMAGES = 20
 MAX_DOCUMENTS = 5
-ALLOWED_DOCUMENT_TYPES = ['pdf', 'csv', 'doc', 'docx', 'xls', 'xlsx', 'html', 'txt', 'md', 'png','jpeg','gif','webp']
+ALLOWED_DOCUMENT_TYPES = ['plain','pdf', 'csv', 'doc', 'docx', 'xls', 'xlsx', 'html', 'txt', 'md', 'png','jpeg','gif','webp']
 
 # Initialize bedrock_runtime client
-bedrock_runtime = boto3.client(service_name="bedrock-runtime")
+config = Config(
+    retries={
+        'total_max_attempts': 5,
+        'mode': 'standard'
+    }
+)
+bedrock_runtime = boto3.client('bedrock-runtime',config=config)
+bedrock_client = boto3.client('bedrock',config=config)
+
 
 # AWS API Gateway Management API client
 apigateway_management_api = boto3.client('apigatewaymanagementapi', endpoint_url=f"{WEBSOCKET_API_ENDPOINT.replace('wss', 'https')}/ws")
@@ -93,14 +108,14 @@ def process_websocket_message(request_body):
             logger.info(f"WebSocket connection is not open (state: {connection_state})")
             return
     except apigateway_management_api.exceptions.GoneException:
-        logger.error(f"WebSocket connection is closed (connectionId: {connection_id})")
+        logger.warn(f"WebSocket connection is closed (connectionId: {connection_id})")
         return
 
     if message_type == 'clear_conversation':
         # logger.info(f'Action: Clear Conversation {session_id}')
         # Delete the conversation history from DynamoDB
-        commons.delete_s3_attachments_for_session(session_id,attachment_bucket,user_id,None,s3_client, logger)
-        commons.delete_s3_attachments_for_session(session_id,image_bucket,user_id,None,s3_client, logger)
+        commons.delete_s3_attachments_for_session(session_id,attachment_bucket_name,user_id,None,s3_client, logger)
+        commons.delete_s3_attachments_for_session(session_id,image_bucket_name,user_id,None,s3_client, logger)
         commons.delete_s3_attachments_for_session(session_id,conversation_history_bucket,user_id,None,s3_client, logger)
         conversations.delete_conversation_history(dynamodb,conversations_table_name,logger,session_id)
         return
@@ -114,8 +129,12 @@ def process_websocket_message(request_body):
         attachments = request_body.get('attachments', [])
         selected_mode = request_body.get('selected_mode', {})
         selected_model_id = selected_mode.get('modelId','')
+        selected_model_name = selected_mode.get('modelName','')
         selected_model_category = selected_mode.get('category','')
-        model_provider = selected_model_id.split('.')[0]
+        if '.' in selected_model_id:
+            model_provider = selected_model_id.split('.')[0]
+        else:
+            model_provider = selected_mode.get('providerName','')
         # Validate attachments
         if len(attachments) > MAX_CONTENT_ITEMS:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
@@ -139,7 +158,7 @@ def process_websocket_message(request_body):
                 'error': f'Too many documents. Maximum allowed is {MAX_DOCUMENTS}.'
             })
             return {'statusCode': 400}
-        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket,logger,s3_client, ALLOWED_DOCUMENT_TYPES,0,0,bedrock_runtime,selected_model_id)
+        processed_attachments, error_message = commons.process_attachments(attachments,user_id,session_id,attachment_bucket_name,logger,s3_client, ALLOWED_DOCUMENT_TYPES,0,0,bedrock_runtime,selected_model_id)
         if error_message and len(error_message) > 1:
             commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
                 'type': 'error',
@@ -201,12 +220,15 @@ def process_websocket_message(request_body):
                                                         }
                                                 })
             else:
-                converse_content_array.append({'document':{'format': attachment['type'].split('/')[-1],
+                file_type = attachment['type'].split('/')[-1]
+                if file_type == 'plain':
+                    file_type = 'txt'
+                converse_content_array.append({'document':{'format': file_type,
                                                             'name': sanitize_filename(attachment['name']),
                                                             'source': {'bytes': attachment['content']}
                                                             }
                                                 })
-                converse_content_with_s3_pointers.append({'document':{'format': attachment['type'].split('/')[-1],
+                converse_content_with_s3_pointers.append({'document':{'format': file_type,
                                                             'name': sanitize_filename(attachment['name']),
                                                             's3source': {'s3bucket': attachment['s3bucket'], 's3key': attachment['s3key']}
                                                             }
@@ -220,75 +242,88 @@ def process_websocket_message(request_body):
         }
         if model_provider == 'meta':
             bedrock_request['additionalModelRequestFields'] = {'max_gen_len':2048}
-        
-        if bedrock_request:
-            try:
-                tracer.put_annotation(key="Model", value=selected_model_id)
-                system_prompt_array = []
-                if (not chat_title and len(bedrock_request.get('messages')) == 1) or (chat_title.startswith('New Conversation:')):
-                    title_prompt_string = (
-                        f'Generate a Title in under 16 characters, '
-                        f'for a Chatbot conversation Header where the initial user prompt is: "{prompt}". '
-                    )
-                    if len(title_theme) > 0:
-                        title_prompt_string = title_prompt_string + f' Be creative using the following theme: "{title_theme}" '
-                    title_prompt_string = title_prompt_string +  'You MUST answer in RAW JSON format only matching this well defined json format: {"title":"title_value"}'
-                    
-                    title_prompt_request = [{'role': 'user','content': [{'text': title_prompt_string}]}]
-                    try: 
-                        chat_title = get_title_from_message(title_prompt_request, title_gen_model if title_gen_model else selected_model_id, connection_id, message_id)
-                    except Exception:
-                        chat_title = f'New Conversation: {hash(prompt) % 1000000:06x}'
-                new_conversation = bool(not original_existing_history or len(original_existing_history) == 0)
-                timezone_prompt = (
-                    f"The Current Time in UTC is: {message_received_timestamp_utc}. "
-                    f"Use the timezone of {timestamp_local_timezone} when making a reference to time. "
-                    "ALWAYS use the date format of: Month DD, YYYY HH24:mm:ss. "
-                    "ONLY include the time if needed. "
-                    "NEVER reference this date randomly. "
-                    "Use it to support high quality answers when the current date is NEEDED."
+        try:
+            tracer.put_annotation(key="Model", value=selected_model_id)
+            system_prompt_array = []
+            if (not chat_title and len(bedrock_request.get('messages')) == 1) or (chat_title.startswith('New Conversation:')):
+                title_prompt_string = (
+                    f'Generate a Title in under 16 characters, '
+                    f'for a Chatbot conversation Header where the initial user prompt is: "{prompt}". '
                 )
-
-                if system_prompt:
-                    system_prompt = system_prompt + ' ' + timezone_prompt
-                else:
-                    system_prompt = timezone_prompt
+                if len(title_theme) > 0:
+                    title_prompt_string = title_prompt_string + f' Be creative using the following theme: "{title_theme}" '
+                title_prompt_string = title_prompt_string +  'You MUST answer in RAW JSON format only matching this well defined json format: {"title":"title_value"}'
                 
-                if system_prompt and selected_model_id not in SYSTEM_PROMPT_EXCLUDED_MODELS and model_provider != 'amazon':
-                    system_prompt_array.append({'text': system_prompt})
-                    response = bedrock_runtime.converse_stream(messages=bedrock_request.get('messages'),
-                                                        modelId=selected_model_id,
-                                                        system=system_prompt_array,
-                                                        additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{}))
-                    #uncomment for prompt debugging
-                    # commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                    #     'type': 'system_prompt_used',
-                    #     'system_prompt': system_prompt,
-                    #     'session_id':session_id,
-                    # });
-                else:
-                    response = bedrock_runtime.converse_stream(messages=bedrock_request.get('messages'),
+                title_prompt_request = [{'role': 'user','content': [{'text': title_prompt_string}]}]
+                try: 
+                    chat_title = get_title_from_message(title_prompt_request, title_gen_model if title_gen_model else selected_model_id, connection_id, message_id)
+                except Exception:
+                    chat_title = f'New Conversation: {hash(prompt) % 1000000:06x}'
+            new_conversation = bool(not original_existing_history or len(original_existing_history) == 0)
+            timezone_prompt = (
+                f"The Current Time in UTC is: {message_received_timestamp_utc}. "
+                f"Use the timezone of {timestamp_local_timezone} when making a reference to time. "
+                "ALWAYS use the date format of: Month DD, YYYY HH24:mm:ss. "
+                "ONLY include the time if needed. "
+                "NEVER reference this date randomly. "
+                "Use it to support high quality answers when the current date is NEEDED."
+            )
+
+            if system_prompt:
+                system_prompt = system_prompt + ' ' + timezone_prompt
+            else:
+                system_prompt = timezone_prompt
+            
+            if system_prompt and selected_model_id not in SYSTEM_PROMPT_EXCLUDED_MODELS and model_provider != 'amazon' and 'imported-model' not in selected_model_id:
+                system_prompt_array.append({'text': system_prompt})
+                response = bedrock_runtime.converse_stream(messages=bedrock_request.get('messages'),
                                                     modelId=selected_model_id,
-                                                    additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{})) 
-                assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)  
+                                                    system=system_prompt_array,
+                                                    additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{}))
+                #uncomment for prompt debugging
+                # commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                #     'type': 'system_prompt_used',
+                #     'system_prompt': system_prompt,
+                #     'session_id':session_id,
+                # });
+            elif 'imported-model' in selected_model_id:
+                if not os.path.exists(f"/tmp/{selected_model_name.replace('/', '-')}"):
+                    os.makedirs(f"/tmp/{selected_model_name.replace('/', '-')}")
+                tags_response = bedrock_client.list_tags_for_resource(resourceARN=selected_model_id)
+                model_identifier = [tag['value'] for tag in tags_response['tags'] if tag['key'] == 'modelIdentifier'][0]
+                tokenizer = get_tokenizer(model_identifier)
+                messages = convert_message_format(message_content)
+                assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = auto_generate(connection_id,session_id,tokenizer,selected_model_id,selected_model_name,messages, temperature=0.7, max_tokens=4096, top_p=0.9)
                 store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id,chat_title,new_conversation,selected_model_category, message_stop_reason)
-            except Exception as e:
-                if 'ThrottlingException' not in str(e):
-                    logger.exception(e)
-                logger.warn(f"Error calling bedrock model (912): {str(e)}")
-                if 'have access to the model with the specified model ID.' in str(e):
-                    model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
-                    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                        'type': 'error',
-                        'error': f'You have not enabled the selected model. Please visit the following link to request model access: [{model_access_url}]({model_access_url})'
-                    })
-                else:
-                    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
-                        'type': 'error',
-                        'error': f'An Error has occurred, please try again: {str(e)}'
-                    })
-        else:
-            logger.warn('No bedrock request')
+            else: 
+                response = bedrock_runtime.converse_stream(messages=bedrock_request.get('messages'),
+                                                modelId=selected_model_id,
+                                                additionalModelRequestFields=bedrock_request.get('additionalModelRequestFields',{})) 
+            if 'imported-model' not in selected_model_id:
+                assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason = process_bedrock_converse_response(apigateway_management_api,response,selected_model_id,connection_id,converse_content_with_s3_pointers,new_conversation,session_id)
+                store_conversation_history_converse(session_id,selected_model_id, original_existing_history,converse_content_with_s3_pointers, prompt, assistant_response, user_id, input_tokens, output_tokens, message_end_timestamp_utc, message_received_timestamp_utc, message_id,chat_title,new_conversation,selected_model_category, message_stop_reason)
+        except Exception as e:
+            if 'ResourceNotFoundException' in str(e):
+                logger.error(f"Imported Model not found: {selected_model_name} - {selected_model_id}")
+                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                    'type': 'error',
+                    'error': f'Imported Model: {selected_model_name} Not Found. Please re-scan models.'
+                })
+                return {'statusCode': 400}
+            if 'ThrottlingException' not in str(e):
+                logger.exception(e)
+            logger.warn(f"Error calling bedrock model (912): {str(e)}")
+            if 'have access to the model with the specified model ID.' in str(e):
+                model_access_url = f'https://{region}.console.aws.amazon.com/bedrock/home?region={region}#/modelaccess'
+                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                    'type': 'error',
+                    'error': f'You have not enabled the selected model. Please visit the following link to request model access: [{model_access_url}]({model_access_url})'
+                })
+            else:
+                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                    'type': 'error',
+                    'error': f'An Error has occurred, please try again: {str(e)}'
+                })
             
             
 @tracer.capture_method
@@ -304,10 +339,7 @@ def get_title_from_message(messages: list, selected_model_id: str,connection_id:
         'title': chat_title['title']
     })
     return chat_title['title']
-
     
-
-              
 @tracer.capture_method
 def download_s3_content(item, content_type):
     """
@@ -533,3 +565,175 @@ def convert_video_s3_source_to_bedrock_format(input_json):
     }
 
     return output_dict
+
+def generate(connection_id,result_length,buffer,char_count,session_id,tokenizer,selected_model_id,selected_model_name,messages, temperature=0.3, max_tokens=4096, top_p=0.9, continuation=False, max_retries=10):
+    """
+    Generate response using the model with proper tokenization and retry mechanism
+    """
+    prompt = tokenizer.apply_chat_template(messages, tokenize=False,
+                                         add_generation_prompt=not continuation)
+    result = ''
+    message_stop_reason = ''
+    current_input_tokens = 0
+    current_output_tokens = 0
+    message_end_timestamp_utc = None
+    
+    attempt = 0
+    while attempt < max_retries:
+        try:
+            response = bedrock_runtime.invoke_model_with_response_stream(
+                modelId=selected_model_id,
+                body=json.dumps({
+                    'prompt': prompt,
+                    'temperature': temperature,
+                    'max_gen_len': max_tokens,
+                    'top_p': top_p
+                }),
+                accept='application/json',
+                contentType='application/json'
+            )
+            event_stream = response['body']
+            counter = 0
+            for event in event_stream:
+                if 'chunk' in event:
+                    data = event['chunk']['bytes']
+                    event_json = json.loads(data.decode('utf8'))
+                    message_stop_reason = event_json['stop_reason']
+                    if event_json['prompt_token_count'] is not None:
+                        current_input_tokens += event_json['prompt_token_count']
+                    if event_json['generation_token_count'] is not None:
+                        current_output_tokens += event_json['generation_token_count']
+                    if message_stop_reason is not None and len(message_stop_reason) > 2:
+                        result += event_json['generation']
+                        message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
+                        needs_code_end = False
+                        if result.count('```') % 2 != 0:
+                            needs_code_end = True
+                        # Send any remaining buffered messages
+                        if buffer:
+                            combined_text = ''.join(buffer)
+                            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                                    'type': 'content_block_delta',
+                                    'message': {"model": selected_model_name},
+                                    'delta': {'text': combined_text},
+                                    'message_id': counter,
+                                    'session_id': session_id,
+                                })
+                            buffer.clear()
+                            char_count = 0
+                        commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                            'type': 'message_stop',
+                            'session_id': session_id,
+                            'message_counter': counter,
+                            'message_stop_reason': message_stop_reason,
+                            'needs_code_end': needs_code_end,
+                            'new_conversation': True,
+                            'timestamp': message_end_timestamp_utc,
+                            'amazon_bedrock_invocation_metrics': {
+                                'inputTokenCount': current_input_tokens,
+                                'outputTokenCount': current_output_tokens
+                            },
+                        })
+                    else:
+                        if (result_length + len(result) <= 1000):
+                            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                                'type': 'message_start' if (result_length + len(result) == 0) else 'content_block_delta',
+                                'message': {"model": selected_model_name},
+                                'delta': {'text': event_json['generation'] },
+                                'message_id': counter,
+                                'session_id': session_id,
+                                })
+                        else:
+                            buffer.append(event_json['generation'])
+                            char_count += len(event_json['generation'])
+                            # Check if the accumulated buffer exceeds or equals 300 characters
+                            if char_count >= 300:
+                                combined_text = ''.join(buffer)
+                                commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                                    'type': 'content_block_delta',
+                                    'message': {"model": selected_model_name},
+                                    'delta': {'text': combined_text},
+                                    'message_id': counter,
+                                    'session_id': session_id,
+                                })
+                                # Clear the buffer and reset character count
+                                buffer.clear()
+                                char_count = 0
+                            
+                    counter += 1
+                    result += event_json['generation']
+            json_result = {"generation":result, "stop_reason":message_stop_reason}
+            return json_result, current_input_tokens, current_output_tokens,message_end_timestamp_utc, message_stop_reason, len(result)
+            
+        except bedrock_runtime.exceptions.ModelNotReadyException as e:
+            logger.warning(f"Model \"{selected_model_id}\" not ready, retrying: {e}")
+            commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+                'type': 'model_not_ready',
+                'session_id':session_id,
+                'message': f'Custom Model "{selected_model_name}" is starting. Attempt {attempt + 1}...'
+            })
+            attempt += 1
+            if attempt < max_retries:
+                time.sleep(30)
+        except Exception as e:
+            logger.exception(e)
+            logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+            attempt += 1
+            if attempt < max_retries:
+                time.sleep(30)
+    commons.send_websocket_message(logger, apigateway_management_api, connection_id, {
+        'type': 'error',
+        'error': f'Failed to get response after maximum retries. \n\nCustom Model "{selected_model_name}"'
+    })
+    raise Exception("Failed to get response after maximum retries")
+
+def auto_generate(connection_id,session_id,tokenizer,selected_model_id,selected_model_name,messages, **kwargs):
+    """
+    Handle longer responses that exceed token limit
+    """
+    assistant_response = ''
+    buffer = []
+    char_count = 0
+    result_length = 0
+    iterations = 0
+    json_result, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason, result_length  = generate(connection_id,result_length,buffer,char_count,session_id,tokenizer,selected_model_id,selected_model_name,messages, **kwargs)
+    while json_result["stop_reason"] == "length":
+        iterations += 1
+        logger.info(f"Response was truncated. Iteration: {iterations}...")
+        assistant_response += json_result["generation"]
+        updated_messages_array = messages + [{'role': 'assistant', 'content': assistant_response},{'role': 'user', 'content': 'Previous response was truncated. Continue from where you left off.'}]
+        json_result,temp_input_tokens, temp_output_tokens, message_end_timestamp_utc, message_stop_reason, temp_result_length = generate(connection_id,result_length,buffer,char_count,session_id,tokenizer,selected_model_id,selected_model_name,updated_messages_array, **kwargs, continuation=False)
+        result_length += temp_result_length
+        input_tokens += temp_input_tokens
+        output_tokens += temp_output_tokens
+
+    assistant_response += json_result["generation"]
+    answer = assistant_response.split("</think>")[-1]
+    think = assistant_response.split("</think>")[0].split("<think>")[-1]
+    json_result = {**json_result, "generation": assistant_response, "answer": answer, "think": think}
+    return assistant_response, input_tokens, output_tokens, message_end_timestamp_utc, message_stop_reason
+       
+def convert_message_format(message_input):
+    # Initialize an empty list to store the converted messages
+    converted_messages = []
+
+    # Iterate through each item in the input list
+    for item in message_input:
+        # Check if 'content' key exists and is a list
+        if 'content' in item and isinstance(item['content'], list):
+            # Iterate through each content item
+            for content_item in item['content']:
+                # Check if 'text' key exists
+                if 'text' in content_item:
+                    # Append the text content to the converted messages
+                    converted_messages.append({'role': item['role'], 'content': content_item['text']})
+
+    return converted_messages 
+
+def get_tokenizer(selected_model_name):
+    if selected_model_name in tokenizer_cache:
+        return tokenizer_cache[selected_model_name]
+    else:
+        new_tokenizer = AutoTokenizer.from_pretrained(selected_model_name, cache_dir=f"/tmp/{selected_model_name.replace('/', '-')}")
+        tokenizer_cache[selected_model_name] = new_tokenizer
+        return new_tokenizer

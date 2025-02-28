@@ -10,6 +10,7 @@ display_help() {
     echo "  -a, --app APP              Specify the app name"
     echo "  -c, --context CONTEXT      Specify the context"
     echo "  --debug                    Enable debug mode"
+    echo "  --deepseek                 Deploy DeepSeek as a Custom Model Import in Bedrock"
     echo "  --profile PROFILE          Specify the AWS profile"
     echo "  -t, --tags TAGS            Specify tags"
     echo "  -f, --force                Force deployment"
@@ -152,6 +153,9 @@ start_docker_macos() {
         echo "Docker Desktop is already running."
     fi
 }
+aws_region=$(aws configure get region)
+aws_account_id=$(aws sts get-caller-identity --query Account --output text)
+application_name="GenAIBedrockChatbot-$aws_region"
 # Get the current git repository URL
 repo_url=$(git config --get remote.origin.url)
 # Get the latest commit hash
@@ -237,6 +241,7 @@ while [[ $# -gt 0 ]]; do
         -a|--app) app_flag="--app $2"; shift 2;;
         -c|--context) context_flag="--context $2"; shift 2;;
         --debug) debug_flag="--debug"; shift;;
+        --deepseek) deepseek_flag="y"; shift;;
         --profile) profile_flag="--profile $2"; shift 2;;
         -t|--tags) tags_flag="--tags $2"; shift 2;;
         -f|--force) force_flag="--force"; shift;;
@@ -276,6 +281,18 @@ fi
 # Restore the positional arguments
 set -- "${POSITIONAL_ARGS[@]}"
 deployExample=${deployExample:-'n'}
+deepseek_flag=${deepseek_flag:-'n'}
+
+projects=$(aws codebuild list-projects \
+  --query "projects[?starts_with(@, 'GenAIChatBotCustomModel')]" \
+  --output json)
+
+# Check if any projects are found
+if [[ $(echo "$projects" | jq 'length') -gt 0 ]]; then
+  # Override the flag if a project is found
+  deepseek_flag='y'
+fi
+
 
 # Check if AWS CDK is installed
 if ! command -v cdk &> /dev/null
@@ -408,8 +425,63 @@ if [ ! -d "./static-website-source" ]; then
     touch ./static-website-source/placeholder.txt
 fi
 
+#Move shared libs into Lambda Container Image Directories
+cp ./lambda_functions/commons_layer/python/chatbot_commons/commons.py ./lambda_functions/genai_bedrock_async_fn/commons.py
+cp ./lambda_functions/conversations_layer/python/conversations/conversations.py ./lambda_functions/genai_bedrock_async_fn/conversations.py
+
 # Install Python dependencies
 python3 -m pip install -r requirements.txt
+
+#WORKAROUND FOR CDK BOOTSTRAP NOT CREATING AN ECR REPOSITORY#
+stack_output=$(aws cloudformation describe-stacks --stack-name CDKToolkit)
+image_repository_name=$(echo "$stack_output" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="ImageRepositoryName") | .OutputValue')
+if [ -n "$image_repository_name" ]; then
+    echo "Found ImageRepositoryName: $image_repository_name"
+
+    policy_document='{
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "LambdaECRImageRetrievalPolicy",
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "lambda.amazonaws.com"
+          },
+          "Action": [
+            "ecr:BatchGetImage",
+            "ecr:GetDownloadUrlForLayer"
+          ],
+          "Condition": {
+            "StringLike": {
+              "aws:sourceArn": "arn:aws:lambda:'$aws_region':'$aws_account_id':function:*"
+            }
+          }
+        }
+      ]
+    }'
+    
+    # Check if the repository exists
+    if ! aws ecr describe-repositories --repository-names "$image_repository_name" 2>/dev/null; then
+        echo "Repository does not exist. Creating repository with immutable tags, AES256 encryption, and manual scanning..."
+        
+        # Create the repository with immutable tags, AES256 encryption, and manual scanning
+        aws ecr create-repository \
+            --repository-name "$image_repository_name" \
+            --image-tag-mutability "IMMUTABLE" \
+            --encryption-configuration "encryptionType=AES256" \
+            --image-scanning-configuration "scanOnPush=false"
+        aws ecr set-repository-policy \
+            --repository-name "$image_repository_name" \
+            --policy-text "$policy_document"
+            
+        echo "Repository created successfully."
+    else
+        echo "Repository already exists."
+    fi
+else
+    echo "ImageRepositoryName not found in stack output"
+fi
+#END WORKAROUND FOR CDK BOOTSTRAP NOT CREATING AN ECR REPOSITORY#
 
 # Check if CDK bootstrap has been completed
 bootstrap_ref_file="bootstrap.ref"
@@ -420,7 +492,7 @@ else
     if [ -n "$run_bootstrap" ]; then
         # If --headless flag is used, run cdk bootstrap
         echo "Running CDK bootstrap..."
-        cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context allowlistDomain="$allowListDomain"
+        cdk bootstrap --all --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context allowlistDomain="$allowListDomain"
         if [ $? -eq 0 ]; then
             echo "CDK bootstrap completed successfully."
         else
@@ -432,7 +504,7 @@ else
         case "$run_bootstrap" in
             [yY][eE][sS]|[yY])
                 echo "Running CDK bootstrap..."
-                cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context allowlistDomain="$allowListDomain"
+                cdk bootstrap --all --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context allowlistDomain="$allowListDomain"
                 if [ $? -eq 0 ]; then
                     echo "CDK bootstrap completed successfully."
                 else
@@ -448,12 +520,40 @@ else
 fi
 touch "$bootstrap_ref_file"
 
-# Deploy the CDK app
-cdk deploy --outputs-file outputs.json --context deployExample="$deployExample" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
-if [ $? -ne 0 ]; then
-    echo "Error: CDK deployment failed. Exiting script."
-    exit 1
+# List bedrock imported models
+imported_models=""
+output=$(aws bedrock list-imported-models 2>&1)
+
+if [ $? -eq 0 ]; then
+    if echo "$output" | jq -e '.modelSummaries' >/dev/null 2>&1; then
+        imported_models=$(echo "$output" | jq -r '.modelSummaries[].modelName' | paste -sd "," -)
+    fi
 fi
+
+aws_application=""
+
+loop_count=0
+while [ -z "$aws_application" ] && [ $loop_count -lt 2 ]; do
+    if aws_application_output=$(aws servicecatalog-appregistry get-application --application "$application_name" 2>&1); then
+        aws_application=$(echo "$aws_application_output" | jq -r '.applicationTag.awsApplication')
+    else
+        if [ $loop_count -eq 1 ]; then
+            break
+        fi
+        aws_application=""
+    fi
+    # Deploy the CDK app
+    cdk deploy --outputs-file outputs.json --context imported_models="$imported_models" --context aws_application="$aws_application" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag --all
+    if [ $? -ne 0 ]; then
+        echo "Error: CDK deployment failed. Exiting script."
+        exit 1
+    fi    
+    loop_count=$((loop_count + 1))
+done
+
+# Remove shared lib files from Docker container image directory
+rm ./lambda_functions/genai_bedrock_async_fn/commons.py
+rm ./lambda_functions/genai_bedrock_async_fn/conversations.py
 
 #### START BUILDING REACT APP ####
 # Check if outputs.json exists

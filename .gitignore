@@ -25,6 +25,8 @@ cdk/.venv
 cdk/.env
 cdk/*.egg-info
 cdk/static-website-source/*
+cdk/lambda_functions/genai_bedrock_async_fn/commons.py
+cdk lambda_functions/genai_bedrock_async_fn/conversations.py
 
 cdk/cdk/*.swp
 cdk/cdk/package-lock.json

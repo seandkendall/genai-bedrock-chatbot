@@ -6,7 +6,7 @@ import os
 import boto3
 from time import time
 from collections import deque
-from chatbot_commons import commons
+import commons
 from datetime import datetime, timezone
 from aws_lambda_powertools import Logger
 logger = Logger(service="BedrockAsyncLLMFunctions")
@@ -28,7 +28,6 @@ def process_message_history_converse(existing_history):
 
     return normalized_history
 
-
 def process_bedrock_converse_response(apigateway_management_api, response, selected_model_id, connection_id, converse_content_with_s3_pointers, new_conversation, session_id):
     """Function to process a bedrock response and send the messages back to the websocket for converse API"""
     result_text = ""
@@ -40,8 +39,8 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
     stream = response.get('stream')
     
     if stream:
-        buffer = []  # Buffer to accumulate messages
-        char_count = 0  # Tracks the total number of characters in the buffer
+        buffer = []
+        char_count = 0
 
         for event in stream:
             if 'contentBlockDelta' in event:
@@ -105,7 +104,7 @@ def process_bedrock_converse_response(apigateway_management_api, response, selec
                 'message_counter': counter
             })
             buffer.clear()
-            char_count = 0
+        
         
         logger.info(f"TokenCounts (Converse): {str(current_input_tokens)}/{str(current_output_tokens)}")
         # Send the message_stop event to the WebSocket client
