@@ -933,7 +933,7 @@ class ChatbotWebsiteStack(Stack):
         )
         identity_pool = IdentityPool(
             self,
-            "ChatBotRUMIdtyPool",
+            "ChatBotRUMIdPool",
             allow_unauthenticated_identities=True,
             unauthenticated_role=guest_role,
         )
