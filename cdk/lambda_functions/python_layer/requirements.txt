@@ -1,5 +1,5 @@
 # https://pypi.org/project/boto3/
-boto3>=1.37.1
+boto3>=1.37.4
 PyJWT
 django
 pytz

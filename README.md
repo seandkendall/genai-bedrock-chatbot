@@ -26,7 +26,7 @@ This terminal is already configured to execute commands againt your AWS account
 
 3. Clone the git repository and "Change Directory" into the cloned git repository (commands below)
 ```bash
-git clone https://github.com/seandkendall/genai-bedrock-chatbot.git --depth 1
+git clone https://github.com/seandkendall/genai-bedrock-chatbot.git
 cd genai-bedrock-chatbot
 ```
 4. Finally run the ./deploy-cicd.sh script which will create a CodeBuild project, and automatically deploy the Chatbot
@@ -96,7 +96,7 @@ If this is the case for you, please try deploying local, and feel free to reach 
 clone this repo + run setup.sh and deploy.sh: 
 
 ```bash
-git clone https://github.com/seandkendall/genai-bedrock-chatbot.git --depth 1
+git clone https://github.com/seandkendall/genai-bedrock-chatbot.git
 cd genai-bedrock-chatbot
 ./setup.sh
 ./deploy.sh
@@ -109,7 +109,7 @@ cd genai-bedrock-chatbot
 clone this repo + run setup.sh and deploy.sh: 
 
 ```bash
-git clone https://github.com/seandkendall/genai-bedrock-chatbot.git --depth 1
+git clone https://github.com/seandkendall/genai-bedrock-chatbot.git
 cd genai-bedrock-chatbot
 ./setup.sh
 ./deploy.sh
@@ -231,7 +231,7 @@ To deploy the application on your local machine, follow these steps:
 1. Clone the repository:
 
    ```
-   git clone https://github.com/seandkendall/genai-bedrock-chatbot --depth 1
+   git clone https://github.com/seandkendall/genai-bedrock-chatbot
    cd genai-bedrock-chatbot
    ```
 

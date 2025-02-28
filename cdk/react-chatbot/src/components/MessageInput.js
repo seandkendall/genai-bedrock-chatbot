@@ -201,7 +201,13 @@ const MessageInput = forwardRef(
 					}
 
 					try {
-						newAttachments.push(file);
+						if (file.name === "image.jpg") {
+							const timestamp = Date.now();
+							const newFileName = `image-${timestamp}-${newAttachments.length}.jpg`;
+							newAttachments.push(new File([file], newFileName, {type: file.type,}));
+						}else{
+							newAttachments.push(file);
+						}
 					} catch (error) {
 						console.error("Error processing image:", error);
 						alert(`Error processing image: ${file.name}`);

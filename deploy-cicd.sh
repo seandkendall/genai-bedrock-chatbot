@@ -63,11 +63,11 @@ create_eventbridge_rule() {
 # Function to delete existing resources
 delete_resources() {
     echo "Deleting existing resources..."
-    aws events remove-targets --rule "$CODEBUILD_PROJECT_NAME-trigger" --ids "1"
-    aws events delete-rule --name "$CODEBUILD_PROJECT_NAME-trigger"
-    aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 
-    aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-base-policy"
-    aws iam delete-role --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role"
+    aws events remove-targets --rule "$CODEBUILD_PROJECT_NAME-trigger" --ids "1" 2>/dev/null || true
+    aws events delete-rule --name "$CODEBUILD_PROJECT_NAME-trigger" 2>/dev/null || true
+    aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 2>/dev/null || true
+    aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-base-policy" 2>/dev/null || true
+    aws iam delete-role --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" 2>/dev/null || true
 }
 
 # Check for delete flag

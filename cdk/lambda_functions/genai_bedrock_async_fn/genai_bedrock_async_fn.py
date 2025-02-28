@@ -57,7 +57,7 @@ S3_KEY_FORMAT = "{prefix}/{session_id}.json"
 MAX_CONTENT_ITEMS = 20
 MAX_IMAGES = 20
 MAX_DOCUMENTS = 5
-ALLOWED_DOCUMENT_TYPES = ['pdf', 'csv', 'doc', 'docx', 'xls', 'xlsx', 'html', 'txt', 'md', 'png','jpeg','gif','webp']
+ALLOWED_DOCUMENT_TYPES = ['plain','pdf', 'csv', 'doc', 'docx', 'xls', 'xlsx', 'html', 'txt', 'md', 'png','jpeg','gif','webp']
 
 # Initialize bedrock_runtime client
 config = Config(
@@ -220,12 +220,15 @@ def process_websocket_message(request_body):
                                                         }
                                                 })
             else:
-                converse_content_array.append({'document':{'format': attachment['type'].split('/')[-1],
+                file_type = attachment['type'].split('/')[-1]
+                if file_type == 'plain':
+                    file_type = 'txt'
+                converse_content_array.append({'document':{'format': file_type,
                                                             'name': sanitize_filename(attachment['name']),
                                                             'source': {'bytes': attachment['content']}
                                                             }
                                                 })
-                converse_content_with_s3_pointers.append({'document':{'format': attachment['type'].split('/')[-1],
+                converse_content_with_s3_pointers.append({'document':{'format': file_type,
                                                             'name': sanitize_filename(attachment['name']),
                                                             's3source': {'s3bucket': attachment['s3bucket'], 's3key': attachment['s3key']}
                                                             }

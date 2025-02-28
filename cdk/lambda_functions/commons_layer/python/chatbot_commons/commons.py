@@ -511,8 +511,6 @@ def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,
             if pil_available:
                 file_content, file_was_modified = resize_image_if_needed(file_content, required_image_width, required_image_height,bedrock_runtime,logger,image_model_id)
                 file_content = convert_image_to_png(file_content, logger)
-                # Change file_key extention from .* to .png
-                file_key = f"{file_key.rsplit('.', 1)[0].replace(' ', '_')}.png"
                 tracer.put_annotation(key="FileName", value=file_key)
                 attachment['name'] = f"{attachment['name'].rsplit('.', 1)[0].replace(' ', '_')}.png"
                 attachment['type'] = 'image/png'
@@ -529,6 +527,7 @@ def process_attachments(attachments,user_id,session_id,attachment_bucket,logger,
 @tracer.capture_method(capture_response=False)
 def resize_image_if_needed(file_content, required_image_width, required_image_height, bedrock_runtime, logger,image_model_id):
     """Max image Size: 3.7MB"""
+    logger.info('Resizing Image')
     MAX_SIZE_BYTES = 3700000
     image = Image.open(io.BytesIO(file_content))
     original_format = image.format
