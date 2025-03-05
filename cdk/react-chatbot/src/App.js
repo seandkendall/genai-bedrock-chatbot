@@ -41,9 +41,12 @@ async function getCurrentSession() {
 Amplify.configure(amplifyConfig);
 
 const App = memo(({ signOut, user, awsRum }) => {
-	const [region, setRegion] = useState('');
+	const [partialMessages, setPartialMessages] = useState([]);
+	const [region, setRegion] = useState("");
 	const [websocketConnectionId, setWebsocketConnectionId] = useState(null);
-	const [reactThemeMode, setReactThemeMode] = useState(localStorage.getItem("react_theme_mode") || 'light');
+	const [reactThemeMode, setReactThemeMode] = useState(
+		localStorage.getItem("react_theme_mode") || "light",
+	);
 	const [firstLoad, setFirstLoad] = useState(true);
 	const [messages, setMessages] = useState([]);
 	const [uploadedFileNames, setUploadedFileNames] = useState([]);
@@ -53,22 +56,24 @@ const App = memo(({ signOut, user, awsRum }) => {
 			: [],
 	);
 	const [conversationListLoading, setConversationListLoading] = useState(false);
-	const [selectedChatId, setSelectedChatId] = useState(localStorage.getItem("selectedChatId") || "");
+	const [selectedChatId, setSelectedChatId] = useState(
+		localStorage.getItem("selectedChatId") || "",
+	);
 	const [requireConversationLoad, setRequireConversationLoad] = useState(true);
 	const [isDisabled, setIsDisabled] = useState(false);
 	const [selectedMode, setSelectedMode] = useState(() => {
 		const storedValue = localStorage.getItem("selectedMode");
 		if (storedValue) {
-		  try {
-			return JSON.parse(storedValue);
-		  } catch (error) {
-			// If parsing fails, remove the invalid value from localStorage
-			localStorage.removeItem("selectedMode");
-			console.warn("Invalid JSON in localStorage, removed 'selectedMode'");
-		  }
+			try {
+				return JSON.parse(storedValue);
+			} catch (error) {
+				// If parsing fails, remove the invalid value from localStorage
+				localStorage.removeItem("selectedMode");
+				console.warn("Invalid JSON in localStorage, removed 'selectedMode'");
+			}
 		}
 		return ""; // Default value if nothing in localStorage or if parsing fails
-	  });
+	});
 	const [selectedTitleGenerationMode, setSelectedTitleGenerationMode] =
 		useState(null);
 	const [selectedTitleGenerationTheme, setSelectedTitleGenerationTheme] =
@@ -129,7 +134,9 @@ const App = memo(({ signOut, user, awsRum }) => {
 	const [modelsLoaded, setModelsLoaded] = useState(false);
 	const [expandedCategories, setExpandedCategories] = useState({});
 
-	const [appSessionid, setAppSessionId] = useState(localStorage.getItem("selectedChatId") || "");
+	const [appSessionid, setAppSessionId] = useState(
+		localStorage.getItem("selectedChatId") || "",
+	);
 	const [kbSessionId, setKBSessionId] = useState("");
 	const [systemPromptUserOrSystem, setSystemPromptUserOrSystem] =
 		useState("system");
@@ -156,18 +163,21 @@ const App = memo(({ signOut, user, awsRum }) => {
 
 	// Use the useWebSocket hook to manage the WebSocket connection
 	// eslint-disable-next-line
-	const { sendMessage, lastMessage, readyState, getWebSocket } = useWebSocket(websocketUrl, {
-		shouldReconnect: (closeEvent) => true,
-		reconnectAttempts: Number.POSITIVE_INFINITY, // Keep trying to reconnect
-		reconnectInterval: (attemptNumber) =>
-			Math.min(1000 * 2 ** attemptNumber, 30000), // Exponential backoff up to 30 seconds
-	});
+	const { sendMessage, lastMessage, readyState, getWebSocket } = useWebSocket(
+		websocketUrl,
+		{
+			shouldReconnect: (closeEvent) => true,
+			reconnectAttempts: Number.POSITIVE_INFINITY, // Keep trying to reconnect
+			reconnectInterval: (attemptNumber) =>
+				Math.min(1000 * 2 ** attemptNumber, 30000), // Exponential backoff up to 30 seconds
+		},
+	);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	useEffect(() => {
 		if (readyState === WebSocket.OPEN) {
 			sendMessage(JSON.stringify({ type: "ping" }));
 		}
-	  }, [readyState, getWebSocket]);
+	}, [readyState, getWebSocket]);
 
 	useEffect(() => {
 		const interval = setInterval(() => {
@@ -197,7 +207,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 	}, [videoModels]);
 	useEffect(() => {
 		if (importedModels && importedModels.length > 0)
-			localStorage.setItem("local-imported-models", JSON.stringify(importedModels));
+			localStorage.setItem(
+				"local-imported-models",
+				JSON.stringify(importedModels),
+			);
 	}, [importedModels]);
 
 	//persist prompt flows to local storage if changed
@@ -230,9 +243,8 @@ const App = memo(({ signOut, user, awsRum }) => {
 				"load_models,load_prompt_flows,load_knowledge_bases,load_agents",
 			);
 		}
-			
 	}, [websocketConnectionId]);
-	const triggerInfoErrorPopupMessage = (msgText,type) => {
+	const triggerInfoErrorPopupMessage = (msgText, type) => {
 		setPopupMessage(msgText);
 		setPopupType(type);
 		setShowPopup(true);
@@ -303,6 +315,21 @@ const App = memo(({ signOut, user, awsRum }) => {
 		return true;
 	};
 
+	const scrollToBottom = () => {
+		window.scrollTo({
+			top: document.documentElement.scrollHeight,
+			behavior: "smooth",
+		});
+
+		setTimeout(() => {
+			requestAnimationFrame(() => {
+				if (messageInputRef.current) {
+					messageInputRef.current.focus();
+				}
+			});
+		}, 200);
+	};
+
 	const handleModeChange = (newMode, chatSelectedByUser) => {
 		if (!chatSelectedByUser) {
 			if (
@@ -322,9 +349,15 @@ const App = memo(({ signOut, user, awsRum }) => {
 					: "unknown";
 				// if selectedOutputType is null or empty or equal to unknown
 				if (!selectedOutputType || selectedOutputType === "Unknown") {
-					triggerInfoErrorPopupMessage("I have created a new chat for you.","success");
+					triggerInfoErrorPopupMessage(
+						"I have created a new chat for you.",
+						"success",
+					);
 				} else {
-					triggerInfoErrorPopupMessage(`You were currently interacting with a model capable of outputting ${selectedOutputType} and are now switching to an output type of ${newOutputType}. I have created a new chat for you.`,"success");
+					triggerInfoErrorPopupMessage(
+						`You were currently interacting with a model capable of outputting ${selectedOutputType} and are now switching to an output type of ${newOutputType}. I have created a new chat for you.`,
+						"success",
+					);
 				}
 				handleNewChat();
 			}
@@ -345,11 +378,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 			accessToken: `${accessToken}`,
 		};
 		sendMessage(JSON.stringify(data));
-		awsRum.recordEvent('chatbot_websocket_call', {
-			action: 'loadConfigSubaction', 
-			data: data
-		}
-	)
+		awsRum.recordEvent("chatbot_websocket_call", {
+			action: "loadConfigSubaction",
+			data: data,
+		});
 	};
 
 	const triggerModelScan = async () => {
@@ -362,7 +394,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				idToken: `${idToken}`,
 				accessToken: `${accessToken}`,
 			};
-			sendMessageViaRest(data,"/rest/model-scan-request",'triggerModelScan')
+			sendMessageViaRest(data, "/rest/model-scan-request", "triggerModelScan");
 		} catch (error) {
 			console.error("Error refreshing models:", error);
 		}
@@ -389,7 +421,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		sendMessageViaRest(data,"/rest/send-message",'loadConversationList')
+		sendMessageViaRest(data, "/rest/send-message", "loadConversationList");
 	};
 
 	const loadConversationHistory = async (sessId) => {
@@ -405,7 +437,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				idToken: `${idToken}`,
 				accessToken: `${accessToken}`,
 			};
-			sendMessageViaRest(data,"/rest/send-message",'loadConversationHistory')
+			sendMessageViaRest(data, "/rest/send-message", "loadConversationHistory");
 		}
 	};
 
@@ -420,22 +452,39 @@ const App = memo(({ signOut, user, awsRum }) => {
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		sendMessageViaRest(data,"/rest/send-message",'clearConversationHistory')
+		sendMessageViaRest(data, "/rest/send-message", "clearConversationHistory");
 	};
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: only fire this when lastMessage changes
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Not Needed
 	useEffect(() => {
 		if (!lastMessage) return;
 
 		try {
 			const message = JSON.parse(lastMessage.data);
-			const message_temp_cache = []
+			const message_temp_cache = [];
 			if (message.type !== "conversation_history") return;
-
 			const current_chunk = message.current_chunk || 1;
 			const last_message = message.last_message;
-			const messageChunk = convertRuleToHuman(JSON.parse(message.chunk));
-			// iterate through items in messageChunk. for each attribute that contains a message_stop_reason key, run handleMaxTokenMessage(current_message)
+			let messageChunk = JSON.parse(message.chunk);
+			if (messageChunk.msg_partial) {
+				const allMessages = [...partialMessages, messageChunk];
+				if (messageChunk.msg_partial_last_chunk) {
+					let newMessageChunk;
+					for (const currentPartialMessage of allMessages) {
+						if (!newMessageChunk) {
+							newMessageChunk = currentPartialMessage;
+						} else {
+							newMessageChunk.content = `${currentPartialMessage.content}${newMessageChunk.content}`;
+						}
+					}
+					messageChunk = newMessageChunk;
+				} else {
+					setPartialMessages(allMessages);
+					return;
+				}
+			}
+			if (partialMessages.length > 0) setPartialMessages([]);
+			messageChunk = convertRoleToHuman(messageChunk);
 			for (const item of messageChunk) {
 				if (item.message_stop_reason) {
 					handleMaxTokenMessage(item);
@@ -460,7 +509,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 				setTimeout(scrollToBottom, 0);
 				// if appSessionid is not null and does not contain the word 'undefined'
 				if (appSessionid && !appSessionid.includes("undefined")) {
-					localStorage.setItem(`chatHistory-${appSessionid}`,JSON.stringify(message_temp_cache),);
+					localStorage.setItem(
+						`chatHistory-${appSessionid}`,
+						JSON.stringify(message_temp_cache),
+					);
 				}
 				message_temp_cache.length = 0;
 			}
@@ -484,13 +536,22 @@ const App = memo(({ signOut, user, awsRum }) => {
 			)
 		) {
 			popupMsg = errormessage;
-			triggerInfoErrorPopupMessage(popupMsg,"error");
-		} else if (errormessage.includes("throttlingException") || errormessage.includes("ThrottlingException")) {
-			triggerInfoErrorPopupMessage("Sorry, we encountered a throttling issue. Please try resubmitting your message.","error");
+			triggerInfoErrorPopupMessage(popupMsg, "error");
+		} else if (
+			errormessage.includes("throttlingException") ||
+			errormessage.includes("ThrottlingException")
+		) {
+			triggerInfoErrorPopupMessage(
+				"Sorry, we encountered a throttling issue. Please try resubmitting your message.",
+				"error",
+			);
 		} else if (errormessage.includes("AUP or AWS Responsible AI")) {
-			triggerInfoErrorPopupMessage("This request has been blocked by our content filters because the generated image(s) may conflict with our AUP or AWS Responsible AI Policy. Please try again.","error");
-		}else{
-			triggerInfoErrorPopupMessage(popupMsg,"error");
+			triggerInfoErrorPopupMessage(
+				"This request has been blocked by our content filters because the generated image(s) may conflict with our AUP or AWS Responsible AI Policy. Please try again.",
+				"error",
+			);
+		} else {
+			triggerInfoErrorPopupMessage(popupMsg, "error");
 		}
 
 		setIsDisabled(false);
@@ -507,13 +568,12 @@ const App = memo(({ signOut, user, awsRum }) => {
 		});
 	}
 
-	const sendMessageViaRest = async (data,endpoint,action) => {
-		awsRum.recordEvent('chatbot_rest_call', {
-				action: action, 
-				endpoint: endpoint, 
-				data: data
-			}
-		)
+	const sendMessageViaRest = async (data, endpoint, action) => {
+		awsRum.recordEvent("chatbot_rest_call", {
+			action: action,
+			endpoint: endpoint,
+			data: data,
+		});
 		try {
 			const { accessToken, idToken } = await getCurrentSession();
 			await axios.post(
@@ -538,7 +598,12 @@ const App = memo(({ signOut, user, awsRum }) => {
 		}
 	};
 
-	const onSend = async (message, attachments, retryPreviousMessage,truncated) => {
+	const onSend = async (
+		message,
+		attachments,
+		retryPreviousMessage,
+		truncated,
+	) => {
 		// if appsessionid is null then setappsessionid
 		let newAppSessionid;
 		if (!appSessionid) {
@@ -560,12 +625,18 @@ const App = memo(({ signOut, user, awsRum }) => {
 		const randomMessageId = Math.random().toString(36).substring(2, 10);
 
 		if (selectedMode.category === "Bedrock Image Models") {
-			generateImage(sanitizedMessage, randomMessageId,attachments);
+			generateImage(sanitizedMessage, randomMessageId, attachments);
 			return;
 		}
 		if (selectedMode.category === "Bedrock Video Models") {
-			const video_helper_image_model_id = selectedMode?.video_helper_image_model_id
-			generateVideo(sanitizedMessage, randomMessageId,attachments,video_helper_image_model_id);
+			const video_helper_image_model_id =
+				selectedMode?.video_helper_image_model_id;
+			generateVideo(
+				sanitizedMessage,
+				randomMessageId,
+				attachments,
+				video_helper_image_model_id,
+			);
 			return;
 		}
 
@@ -584,7 +655,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
 			timestamp_local_timezone: timezone,
-			session_id: (newAppSessionid ? newAppSessionid : appSessionid),
+			session_id: newAppSessionid ? newAppSessionid : appSessionid,
 			kb_session_id: kbSessionId,
 			selected_mode: selectedMode,
 			titleGenModel: selectedTitleGenerationMode,
@@ -618,11 +689,19 @@ const App = memo(({ signOut, user, awsRum }) => {
 		const reformatted_attachments = reformat_attachments(attachments);
 		let truncated_message = "";
 		if (truncated) {
-			truncated_message = "\n\n* Max message size is 250MB. Your input has been truncated to this size. *"
+			truncated_message =
+				"\n\n* Max message size is 250MB. Your input has been truncated to this size. *";
 		}
 		const messageWithTime = {
 			role: "user",
-			content: [{text: message ? `${message}${truncated_message || ''}` : truncated_message || ''}, ...reformatted_attachments],
+			content: [
+				{
+					text: message
+						? `${message}${truncated_message || ""}`
+						: truncated_message || "",
+				},
+				...reformatted_attachments,
+			],
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
 		};
@@ -639,7 +718,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-		sendMessageViaRest(data,"/rest/send-message",'chatMessage')
+		sendMessageViaRest(data, "/rest/send-message", "chatMessage");
 		setReloadPromptConfig(false);
 	};
 
@@ -651,7 +730,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
 			setAppSessionId(newAppSessionid);
 		}
-				
 
 		const { accessToken, idToken } = await getCurrentSession();
 		const message_timestamp = new Date().toISOString();
@@ -691,10 +769,15 @@ const App = memo(({ signOut, user, awsRum }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-		sendMessageViaRest(data,"/rest/send-message",'generateImageRequest')
+		sendMessageViaRest(data, "/rest/send-message", "generateImageRequest");
 	};
 
-	const generateVideo = async (prompt, randomMessageId,attachments,video_helper_image_model_id) => {
+	const generateVideo = async (
+		prompt,
+		randomMessageId,
+		attachments,
+		video_helper_image_model_id,
+	) => {
 		setIsLoading(true);
 		let newAppSessionid;
 		if (!appSessionid) {
@@ -732,12 +815,14 @@ const App = memo(({ signOut, user, awsRum }) => {
 			),
 		};
 
-
 		const currentTime = new Date();
 		const reformatted_attachments = reformat_attachments(attachments);
 		const messageWithTime = {
 			role: "user",
-			content: [{ text: `Generate a Video of: ${prompt}.` }, ...reformatted_attachments],
+			content: [
+				{ text: `Generate a Video of: ${prompt}.` },
+				...reformatted_attachments,
+			],
 			message_id: randomMessageId,
 			timestamp: currentTime.toISOString(),
 		};
@@ -758,9 +843,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-		sendMessageViaRest(data,"/rest/send-message",'generateVideoRequest')
+		sendMessageViaRest(data, "/rest/send-message", "generateVideoRequest");
 	};
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies:
 	useEffect(() => {
 		if (lastMessage !== null) {
 			const message = JSON.parse(lastMessage.data);
@@ -832,8 +918,13 @@ const App = memo(({ signOut, user, awsRum }) => {
 				if (isRefreshing) {
 					setIsRefreshing(false);
 				}
-				if (message.error && (message.error.includes("throttlingException") || message.error.includes("ThrottlingException"))){
-					message.error = "Oops! Looks like we're experiencing a 'traffic jam' on the Amazon Bedrock superhighway. Our AI is currently doing the digital equivalent of honking its horn and tapping its foot impatiently. \n\r\n\rPlease give it another shot - our AI is eager to chat with you! If this keeps happening, it might be time to sweet-talk your IT team into upgrading our 'digital express lane' by purchasing some fancy 'Provisioned Throughput' from Amazon Bedrock. \n\r\n\rRemember, good things come to those who wait... but faster things come to those with better throughput!"
+				if (
+					message.error &&
+					(message.error.includes("throttlingException") ||
+						message.error.includes("ThrottlingException"))
+				) {
+					message.error =
+						"Oops! Looks like we're experiencing a 'traffic jam' on the Amazon Bedrock superhighway. Our AI is currently doing the digital equivalent of honking its horn and tapping its foot impatiently. \n\r\n\rPlease give it another shot - our AI is eager to chat with you! If this keeps happening, it might be time to sweet-talk your IT team into upgrading our 'digital express lane' by purchasing some fancy 'Provisioned Throughput' from Amazon Bedrock. \n\r\n\rRemember, good things come to those who wait... but faster things come to those with better throughput!";
 				}
 				updateMessagesOnStop(message);
 				handleError(message);
@@ -937,10 +1028,13 @@ const App = memo(({ signOut, user, awsRum }) => {
 						// log current time and connectionId
 						// console.log(`pong received at ${new Date().toISOString()} with connection_id: ${message?.connection_id}`)
 						message.connection_id &&
-								setWebsocketConnectionId(message.connection_id);
+							setWebsocketConnectionId(message.connection_id);
 					} else if (messageString.includes("model_not_ready")) {
-						console.log('Model Not Ready')
-						triggerInfoErrorPopupMessage("Custom Model Starting. Please wait while we retry","success");
+						console.log("Model Not Ready");
+						triggerInfoErrorPopupMessage(
+							"Custom Model Starting. Please wait while we retry",
+							"success",
+						);
 					} else if (messageString.includes("no_conversation_to_load")) {
 						setIsRefreshing(false);
 					} else if (messageString.includes("Access Token has expired")) {
@@ -1002,12 +1096,12 @@ const App = memo(({ signOut, user, awsRum }) => {
 		if (message.message_stop_reason) {
 			let max_token_message;
 			if (message.message_stop_reason === "max_tokens") {
-				const needs_code_end = message.needs_code_end
+				const needs_code_end = message.needs_code_end;
 				if (message?.amazon_bedrock_invocation_metrics?.outputTokenCount) {
 					// if needs_code_end is true, then prepend ``` to max_token_message
 					if (needs_code_end) {
 						max_token_message = `\`\`\`\n\rThe response from this model has reached the maximum size. Max Size: ${message.amazon_bedrock_invocation_metrics.outputTokenCount} Tokens.`;
-					}else{
+					} else {
 						max_token_message = ` The response from this model has reached the maximum size. Max Size: ${message.amazon_bedrock_invocation_metrics.outputTokenCount} Tokens`;
 					}
 				} else {
@@ -1144,7 +1238,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 					);
 					//save conversation to local storage
 					if (appSessionid && !appSessionid.includes("undefined")) {
-						localStorage.setItem(`chatHistory-${appSessionid}`,JSON.stringify(filteredMessages),);
+						localStorage.setItem(
+							`chatHistory-${appSessionid}`,
+							JSON.stringify(filteredMessages),
+						);
 					}
 				}
 			} else {
@@ -1153,21 +1250,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			return updatedMessages;
 		});
 		setTimeout(scrollToBottom, 0);
-	};
-
-	const scrollToBottom = () => {
-		window.scrollTo({
-			top: document.documentElement.scrollHeight,
-			behavior: "smooth",
-		});
-
-		setTimeout(() => {
-			requestAnimationFrame(() => {
-				if (messageInputRef.current) {
-					messageInputRef.current.focus();
-				}
-			});
-		}, 200);
 	};
 
 	const handleOpenSettingsModal = () => {
@@ -1188,19 +1270,21 @@ const App = memo(({ signOut, user, awsRum }) => {
 		setAttachments([]);
 		setUploadedFileNames([]);
 		setSelectedChatId("");
-		localStorage.removeItem("selectedChatId")
-		const newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`
+		localStorage.removeItem("selectedChatId");
+		const newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
 		setAppSessionId(newAppSessionid);
 	};
 
 	const handleDeleteChat = (chatId) => {
 		//Show Message to user, telling them the chat was deleted
-		triggerInfoErrorPopupMessage("Chat/Conversation Deleted","success");
+		triggerInfoErrorPopupMessage("Chat/Conversation Deleted", "success");
 		//logic for handling the current loaded chat
 		if (selectedChatId === chatId) {
-			setAppSessionId(`session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`);
+			setAppSessionId(
+				`session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
+			);
 			setSelectedChatId("");
-			localStorage.removeItem("selectedChatId")
+			localStorage.removeItem("selectedChatId");
 			setMessages([]);
 			setUploadedFileNames([]);
 			setAttachments([]);
@@ -1217,9 +1301,11 @@ const App = memo(({ signOut, user, awsRum }) => {
 		);
 		localStorage.setItem(
 			"load_conversation_list",
-			JSON.stringify(conversationList.filter(
-				(conversation) => conversation.session_id !== chatId,
-			)),
+			JSON.stringify(
+				conversationList.filter(
+					(conversation) => conversation.session_id !== chatId,
+				),
+			),
 		);
 	};
 
@@ -1261,12 +1347,18 @@ const App = memo(({ signOut, user, awsRum }) => {
 	}, [isDragging]);
 	// End of Code Supporting SideBar
 
-	const getModeObjectFromModelID = (category,selectedModelId) => {
+	const getModeObjectFromModelID = (category, selectedModelId) => {
 		let selectedObject = null;
-		if (category === "Bedrock Models" || category === "Imported Models" || category === "Bedrock KnowledgeBases") {
+		if (
+			category === "Bedrock Models" ||
+			category === "Imported Models" ||
+			category === "Bedrock KnowledgeBases"
+		) {
 			selectedObject = models.find((item) => item.modelId === selectedModelId);
 			if (!selectedObject) {
-				selectedObject = models.find((item) => item.modelArn === selectedModelId);
+				selectedObject = models.find(
+					(item) => item.modelArn === selectedModelId,
+				);
 			}
 		} else if (category === "Bedrock Image Models") {
 			selectedObject = imageModels.find(
@@ -1492,13 +1584,22 @@ const App = memo(({ signOut, user, awsRum }) => {
 	);
 });
 
-function convertRuleToHuman(jsonArray) {
+function convertRoleToHuman(input) {
+	// Convert single object to array if needed
+	const jsonArray = Array.isArray(input) ? input : [input];
+
 	return jsonArray.map((item) => {
-		if (item.rule === "user") {
-			return { ...item, rule: "Human" };
+		if (item.role === "user") {
+			return {
+				...item,
+				role: "Human",
+			};
 		}
-		if (item.rule === "assistant") {
-			return { ...item, rule: "Assistant" };
+		if (item.role === "assistant") {
+			return {
+				...item,
+				role: "Assistant",
+			};
 		}
 		return item;
 	});
