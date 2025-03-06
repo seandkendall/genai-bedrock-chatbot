@@ -48,6 +48,7 @@ def lambda_handler(event, context):
                 logger.error("Error 7460: " + str(e))
             else:
                 logger.warn("ThrottlingException: " + str(e))
+
             if "Session with Id" in str(
                 e
             ) and "is not valid. Please check and try again" in str(e):
@@ -141,17 +142,32 @@ def process_websocket_message(request_body, force_null_kb_session_id):
                 "type": "KNOWLEDGE_BASE",
             }
 
-            if not kb_session_id or kb_session_id == "null":
-                response = bedrock_agent_runtime.retrieve_and_generate_stream(
-                    input={"text": prompt},
-                    retrieveAndGenerateConfiguration=retrieveAndGenerateConfigurationData,
-                )
-            else:
-                response = bedrock_agent_runtime.retrieve_and_generate_stream(
-                    input={"text": prompt},
-                    retrieveAndGenerateConfiguration=retrieveAndGenerateConfigurationData,
-                    sessionId=kb_session_id,
-                )
+            response = None
+            loop_counter = 0
+            while not response and loop_counter < 3:
+                loop_counter += 1
+                try:
+                    if not kb_session_id or kb_session_id == "null":
+                        response = bedrock_agent_runtime.retrieve_and_generate_stream(
+                            input={"text": prompt},
+                            retrieveAndGenerateConfiguration=retrieveAndGenerateConfigurationData,
+                        )
+                    else:
+                        response = bedrock_agent_runtime.retrieve_and_generate_stream(
+                            input={"text": prompt},
+                            retrieveAndGenerateConfiguration=retrieveAndGenerateConfigurationData,
+                            sessionId=kb_session_id,
+                        )
+                except Exception as e:
+                    if (
+                        "Knowledge base configurations cannot be modified for an ongoing session"
+                        in str(e)
+                    ):
+                        # reset kb_session_id and loop
+                        kb_session_id = None
+                    else:
+                        logger.exception(e)
+                        logger.error("Error 187464: " + str(e))
 
             needs_load_from_s3, chat_title_loaded, original_existing_history = (
                 conversations.query_existing_history(
@@ -407,19 +423,49 @@ def process_bedrock_knowledgebase_response_stream(
     # Send collected citations
     if citations_list:
         for citation in citations_list:
-            commons.send_websocket_message(
-                logger,
-                apigateway_management_api,
-                connection_id,
-                {
-                    "type": "citation_data",
-                    "message_id": message_id,
-                    "delta": citation,
-                    "kb_session_id": kb_session_id,
-                    "session_id": session_id,
-                    "backend_type": backend_type,
-                },
-            )
+            if len(str(citation)) > 10000:
+                citation_parts = split_string_into_chunks(str(citation))
+                for citation_part in citation_parts:
+                    try:
+                        commons.send_websocket_message(
+                            logger,
+                            apigateway_management_api,
+                            connection_id,
+                            {
+                                "type": "citation_data_part",
+                                "message_id": message_id,
+                                "delta": citation_part,
+                                "last_part": citation_part == citation_parts[-1],
+                                "kb_session_id": kb_session_id,
+                                "session_id": session_id,
+                                "backend_type": backend_type,
+                            },
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "Error sending citation (part) data (not passing error to client)"
+                        )
+                        logger.exception(e)
+            else:
+                try:
+                    commons.send_websocket_message(
+                        logger,
+                        apigateway_management_api,
+                        connection_id,
+                        {
+                            "type": "citation_data",
+                            "message_id": message_id,
+                            "delta": citation,
+                            "kb_session_id": kb_session_id,
+                            "session_id": session_id,
+                            "backend_type": backend_type,
+                        },
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Error sending citation data (not passing error to client)"
+                    )
+                    logger.exception(e)
 
     # Send message stop
     commons.send_websocket_message(
@@ -749,3 +795,14 @@ def store_bedrock_agents_response(
     if selected_agent_alias_id:
         item_value["selected_agent_alias_id"] = {"S": selected_agent_alias_id}
     dynamodb.put_item(TableName=conversations_table_name, Item=item_value)
+
+
+def split_string_into_chunks(input_string, max_chars: int = 10000):
+    if not input_string:
+        return []
+    if max_chars <= 0:
+        raise ValueError("max_chars must be greater than 0")
+
+    return [
+        input_string[i : i + max_chars] for i in range(0, len(input_string), max_chars)
+    ]
