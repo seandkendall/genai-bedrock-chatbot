@@ -3,21 +3,21 @@ export AWS_PAGER=""
 
 # Function to display help information
 display_help() {
-    echo "Usage: $0 [OPTIONS]"
-    echo
-    echo "Options:"
-    echo "  -h, --help                 Display this help message"
-    echo "  -d                         Delete existing resources"
-    echo "  -a                         Enable auto-deploy branch detection"
-    echo "  --deepseek                 Deploy DeepSeek as a Custom Model Import in Bedrock"
-    echo "  --deploy-agents-example    Deploy agents example"
-    echo "  --branch BRANCH_NAME       Specify a branch to use"
-    echo "  --schedule SCHEDULE        Set the deployment schedule (daily or weekly, default: weekly)"
-    echo "  --allowlist PATTERN        Set the allowlist pattern"
-    echo
-    echo "Example:"
-    echo "  $0 -a --schedule daily --allowlist 'mypattern*'"
-    exit 0
+  echo "Usage: $0 [OPTIONS]"
+  echo
+  echo "Options:"
+  echo "  -h, --help                 Display this help message"
+  echo "  -d                         Delete existing resources"
+  echo "  -a                         Enable auto-deploy branch detection"
+  echo "  --deepseek                 Deploy DeepSeek as a Custom Model Import in Bedrock"
+  echo "  --deploy-agents-example    Deploy agents example"
+  echo "  --branch BRANCH_NAME       Specify a branch to use"
+  echo "  --schedule SCHEDULE        Set the deployment schedule (daily or weekly, default: weekly)"
+  echo "  --allowlist PATTERN        Set the allowlist pattern"
+  echo
+  echo "Example:"
+  echo "  $0 -a --schedule daily --allowlist 'mypattern*'"
+  exit 0
 }
 
 # GitHub repository URL
@@ -31,81 +31,128 @@ schedule="weekly"
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -h|--help) display_help;;
-        -d) delete_flag=true; shift;;
-        -a) auto_deploy_branch=true; shift;;
-        --deploy-agents-example) deploy_agents_example=true; shift;;
-        --deepseek) deepseek=true; shift;;
-        --branch) branch_name="$2"; shift 2;;
-        --schedule) schedule="$2"; shift 2;;
-        --allowlist) allowlist_pattern="$2"; shift 2;;
-        *) echo "Unknown argument: $1"; display_help;;
-    esac
+  case "$1" in
+  -h | --help) display_help ;;
+  -d)
+    delete_flag=true
+    shift
+    ;;
+  -a)
+    auto_deploy_branch=true
+    shift
+    ;;
+  --deploy-agents-example)
+    deploy_agents_example=true
+    shift
+    ;;
+  --deepseek)
+    deepseek=true
+    shift
+    ;;
+  --branch)
+    branch_name="$2"
+    shift 2
+    ;;
+  --schedule)
+    schedule="$2"
+    shift 2
+    ;;
+  --allowlist)
+    allowlist_pattern="$2"
+    shift 2
+    ;;
+  *)
+    echo "Unknown argument: $1"
+    display_help
+    ;;
+  esac
 done
 
-create_eventbridge_rule() {
-    local schedule=$1
-    local rule_name="$CODEBUILD_PROJECT_NAME-trigger"
-    local region=$(aws configure get region)
-    
-    # Debug output
-    echo "Using region: $region"
-    echo "CodeBuild project name: $CODEBUILD_PROJECT_NAME"
-    
-    # Create the EventBridge rule
-    aws events put-rule \
-        --name "$rule_name" \
-        --schedule-expression "$schedule" \
-        --state "ENABLED" \
-        --region "$region"
+get_aws_region() {
+  local region=""
 
-    # Create the target for the rule
-    aws events put-targets \
-        --rule "$rule_name" \
-        --region "$region" \
-        --targets "[{\"Id\": \"1\", \"Arn\": \"arn:aws:codebuild:$region:$(aws sts get-caller-identity --query Account --output text):project/$CODEBUILD_PROJECT_NAME\", \"RoleArn\": \"arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/service-role/Amazon_EventBridge_Invoke_CodeBuild\"}]"
-    
-    # Confirm created resources
-    echo "EventBridge rule ARN: $(aws events describe-rule --name "$rule_name" --region "$region" --query 'Arn' --output text)"
-    echo "Target ARN: arn:aws:codebuild:$region:$(aws sts get-caller-identity --query Account --output text):project/$CODEBUILD_PROJECT_NAME"
+  # Check if AWS_REGION is set
+  if [ -n "${AWS_REGION}" ]; then
+    region="${AWS_REGION}"
+  # Check if AWS_DEFAULT_REGION is set
+  elif [ -n "${AWS_DEFAULT_REGION}" ]; then
+    region="${AWS_DEFAULT_REGION}"
+  # Try to get region from AWS CLI configuration
+  else
+    local cli_region=$(aws configure get region)
+    if [ -n "${cli_region}" ]; then
+      region="${cli_region}"
+    # Default to us-east-1 if no region is found
+    else
+      region="us-east-1"
+    fi
+  fi
+
+  echo "${region}"
+}
+
+create_eventbridge_rule() {
+  local schedule=$1
+  local rule_name="$CODEBUILD_PROJECT_NAME-trigger"
+  local region=$(get_aws_region)
+
+  # Debug output
+  echo "Using region: $region"
+  echo "CodeBuild project name: $CODEBUILD_PROJECT_NAME"
+
+  # Create the EventBridge rule
+  aws events put-rule \
+    --name "$rule_name" \
+    --schedule-expression "$schedule" \
+    --state "ENABLED" \
+    --region "$region"
+
+  # Create the target for the rule
+  aws events put-targets \
+    --rule "$rule_name" \
+    --region "$region" \
+    --targets "[{\"Id\": \"1\", \"Arn\": \"arn:aws:codebuild:$region:$(aws sts get-caller-identity --query Account --output text):project/$CODEBUILD_PROJECT_NAME\", \"RoleArn\": \"arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/service-role/Amazon_EventBridge_Invoke_CodeBuild\"}]"
+
+  # Confirm created resources
+  echo "EventBridge rule ARN: $(aws events describe-rule --name "$rule_name" --region "$region" --query 'Arn' --output text)"
+  echo "Target ARN: arn:aws:codebuild:$region:$(aws sts get-caller-identity --query Account --output text):project/$CODEBUILD_PROJECT_NAME"
 }
 
 # Function to delete existing resources
 delete_resources() {
-    echo "Deleting existing resources..."
-    aws events remove-targets --rule "$CODEBUILD_PROJECT_NAME-trigger" --ids "1" 2>/dev/null || true
-    aws events delete-rule --name "$CODEBUILD_PROJECT_NAME-trigger" 2>/dev/null || true
-    aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 2>/dev/null || true
-    aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-base-policy" 2>/dev/null || true
-    aws iam delete-role --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" 2>/dev/null || true
+  echo "Deleting existing resources..."
+  aws events remove-targets --rule "$CODEBUILD_PROJECT_NAME-trigger" --ids "1" 2>/dev/null || true
+  aws events delete-rule --name "$CODEBUILD_PROJECT_NAME-trigger" 2>/dev/null || true
+  aws codebuild delete-project --name $CODEBUILD_PROJECT_NAME 2>/dev/null || true
+  aws iam delete-role-policy --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" --policy-name "codebuild-base-policy" 2>/dev/null || true
+  aws iam delete-role --role-name "codebuild-$CODEBUILD_PROJECT_NAME-service-role" 2>/dev/null || true
 }
 
 # Check for delete flag
 if [ "$delete_flag" = true ]; then
-    delete_resources
+  delete_resources
 fi
 
 # Function to create or update IAM role
 create_or_update_role() {
-    local role_name=$1
-    local assume_role_policy=$2
-    local policy_name=$3
-    local policy_document=$4
+  local role_name=$1
+  local assume_role_policy=$2
+  local policy_name=$3
+  local policy_document=$4
 
-    # Check if the role exists
-    if aws iam get-role --role-name "$role_name" 2>/dev/null; then
-        echo "Updating existing role: $role_name"
-        aws iam update-assume-role-policy --role-name "$role_name" --policy-document "$assume_role_policy" 
-        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
-    else
-        echo "Creating new role: $role_name"
-        aws iam create-role --role-name "$role_name" --assume-role-policy-document "$assume_role_policy" 
-        echo "Waiting for role creation..."
-        aws iam wait role-exists --role-name "$role_name"
-        aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document" 
-    fi
-    sleep 5
+  # Check if the role exists
+  if aws iam get-role --role-name "$role_name" 2>/dev/null; then
+    echo "Updating existing role: $role_name"
+    aws iam update-assume-role-policy --role-name "$role_name" --policy-document "$assume_role_policy"
+    aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document"
+  else
+    echo "Creating new role: $role_name"
+    aws iam create-role --role-name "$role_name" --assume-role-policy-document "$assume_role_policy"
+    echo "Waiting for role creation..."
+    aws iam wait role-exists --role-name "$role_name"
+    aws iam put-role-policy --role-name "$role_name" --policy-name "$policy_name" --policy-document "$policy_document"
+  fi
+  sleep 5
 }
 
 # Create or update IAM roles
@@ -113,10 +160,10 @@ echo "Creating or updating IAM roles..."
 
 # CodeBuild role
 create_or_update_role \
-    "codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
-    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codebuild.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
-    "codebuild-base-policy" \
-    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["ecr:*","dynamodb:*","ssm:*","apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
+  "codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
+  '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codebuild.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
+  "codebuild-base-policy" \
+  '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*","Action":["ecr:*","dynamodb:*","ssm:*","apigateway:*","lambda:*","logs:*","s3:*","ec2:*","iam:*","codebuild:*","cloudformation:*","cognito-idp:*","acm:*"]}]}'
 
 # Create CodeBuild project
 echo "Creating CodeBuild project..."
@@ -127,8 +174,8 @@ deploy_deepseek_option=$([ "$deepseek" = true ] && echo " --deepseek " || echo "
 allowlist_option=$([ -n "$allowlist_pattern" ] && echo "--allowlist $allowlist_pattern" || echo "")
 
 if [ -n "$branch_name" ]; then
-    # Use the specified branch
-    read -r -d '' buildspec <<EOF
+  # Use the specified branch
+  read -r -d '' buildspec <<EOF
 version: 0.2
 
 phases:
@@ -158,8 +205,8 @@ phases:
       - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
 EOF
 elif [ "$auto_deploy_branch" = true ]; then
-    # Use auto-deploy branch detection
-    read -r -d '' buildspec <<EOF
+  # Use auto-deploy branch detection
+  read -r -d '' buildspec <<EOF
 version: 0.2
 
 phases:
@@ -195,8 +242,8 @@ phases:
       - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
 EOF
 else
-    # Use auto-deploy branch detection
-    read -r -d '' buildspec <<EOF
+  # Use auto-deploy branch detection
+  read -r -d '' buildspec <<EOF
 version: 0.2
 
 phases:
@@ -234,11 +281,11 @@ source_config="$source_config, \"buildspec\": $buildspec_escaped}"
 
 # Create the CodeBuild project
 aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
-    --source "$source_config" \
-    --description "Build and deploy genai-bedrock-chatbot" \
-    --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
-    --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/amazonlinux2-x86_64-standard:5.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
-    --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role"
+  --source "$source_config" \
+  --description "Build and deploy genai-bedrock-chatbot" \
+  --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
+  --environment "{\"type\": \"LINUX_CONTAINER\", \"image\": \"aws/codebuild/amazonlinux2-x86_64-standard:5.0\", \"computeType\": \"BUILD_GENERAL1_SMALL\"}" \
+  --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role"
 
 sleep 1
 # wait for the project $CODEBUILD_PROJECT_NAME to be created
@@ -247,34 +294,33 @@ INTERVAL=2
 
 start_time=$(date +%s)
 end_time=$((start_time + TIMEOUT))
-build_success=false 
-
+build_success=false
 
 while [ $(date +%s) -lt $end_time ]; do
-    echo "Checking for project '$CODEBUILD_PROJECT_NAME' "
-    raw_output=$(aws codebuild list-projects --query "projects[?@=='genai-bedrock-chatbot-build']")
-    # if raw_output contains text from: $CODEBUILD_PROJECT_NAME
-    if echo "$raw_output" | grep -q "$CODEBUILD_PROJECT_NAME"; then
-        echo "Project '$CODEBUILD_PROJECT_NAME' found"
-        echo "Deployment resources created successfully."
-        build_success=true
-        break
-    fi
-    sleep $INTERVAL
+  echo "Checking for project '$CODEBUILD_PROJECT_NAME' "
+  raw_output=$(aws codebuild list-projects --query "projects[?@=='genai-bedrock-chatbot-build']")
+  # if raw_output contains text from: $CODEBUILD_PROJECT_NAME
+  if echo "$raw_output" | grep -q "$CODEBUILD_PROJECT_NAME"; then
+    echo "Project '$CODEBUILD_PROJECT_NAME' found"
+    echo "Deployment resources created successfully."
+    build_success=true
+    break
+  fi
+  sleep $INTERVAL
 done
 
 # Create EventBridge rule for scheduled trigger
 echo "Creating EventBridge rule for scheduled trigger..."
 if [ "$schedule" = "daily" ]; then
-    create_eventbridge_rule "cron(0 0 * * ? *)"
+  create_eventbridge_rule "cron(0 0 * * ? *)"
 else
-    create_eventbridge_rule "cron(0 0 ? * SUN *)"
+  create_eventbridge_rule "cron(0 0 ? * SUN *)"
 fi
 
 if [ "$build_success" = true ]; then
-    # Start the CodeBuild project build
-    echo "Starting CodeBuild project build..."
-    aws codebuild start-build --project-name $CODEBUILD_PROJECT_NAME
-    echo "Build Started..."
-    echo "View Build status here: https://console.aws.amazon.com/codesuite/codebuild/projects/genai-bedrock-chatbot-build/history"
+  # Start the CodeBuild project build
+  echo "Starting CodeBuild project build..."
+  aws codebuild start-build --project-name $CODEBUILD_PROJECT_NAME
+  echo "Build Started..."
+  echo "View Build status here: https://console.aws.amazon.com/codesuite/codebuild/projects/genai-bedrock-chatbot-build/history"
 fi
