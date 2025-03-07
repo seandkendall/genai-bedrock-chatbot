@@ -1,65 +1,58 @@
 {
-  "name": "sean-kendalls-awsome-chatbot",
-  "version": "0.1.0",
-  "private": true,
-  "devDependencies": {
-    "@babel/cli": "^7.26.4",
-    "@babel/core": "^7.26.7",
-    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-    "@babel/preset-env": "^7.26.7",
-    "@biomejs/biome": "1.9.4",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.2.0",
-    "@testing-library/user-event": "^14.6.1",
-    "jest": "^29.7.0"
-  },
-  "dependencies": {
-    "@aws-amplify/ui-react": "^6.9.2",
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.0",
-    "@mui/icons-material": "^6.4.6",
-    "@mui/material": "^6.4.6",
-    "aws-amplify": "^6.13.2",
-    "aws-rum-web": "^1.20.0",
-    "axios": "^1.8.1",
-    "better-react-mathjax": "^2.0.3",
-    "dompurify": "^3.2.4",
-    "eslint-config-react-app": "^7.0.1",
-    "katex": "^0.16.21",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-icons": "^5.5.0",
-    "react-markdown": "^9.0.3",
-    "react-scripts": "^5.0.1",
-    "react-syntax-highlighter": "^15.6.1",
-    "react-use-websocket": "^4.13.0",
-    "rehype-katex": "^7.0.0",
-    "remark-gfm": "^4.0.1",
-    "remark-math": "^6.0.0",
-    "web-vitals": "^4.2.4"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "BUILD_PATH='../static-website-source' react-scripts build",
-    "eject": "react-scripts eject",
-    "test": "jest"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  }
+	"name": "sean-kendalls-awsome-chatbot",
+	"version": "0.1.0",
+	"private": true,
+	"devDependencies": {
+		"@babel/cli": "^7.26.4",
+		"@babel/core": "^7.26.7",
+		"@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+		"@babel/preset-env": "^7.26.7",
+		"@biomejs/biome": "1.9.4",
+		"@testing-library/jest-dom": "^6.6.3",
+		"@testing-library/react": "^16.2.0",
+		"@testing-library/user-event": "^14.6.1",
+		"jest": "^29.7.0"
+	},
+	"dependencies": {
+		"@aws-amplify/ui-react": "^6.9.3",
+		"@emotion/react": "^11.14.0",
+		"@emotion/styled": "^11.14.0",
+		"@mui/icons-material": "^6.4.7",
+		"@mui/material": "^6.4.7",
+		"aws-amplify": "^6.13.4",
+		"aws-rum-web": "^1.20.0",
+		"axios": "^1.8.2",
+		"better-react-mathjax": "^2.0.3",
+		"dompurify": "^3.2.4",
+		"eslint-config-react-app": "^7.0.1",
+		"katex": "^0.16.21",
+		"react": "^18.3.1",
+		"react-dom": "^18.3.1",
+		"react-icons": "^5.5.0",
+		"react-markdown": "^9.0.3",
+		"react-scripts": "^5.0.1",
+		"react-syntax-highlighter": "^15.6.1",
+		"react-use-websocket": "^4.13.0",
+		"rehype-katex": "^7.0.0",
+		"remark-gfm": "^4.0.1",
+		"remark-math": "^6.0.0",
+		"web-vitals": "^4.2.4"
+	},
+	"scripts": {
+		"start": "react-scripts start",
+		"build": "BUILD_PATH='../static-website-source' react-scripts build",
+		"eject": "react-scripts eject",
+		"test": "jest"
+	},
+	"eslintConfig": {
+		"extends": ["react-app", "react-app/jest"]
+	},
+	"browserslist": {
+		"production": [">0.2%", "not dead", "not op_mini all"],
+		"development": [
+			"last 1 chrome version",
+			"last 1 firefox version",
+			"last 1 safari version"
+		]
+	}
 }

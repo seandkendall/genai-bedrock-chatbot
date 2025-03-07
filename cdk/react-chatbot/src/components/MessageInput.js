@@ -73,7 +73,7 @@ export function sanitizeFileName(name) {
 const MessageInput = forwardRef(
 	(
 		{
-			appSessionid,
+			selectedConversation,
 			onSend,
 			disabled,
 			setIsDisabled,
@@ -204,8 +204,10 @@ const MessageInput = forwardRef(
 						if (file.name === "image.jpg") {
 							const timestamp = Date.now();
 							const newFileName = `image-${timestamp}-${newAttachments.length}.jpg`;
-							newAttachments.push(new File([file], newFileName, {type: file.type,}));
-						}else{
+							newAttachments.push(
+								new File([file], newFileName, { type: file.type }),
+							);
+						} else {
 							newAttachments.push(file);
 						}
 					} catch (error) {
@@ -306,7 +308,12 @@ const MessageInput = forwardRef(
 					attachments.map(uploadFileToS3),
 				);
 
-				onSend(finalMessage ? finalMessage : "?", uploadedAttachments, false,truncated);
+				onSend(
+					finalMessage ? finalMessage : "?",
+					uploadedAttachments,
+					false,
+					truncated,
+				);
 
 				setIsRefreshing(false);
 				setMessage("");
@@ -332,7 +339,7 @@ const MessageInput = forwardRef(
 						accessToken: accessToken,
 						fileName: file.name,
 						fileType: file.type,
-						session_id: appSessionid,
+						session_id: selectedConversation?.session_id,
 					},
 					{
 						headers: {

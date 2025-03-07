@@ -411,9 +411,13 @@ class ChatbotWebsiteStack(Stack):
             user_pool_name="ChatbotUserPool",
             self_sign_up_enabled=True,
             sign_in_aliases={"email": True},  # Enable sign-in with email
-            auto_verify={"email": True},  # Auto-verify email addresses
+            auto_verify={"email": False},  # Auto-verify email addresses
             feature_plan=cognito.FeaturePlan.ESSENTIALS,
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
+            device_tracking=cognito.DeviceTracking(
+                challenge_required_on_new_device=True,
+                device_only_remembered_on_user_prompt=True,
+            ),
             removal_policy=RemovalPolicy.DESTROY,
             password_policy=cognito.PasswordPolicy(  # Configure password policy
                 min_length=8,
@@ -1042,20 +1046,22 @@ class ChatbotWebsiteStack(Stack):
         user_pool_client.apply_removal_policy(RemovalPolicy.DESTROY)
 
         # Create a Cognito User Pool Domain
-        # user_pool_domain = cognito.UserPoolDomain(
-        #     self, "ChatbotUserPoolDomain",
-        #     user_pool=user_pool,
-        #     cognito_domain=cognito.CognitoDomainOptions(
-        #         domain_prefix=cognito_domain_string
-        #     )
-        # )
-        # TODO Customize Cognito Hosted Login
-        # cfn_user_pool_uICustomization_attachment = cognito.CfnUserPoolUICustomizationAttachment(self, "CfnUserPoolUICustomizationAttachment",
-        #     client_id="ALL",
-        #     user_pool_id=user_pool.user_pool_id,
-        #     # the properties below are optional
-        #     css="css"
-        # )
+        cognito.UserPoolDomain(
+            self,
+            "ChatbotUserPoolDomain",
+            user_pool=user_pool,
+            cognito_domain=cognito.CognitoDomainOptions(
+                domain_prefix=cognito_domain_string
+            ),
+            managed_login_version=cognito.ManagedLoginVersion.NEWER_MANAGED_LOGIN,
+        )
+        cognito.CfnManagedLoginBranding(
+            self,
+            "CognitoManagedLoginBranding",
+            user_pool_id=user_pool.user_pool_id,
+            client_id=user_pool_client.user_pool_client_id,
+            use_cognito_provided_values=True,
+        )
 
         # Create the EventBridge Scheduler schedule
         scheduler_group = scheduler.Group(

@@ -34,7 +34,7 @@ const NoMaxWidthTooltip = styled(({ className, ...props }) => (
 
 const Header = ({
 	disabled,
-	appSessionid,
+	selectedConversation,
 	kbSessionId,
 	setKBSessionId,
 	handleOpenSettingsModal,
@@ -78,35 +78,6 @@ const Header = ({
 	const [dropdownOpen, setDropdownOpen] = useState(false);
 	const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
 
-	// load selectedMode from local storage
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Dependencies not needed
-	useEffect(() => {
-		if (selectedMode) {
-      setExpandedCategories((prev) => {
-        return {
-          ...Object.keys(prev).reduce((acc, key) => {
-            acc[key] = false;
-            return acc;
-          }, {}),
-          [selectedMode.category]: true
-        };
-      });              
-      handleModeChange(selectedMode, false);
-    }
-		if (selectedKbMode === null) {
-			let savedKbOption;
-			try {
-				// Attempt to parse the JSON string from
-				savedKbOption = JSON.parse(localStorage.getItem("selectedKbMode"));
-			} catch (error) {
-				localStorage.removeItem("selectedKbMode");
-			}
-			if (savedKbOption) {
-				onSelectedKbMode(savedKbOption);
-			}
-		}
-	}, []);
-
 	//start and stop header timer
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Dependencies not needed
 	useEffect(() => {
@@ -141,42 +112,41 @@ const Header = ({
 	};
 
 	const toggleCategory = (event, category, forceOpen) => {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  
-    setExpandedCategories(prev => {
-      const currentState = prev[category];
-  
-      if (forceOpen || (!currentState && !prev[category])) {
-        // If forceOpen is true or the category doesn't exist and we're setting it to true
-        return {
-          ...Object.keys(prev).reduce((acc, key) => {
-            acc[key] = false;
-            return acc;
-          }, {}),
-          [category]: true
-        };
-      }
-        if (currentState) {
-          // If the category is currently true, set it to false
-          return {
-            ...prev,
-            [category]: false
-          };
-        }
-          // If the category is currently false, set it to true and all others to false
-          return {
-            ...Object.keys(prev).reduce((acc, key) => {
-              acc[key] = false;
-              return acc;
-            }, {}),
-            [category]: true
-          };
-    });
-  };
-  
+		if (event) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+
+		setExpandedCategories((prev) => {
+			const currentState = prev[category];
+
+			if (forceOpen || (!currentState && !prev[category])) {
+				// If forceOpen is true or the category doesn't exist and we're setting it to true
+				return {
+					...Object.keys(prev).reduce((acc, key) => {
+						acc[key] = false;
+						return acc;
+					}, {}),
+					[category]: true,
+				};
+			}
+			if (currentState) {
+				// If the category is currently true, set it to false
+				return {
+					...prev,
+					[category]: false,
+				};
+			}
+			// If the category is currently false, set it to true and all others to false
+			return {
+				...Object.keys(prev).reduce((acc, key) => {
+					acc[key] = false;
+					return acc;
+				}, {}),
+				[category]: true,
+			};
+		});
+	};
 
 	const renderSelectOptions = (options, maxLength) => {
 		return options.flatMap(({ title, data }) =>
@@ -376,7 +346,9 @@ const Header = ({
 				onSelectedKbMode(selectedObject);
 				localStorage.setItem("selectedKbMode", JSON.stringify(selectedObject));
 				setKBSessionId("");
-				localStorage.removeItem(`kbSessionId-${appSessionid}`);
+				localStorage.removeItem(
+					`kbSessionId-${selectedConversation?.session_id}`,
+				);
 			}
 		}
 	};
@@ -393,13 +365,14 @@ const Header = ({
 		if (value < 1000) {
 			return `${value} ms`;
 		}
-		if (value < 60000) { // Less than 60 seconds
+		if (value < 60000) {
+			// Less than 60 seconds
 			return `${(value / 1000).toFixed(1)} s`;
 		}
 		const totalSeconds = Math.floor(value / 1000);
 		const minutes = Math.floor(totalSeconds / 60);
 		const seconds = totalSeconds % 60;
-		return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+		return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 	};
 
 	const handleInfoTooltipOpen = () => {
@@ -527,7 +500,8 @@ const Header = ({
 				).filter(
 					(item) =>
 						models.some((model) => model.modelId === item.modelId) &&
-						(item.is_kb_model === true && (item.is_active === true || !("is_active" in item))),
+						item.is_kb_model === true &&
+						(item.is_active === true || !("is_active" in item)),
 				),
 			},
 		],
@@ -562,14 +536,14 @@ const Header = ({
 										</Typography>
 									)}
 									{region && (
-										<Typography>
-											Deployment Region: {region}
-										</Typography>
+										<Typography>Deployment Region: {region}</Typography>
 									)}
 									<Typography>
 										Active Model/Mode: {getHeaderLabelExtended()}
 									</Typography>
-									<Typography>App Session ID: {appSessionid}</Typography>
+									<Typography>
+										App Session ID: {selectedConversation?.session_id}
+									</Typography>
 									{kbSessionId && (
 										<Typography>
 											KnowledgeBase Session ID: {kbSessionId}

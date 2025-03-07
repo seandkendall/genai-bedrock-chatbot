@@ -84,6 +84,7 @@ def load_and_send_conversation_history(
                 # Load conversation history from DynamoDB
                 conversation_history_str = item["conversation_history"]["S"]
                 conversation_history = json.loads(conversation_history_str)
+
             # Split the conversation history into chunks
             conversation_history_chunks = split_message(conversation_history, logger)
             # Send the conversation history chunks to the WebSocket client
@@ -118,14 +119,9 @@ def load_and_send_conversation_history(
 
 def create_base_message(msg: Dict, is_partial: bool = False) -> Dict:
     """Creates a base message structure for chunking"""
-    return {
-        "role": msg["role"],
-        "timestamp": msg["timestamp"],
-        "message_id": msg["message_id"],
-        "msg_partial": is_partial,
-        "msg_partial_last_chunk": False,
-        "content": msg["content"],
-    }
+    msg["msg_partial"] = is_partial
+    msg["msg_partial_last_chunk"] = False
+    return msg
 
 
 def split_message(

@@ -49,6 +49,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 	);
 	const [firstLoad, setFirstLoad] = useState(true);
 	const [messages, setMessages] = useState([]);
+	const [messagesProcessing, setMessagesProcessing] = useState(false);
 	const [uploadedFileNames, setUploadedFileNames] = useState([]);
 	const [conversationList, setConversationList] = useState(
 		localStorage.getItem("load_conversation_list")
@@ -56,9 +57,26 @@ const App = memo(({ signOut, user, awsRum }) => {
 			: [],
 	);
 	const [conversationListLoading, setConversationListLoading] = useState(false);
-	const [selectedChatId, setSelectedChatId] = useState(
-		localStorage.getItem("selectedChatId") || "",
-	);
+
+	const [selectedConversation, setSelectedConversation] = useState(() => {
+		const storedValue = localStorage.getItem("selectedConversation");
+		if (storedValue) {
+			try {
+				const storedValueJson = JSON.parse(storedValue);
+				return storedValueJson;
+			} catch (error) {
+				// If parsing fails, remove the invalid value from localStorage
+				localStorage.removeItem("selectedConversation");
+				console.warn(
+					"Invalid JSON in localStorage, removed 'selectedConversation'",
+				);
+			}
+		}
+		return {
+			session_id: `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
+		};
+	});
+
 	const [requireConversationLoad, setRequireConversationLoad] = useState(true);
 	const [isDisabled, setIsDisabled] = useState(false);
 	const [selectedMode, setSelectedMode] = useState(() => {
@@ -133,10 +151,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 	); //local-prompt-flows
 	const [modelsLoaded, setModelsLoaded] = useState(false);
 	const [expandedCategories, setExpandedCategories] = useState({});
-
-	const [appSessionid, setAppSessionId] = useState(
-		localStorage.getItem("selectedChatId") || "",
-	);
 	const [kbSessionId, setKBSessionId] = useState("");
 	const [systemPromptUserOrSystem, setSystemPromptUserOrSystem] =
 		useState("system");
@@ -244,6 +258,148 @@ const App = memo(({ signOut, user, awsRum }) => {
 			);
 		}
 	}, [websocketConnectionId]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: only watch messages
+	useEffect(() => {
+		// if messages has > 0 elements, print to console
+		if (messages.length > 0 && !messagesProcessing) {
+			//Remove any error messages and the cooresponding message before (which is the user message) only for persistence
+			const filteredMessages = messages.filter((message, index, array) => {
+				if (
+					index > 0 &&
+					message.raw_message &&
+					message.raw_message.type === "error"
+				) {
+					// Skip this message and the previous one
+					return false;
+				}
+				if (
+					index < array.length - 1 &&
+					array[index + 1].raw_message &&
+					array[index + 1].raw_message.type === "error"
+				) {
+					// Skip this message as it's followed by an error
+					return false;
+				}
+				return true;
+			});
+			localStorage.setItem(
+				`chatHistory-${selectedConversation?.session_id}`,
+				JSON.stringify(filteredMessages),
+			);
+		}
+	}, [messages]);
+
+	const getModeObjectFromModelID = (category, selectedModelId) => {
+		let selectedObject = null;
+		if (
+			category === "Bedrock Models" ||
+			category === "Imported Models" ||
+			category === "Bedrock KnowledgeBases"
+		) {
+			selectedObject = models.find((item) => item.modelId === selectedModelId);
+			if (!selectedObject) {
+				selectedObject = models.find(
+					(item) => item.modelArn === selectedModelId,
+				);
+			}
+		} else if (category === "Bedrock Image Models") {
+			selectedObject = imageModels.find(
+				(item) => item.modelId === selectedModelId,
+			);
+			if (!selectedObject) {
+				selectedObject = imageModels.find(
+					(item) => item.modelArn === selectedModelId,
+				);
+			}
+		} else if (category === "Bedrock Video Models") {
+			selectedObject = videoModels.find(
+				(item) => item.modelId === selectedModelId,
+			);
+			if (!selectedObject) {
+				selectedObject = videoModels.find(
+					(item) => item.modelArn === selectedModelId,
+				);
+			}
+		} else if (category === "Imported Models") {
+			selectedObject = importedModels.find(
+				(item) => item.modelId === selectedModelId,
+			);
+			if (!selectedObject) {
+				selectedObject = importedModels.find(
+					(item) => item.modelArn === selectedModelId,
+				);
+			}
+		} else if (category === "Prompt Flows") {
+			selectedObject = promptFlows.find(
+				(item) => item.flowAliasId === selectedModelId,
+			);
+		} else if (category === "Bedrock Agents") {
+			selectedObject = bedrockAgents.find(
+				(item) => item.agentAliasId === selectedModelId,
+			);
+		}
+		return selectedObject;
+	};
+
+	const handleSelectChat = (conversation) => {
+		if (isDisabled) {
+			return;
+		}
+		setRequireConversationLoad(true);
+		setSelectedConversation(conversation);
+		if (conversation) {
+			localStorage.setItem(
+				"selectedConversation",
+				JSON.stringify(conversation),
+			);
+		}
+		const selMode = getModeObjectFromModelID(
+			conversation.category,
+			conversation.selected_model_id,
+		);
+		if (conversation.selected_knowledgebase_id && conversation.kb_session_id) {
+			setKBSessionId(conversation.kb_session_id);
+			const selectedObject = bedrockKnowledgeBases.find(
+				(model) =>
+					model.knowledgeBaseId === conversation.selected_knowledgebase_id,
+			);
+			onSelectedKbMode(selMode);
+			setExpandedCategories((prev) => {
+				return {
+					...Object.keys(prev).reduce((acc, key) => {
+						acc[key] = false;
+						return acc;
+					}, {}),
+					[selectedObject.category]: true,
+				};
+			});
+			handleModeChange(selectedObject, true);
+			localStorage.setItem("selectedKbMode", JSON.stringify(selectedObject));
+			localStorage.setItem(
+				`kbSessionId-${conversation.sessionId}`,
+				conversation.kb_session_id,
+			);
+		} else if (selMode) {
+			setExpandedCategories((prev) => {
+				return {
+					...Object.keys(prev).reduce((acc, key) => {
+						acc[key] = false;
+						return acc;
+					}, {}),
+					[selMode.category]: true,
+				};
+			});
+
+			handleModeChange(selMode, true);
+		}
+	};
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Not needed
+	useEffect(() => {
+		if (selectedConversation) {
+			handleSelectChat(selectedConversation);
+		}
+	}, [selectedConversation]);
 	const triggerInfoErrorPopupMessage = (msgText, type) => {
 		setPopupMessage(msgText);
 		setPopupType(type);
@@ -405,7 +561,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		);
 	};
 
-	const loadConversationList = async () => {
+	const loadConversationList = async (selected_session_id = null) => {
 		// if firstLoad is true and conversationList is not null empty
 		if (firstLoad && conversationList.length > 0) {
 			setFirstLoad(false);
@@ -418,20 +574,35 @@ const App = memo(({ signOut, user, awsRum }) => {
 		const { accessToken, idToken } = await getCurrentSession();
 		const data = {
 			type: "load_conversation_list",
+			selectedSessionId: selected_session_id,
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
 		sendMessageViaRest(data, "/rest/send-message", "loadConversationList");
 	};
 
-	const loadConversationHistory = async (sessId) => {
-		if (models && selectedMode && (appSessionid || sessId)) {
-			setIsRefreshingMessage("Loading Previous Conversation");
-			setIsRefreshing(true);
+	const loadConversationHistory = async (
+		sessId,
+		chatHistoryExists,
+		lastLoadedChatMessageId,
+	) => {
+		// if (chatHistoryExists) {
+		// 	return;
+		// }
+		if (
+			models &&
+			selectedMode &&
+			(selectedConversation?.session_id || sessId)
+		) {
+			if (!chatHistoryExists) {
+				setIsRefreshingMessage("Loading Previous Conversation");
+				setIsRefreshing(true);
+			}
 			const { accessToken, idToken } = await getCurrentSession();
 			const data = {
 				type: "load",
-				session_id: sessId ? sessId : appSessionid,
+				session_id: sessId ? sessId : selectedConversation?.session_id,
+				last_loaded_message_id: lastLoadedChatMessageId,
 				kb_session_id: kbSessionId,
 				selected_mode: selectedMode,
 				idToken: `${idToken}`,
@@ -458,7 +629,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Not Needed
 	useEffect(() => {
 		if (!lastMessage) return;
-
 		try {
 			const message = JSON.parse(lastMessage.data);
 			const message_temp_cache = [];
@@ -491,29 +661,18 @@ const App = memo(({ signOut, user, awsRum }) => {
 				}
 			}
 
-			// Memoize the comparison result
-			const isMessageDifferent =
-				JSON.stringify(messageChunk) !== JSON.stringify(messages);
-
-			if (isMessageDifferent) {
-				message_temp_cache.push(...messageChunk);
-				setMessages((prevMessages) =>
-					current_chunk === 1
-						? messageChunk
-						: [...prevMessages, ...messageChunk],
-				);
+			message_temp_cache.push(...messageChunk);
+			if (last_message) {
+				setMessagesProcessing(false);
+			} else if (!messagesProcessing) {
+				setMessagesProcessing(true);
 			}
-			// if is last message then setIsRefreshing(false);
+			setMessages((prevMessages) =>
+				current_chunk === 1 ? messageChunk : [...prevMessages, ...messageChunk],
+			);
 			if (last_message) {
 				setIsRefreshing(false);
 				setTimeout(scrollToBottom, 0);
-				// if appSessionid is not null and does not contain the word 'undefined'
-				if (appSessionid && !appSessionid.includes("undefined")) {
-					localStorage.setItem(
-						`chatHistory-${appSessionid}`,
-						JSON.stringify(message_temp_cache),
-					);
-				}
 				message_temp_cache.length = 0;
 			}
 		} catch (error) {
@@ -580,7 +739,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				endpoint,
 				{
 					...data,
-					session_id: appSessionid,
+					session_id: selectedConversation?.session_id,
 					connection_id: websocketConnectionId,
 					access_token: accessToken,
 				},
@@ -604,12 +763,13 @@ const App = memo(({ signOut, user, awsRum }) => {
 		retryPreviousMessage,
 		truncated,
 	) => {
-		// if appsessionid is null then setappsessionid
-		let newAppSessionid;
-		if (!appSessionid) {
+		let newConversationSessionId;
+		if (!selectedConversation || !selectedConversation.session_id) {
 			setRequireConversationLoad(false);
-			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
-			setAppSessionId(newAppSessionid);
+			newConversationSessionId = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
+			const newConvo = { session_id: newConversationSessionId };
+			setSelectedConversation(newConvo);
+			localStorage.setItem("selectedConversation", JSON.stringify(newConvo));
 		}
 
 		if (retryPreviousMessage) {
@@ -655,7 +815,9 @@ const App = memo(({ signOut, user, awsRum }) => {
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
 			timestamp_local_timezone: timezone,
-			session_id: newAppSessionid ? newAppSessionid : appSessionid,
+			session_id: newConversationSessionId
+				? newConversationSessionId
+				: selectedConversation?.session_id,
 			kb_session_id: kbSessionId,
 			selected_mode: selectedMode,
 			titleGenModel: selectedTitleGenerationMode,
@@ -724,11 +886,13 @@ const App = memo(({ signOut, user, awsRum }) => {
 
 	const generateImage = async (prompt, randomMessageId, attachments) => {
 		setIsLoading(true);
-		let newAppSessionid;
-		if (!appSessionid) {
+		let newConversationSessionId;
+		if (!selectedConversation || !selectedConversation.session_id) {
 			setRequireConversationLoad(false);
-			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
-			setAppSessionId(newAppSessionid);
+			newConversationSessionId = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
+			const newConvo = { session_id: newConversationSessionId };
+			setSelectedConversation(newConvo);
+			localStorage.setItem("selectedConversation", JSON.stringify(newConvo));
 		}
 
 		const { accessToken, idToken } = await getCurrentSession();
@@ -737,7 +901,9 @@ const App = memo(({ signOut, user, awsRum }) => {
 			prompt: prompt,
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
-			session_id: newAppSessionid ? newAppSessionid : appSessionid,
+			session_id: newConversationSessionId
+				? newConversationSessionId
+				: selectedConversation?.session_id,
 			selected_mode: selectedMode,
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
@@ -779,11 +945,13 @@ const App = memo(({ signOut, user, awsRum }) => {
 		video_helper_image_model_id,
 	) => {
 		setIsLoading(true);
-		let newAppSessionid;
-		if (!appSessionid) {
+		let newConversationSessionId;
+		if (!selectedConversation || !selectedConversation.session_id) {
 			setRequireConversationLoad(false);
-			newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
-			setAppSessionId(newAppSessionid);
+			newConversationSessionId = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
+			const newConvo = { session_id: newConversationSessionId };
+			setSelectedConversation(newConvo);
+			localStorage.setItem("selectedConversation", JSON.stringify(newConvo));
 		}
 
 		const { accessToken, idToken } = await getCurrentSession();
@@ -793,7 +961,9 @@ const App = memo(({ signOut, user, awsRum }) => {
 			video_helper_image_model_id: video_helper_image_model_id,
 			message_id: randomMessageId,
 			timestamp: message_timestamp,
-			session_id: newAppSessionid ? newAppSessionid : appSessionid,
+			session_id: newConversationSessionId
+				? newConversationSessionId
+				: selectedConversation?.session_id,
 			selected_mode: selectedMode,
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
@@ -869,7 +1039,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 					} else {
 						setKBSessionId(message.kb_session_id);
 						localStorage.setItem(
-							`kbSessionId-${appSessionid}`,
+							`kbSessionId-${selectedConversation?.session_id}`,
 							message.kb_session_id,
 						);
 					}
@@ -883,19 +1053,28 @@ const App = memo(({ signOut, user, awsRum }) => {
 				handleError(message);
 			} else if (message.type === "message_title") {
 				// Do nothing
-			} else if (message.type === "message_start") {
+			} else if (
+				message.type === "message_start" &&
+				selectedConversation.session_id === message.session_id
+			) {
 				if (isRefreshing) {
 					setIsRefreshing(false);
 				}
 				const model = message?.message?.model;
 				setUsedModel(model);
 				updateMessages(message);
-			} else if (message.type === "content_block_delta") {
+			} else if (
+				message.type === "content_block_delta" &&
+				selectedConversation.session_id === message.session_id
+			) {
 				if (isRefreshing) {
 					setIsRefreshing(false);
 				}
 				updateMessages(message);
-			} else if (message.type === "message_stop") {
+			} else if (
+				message.type === "message_stop" &&
+				selectedConversation.session_id === message.session_id
+			) {
 				if (isRefreshing) {
 					setIsRefreshing(false);
 				}
@@ -905,15 +1084,12 @@ const App = memo(({ signOut, user, awsRum }) => {
 				setIsLoading(false);
 				setTimeout(scrollToBottom, 0);
 				if (message.new_conversation) {
-					loadConversationList();
-					setSelectedChatId(message.session_id);
-					if (message.session_id && !message.session_id.includes("undefined")) {
-						localStorage.setItem("selectedChatId", message.session_id);
-					}
+					loadConversationList(message.session_id);
 				}
 			} else if (
-				message.type === "error" ||
-				message.message === "Internal server error"
+				(message.type === "error" ||
+					message.message === "Internal server error") &&
+				selectedConversation.session_id === message.session_id
 			) {
 				if (isRefreshing) {
 					setIsRefreshing(false);
@@ -931,7 +1107,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 				setIsDisabled(false);
 				setIsLoading(false);
 				setTimeout(scrollToBottom, 0);
-			} else if (message.type === "video_generated") {
+			} else if (
+				message.type === "video_generated" &&
+				selectedConversation.session_id === message.session_id
+			) {
 				if (isRefreshing) {
 					setIsRefreshing(false);
 				}
@@ -955,7 +1134,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 					};
 					return updatedMessages;
 				});
-			} else if (message.type === "image_generated") {
+			} else if (
+				message.type === "image_generated" &&
+				selectedConversation.session_id === message.session_id
+			) {
 				if (isRefreshing) {
 					setIsRefreshing(false);
 				}
@@ -1018,6 +1200,18 @@ const App = memo(({ signOut, user, awsRum }) => {
 					);
 				}
 
+				if (message.selected_session_id) {
+					const selectedConversation = message.conversation_list.find(
+						(conversation) =>
+							conversation.session_id === message.selected_session_id,
+					);
+					setSelectedConversation(selectedConversation);
+					localStorage.setItem(
+						"selectedConversation",
+						JSON.stringify(selectedConversation),
+					);
+				}
+
 				setConversationListLoading(false);
 			} else if (message.type === "modelscan") {
 				triggerModelScanFinished();
@@ -1037,6 +1231,8 @@ const App = memo(({ signOut, user, awsRum }) => {
 						);
 					} else if (messageString.includes("no_conversation_to_load")) {
 						setIsRefreshing(false);
+					} else if (messageString.includes('"type":"citation_data')) {
+						console.log("Citation Data", messageString);
 					} else if (messageString.includes("Access Token has expired")) {
 						try {
 							localSignOut();
@@ -1138,6 +1334,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 	}
 
 	const updateMessagesOnStop = (messageStop) => {
+		setMessagesProcessing(false);
 		setMessages((prevMessages) => {
 			const updatedMessages = [...(prevMessages ? prevMessages : [])];
 			const lastIndex = updatedMessages.length - 1;
@@ -1200,53 +1397,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 
 			setTotalInputTokens(newInputTokens);
 			setTotalOutputTokens(newOutputTokens);
-			if (
-				updatedMessages.length > 0 &&
-				updatedMessages[updatedMessages.length - 1].role &&
-				updatedMessages[updatedMessages.length - 1].content
-			) {
-				if (
-					updatedMessages[updatedMessages.length - 1].role.includes(
-						"assistant",
-					) &&
-					updatedMessages[updatedMessages.length - 1].error &&
-					updatedMessages[updatedMessages.length - 1].error.trim() !== ""
-				) {
-					console.log("An error occurred: not adding to local storage");
-				} else {
-					//Remove any error messages and the cooresponding message before (which is the user message) only for persistence
-					const filteredMessages = updatedMessages.filter(
-						(message, index, array) => {
-							if (
-								index > 0 &&
-								message.raw_message &&
-								message.raw_message.type === "error"
-							) {
-								// Skip this message and the previous one
-								return false;
-							}
-							if (
-								index < array.length - 1 &&
-								array[index + 1].raw_message &&
-								array[index + 1].raw_message.type === "error"
-							) {
-								// Skip this message as it's followed by an error
-								return false;
-							}
-							return true;
-						},
-					);
-					//save conversation to local storage
-					if (appSessionid && !appSessionid.includes("undefined")) {
-						localStorage.setItem(
-							`chatHistory-${appSessionid}`,
-							JSON.stringify(filteredMessages),
-						);
-					}
-				}
-			} else {
-				console.log("No messages to save to local storage");
-			}
 			return updatedMessages;
 		});
 		setTimeout(scrollToBottom, 0);
@@ -1269,27 +1419,28 @@ const App = memo(({ signOut, user, awsRum }) => {
 		setMessages([]);
 		setAttachments([]);
 		setUploadedFileNames([]);
-		setSelectedChatId("");
-		localStorage.removeItem("selectedChatId");
-		const newAppSessionid = `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
-		setAppSessionId(newAppSessionid);
+		setSelectedConversation({});
+		localStorage.removeItem("selectedConversation");
+		setSelectedConversation({
+			session_id: `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
+		});
 	};
 
 	const handleDeleteChat = (chatId) => {
 		//Show Message to user, telling them the chat was deleted
 		triggerInfoErrorPopupMessage("Chat/Conversation Deleted", "success");
 		//logic for handling the current loaded chat
-		if (selectedChatId === chatId) {
-			setAppSessionId(
-				`session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
-			);
-			setSelectedChatId("");
-			localStorage.removeItem("selectedChatId");
+		if (selectedConversation.session_id === chatId) {
+			localStorage.removeItem(`kbSessionId-${selectedConversation.session_id}`);
+			setSelectedConversation({});
+			localStorage.removeItem("selectedConversation");
+			setSelectedConversation({
+				session_id: `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
+			});
 			setMessages([]);
 			setUploadedFileNames([]);
 			setAttachments([]);
 			setKBSessionId("");
-			localStorage.removeItem(`kbSessionId-${appSessionid}`);
 		}
 		//delete the chat
 		clearConversationHistory(chatId);
@@ -1347,58 +1498,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 	}, [isDragging]);
 	// End of Code Supporting SideBar
 
-	const getModeObjectFromModelID = (category, selectedModelId) => {
-		let selectedObject = null;
-		if (
-			category === "Bedrock Models" ||
-			category === "Imported Models" ||
-			category === "Bedrock KnowledgeBases"
-		) {
-			selectedObject = models.find((item) => item.modelId === selectedModelId);
-			if (!selectedObject) {
-				selectedObject = models.find(
-					(item) => item.modelArn === selectedModelId,
-				);
-			}
-		} else if (category === "Bedrock Image Models") {
-			selectedObject = imageModels.find(
-				(item) => item.modelId === selectedModelId,
-			);
-			if (!selectedObject) {
-				selectedObject = imageModels.find(
-					(item) => item.modelArn === selectedModelId,
-				);
-			}
-		} else if (category === "Bedrock Video Models") {
-			selectedObject = videoModels.find(
-				(item) => item.modelId === selectedModelId,
-			);
-			if (!selectedObject) {
-				selectedObject = videoModels.find(
-					(item) => item.modelArn === selectedModelId,
-				);
-			}
-		} else if (category === "Imported Models") {
-			selectedObject = importedModels.find(
-				(item) => item.modelId === selectedModelId,
-			);
-			if (!selectedObject) {
-				selectedObject = importedModels.find(
-					(item) => item.modelArn === selectedModelId,
-				);
-			}
-		} else if (category === "Prompt Flows") {
-			selectedObject = promptFlows.find(
-				(item) => item.flowAliasId === selectedModelId,
-			);
-		} else if (category === "Bedrock Agents") {
-			selectedObject = bedrockAgents.find(
-				(item) => item.agentAliasId === selectedModelId,
-			);
-		}
-		return selectedObject;
-	};
-
 	const reactThemePropviderTheme = createTheme({
 		palette: {
 			mode: reactThemeMode,
@@ -1411,7 +1510,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			<div className="app">
 				<Header
 					disabled={isDisabled || isLoading}
-					appSessionid={appSessionid}
+					selectedConversation={selectedConversation}
 					kbSessionId={kbSessionId}
 					setKBSessionId={setKBSessionId}
 					handleOpenSettingsModal={handleOpenSettingsModal}
@@ -1466,20 +1565,11 @@ const App = memo(({ signOut, user, awsRum }) => {
 							handleNewChat={handleNewChat}
 							handleDeleteChat={handleDeleteChat}
 							conversationList={conversationList}
+							handleSelectChat={handleSelectChat}
 							conversationListLoading={conversationListLoading}
-							selectedChatId={selectedChatId}
-							setSelectedChatId={setSelectedChatId}
-							setAppSessionId={setAppSessionId}
-							setRequireConversationLoad={setRequireConversationLoad}
-							handleModeChange={handleModeChange}
-							getModeObjectFromModelID={getModeObjectFromModelID}
-							setKBSessionId={setKBSessionId}
-							onSelectedKbMode={onSelectedKbMode}
-							bedrockKnowledgeBases={bedrockKnowledgeBases}
-							setExpandedCategories={setExpandedCategories}
+							selectedConversation={selectedConversation}
 							isDisabled={isDisabled}
 							reactThemeMode={reactThemeMode}
-							setMessages={setMessages}
 						/>
 						<div className="resizer" onMouseDown={handleMouseDown} />
 					</Box>
@@ -1505,20 +1595,19 @@ const App = memo(({ signOut, user, awsRum }) => {
 								messages={messages}
 								selectedMode={selectedMode}
 								setMessages={setMessages}
-								appSessionid={appSessionid}
+								selectedConversation={selectedConversation}
 								loadConversationHistory={loadConversationHistory}
 								loadConversationList={loadConversationList}
 								onSend={onSend}
 								requireConversationLoad={requireConversationLoad}
 								setRequireConversationLoad={setRequireConversationLoad}
-								setAppSessionId={setAppSessionId}
-								selectedChatId={selectedChatId}
 								reactThemeMode={reactThemeMode}
 								websocketConnectionId={websocketConnectionId}
+								conversationList={conversationList}
 							/>
 						</div>
 						<MessageInput
-							appSessionid={appSessionid}
+							selectedConversation={selectedConversation}
 							onSend={onSend}
 							disabled={isDisabled || isLoading}
 							setIsDisabled={setIsDisabled}

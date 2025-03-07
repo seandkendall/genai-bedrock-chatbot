@@ -12,10 +12,10 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
-import { MathJaxContext, MathJax } from 'better-react-mathjax';
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
+import { MathJaxContext, MathJax } from "better-react-mathjax";
 
 import { okaidia } from "react-syntax-highlighter/dist/esm/styles/prism";
 import CodeBlock from "./CodeBlock";
@@ -39,101 +39,55 @@ const ChatMessage = memo(
 		prompt,
 		reactThemeMode,
 	}) => {
-		
 		const parseDeepseekResponse = useCallback((content) => {
-			const sections = {
-			  user: '',
-			  think: '',
-			  response: ''
-			};
-		  
-			let currentSection = '';
-			const lines = content.split('\n');
-		  
-			const processPart = (part, sectionName) => {
-			  if (currentSection && currentSection !== sectionName) {
-				sections[currentSection] = sections[currentSection].trim();
-			  }
-			  currentSection = sectionName;
-			  if (part.trim()) {
-				sections[currentSection] += `${part.trim()}\n`;
-			  }
-			};
-		  
-			for (const line of lines) {
-			  const parts = line.split(/<\/?(?:user|think|system)>/i);
-			  
-			  for (let i = 0; i < parts.length; i++) {
-				const part = parts[i];
-				const lowerPart = part.toLowerCase();
-		  
-				if (lowerPart.includes('</user>')) {
-				  processPart(part.split('</user>')[0], 'user');
-				  currentSection = '';
-				} else if (lowerPart.includes('</think>')) {
-				  processPart(part.split('</think>')[0], 'think');
-				  currentSection = '';
-				} else if (lowerPart.includes('</system>')) {
-					processPart(part.split('</system>')[0], 'system');
-					currentSection = '';
-				} else if (lowerPart.includes('<user>')) {
-				  processPart(part.split('<user>')[1], 'user');
-				} else if (lowerPart.includes('<think>')) {
-				  processPart(part.split('<think>')[1], 'think');
-				} else if (lowerPart.includes('<system>')) {
-					processPart(part.split('<system>')[1], 'system');
-				} else if (currentSection) {
-				  sections[currentSection] += `${part.trim()}\n`;
-				} else {
-				  sections.response += `${part.trim()}\n`;
-				}
-			  }
+			const sections = { user: "", think: "", response: "", system: "" };
+			const sectionRegex = /<(user|think|system)>([\s\S]*?)<\/\1>/gi;
+
+			// Use matchAll instead of exec
+			for (const match of content.matchAll(sectionRegex)) {
+				const [, type, text] = match;
+				sections[type] = text.trim();
 			}
-		  
-			// Trim whitespace from each section
-			for (const key of Object.keys(sections)) {
-			  sections[key] = sections[key].trim();
-			}
-		  
+
+			sections.response = content.replace(sectionRegex, "").trim();
 			return sections;
-		  }, []);
+		}, []);
 
-		const formatContent = useCallback((content, outputTokenCount) => {
-			let formattedContent = '';
-		  
-			// Check if content contains 'think', 'system' or 'user' tags
-			if (/<\/?(?:think|user|system)>/i.test(content)) {
-			  // Parse the Deepseek response
-			  const parsedContent = parseDeepseekResponse(content);
-		  
-			  // Combine the parsed sections into a single string, using Markdown syntax
-			  if (parsedContent.user) {
-				formattedContent += `## User Input Summary\n\n${parsedContent.user}\n\n`;
-			  }
-		  
-			  if (parsedContent.think) {
-				formattedContent += `## Thinking Process\n\n${parsedContent.think}\n\n`;
-			  }
+		const formatContent = useCallback(
+			(content, outputTokenCount) => {
+				let formattedContent = "";
 
-			  if (parsedContent.system) {
-				formattedContent += `## System\n\n${parsedContent.system}\n\n`;
-			  }
-		  
-			  if (parsedContent.response) {
-				formattedContent += `## Response\n\n${parsedContent.response}`;
-			  }
-		  
-			  formattedContent = formattedContent.trim();
-			} else {
-			  // If no tags are present, use the raw content
-			  formattedContent = content.trim();
-			}
-			return formattedContent;
-			// if (!outputTokenCount || outputTokenCount < 4096) return formattedContent;
-		  
-			// const contentslice = formattedContent.slice(-100).trim();
-			// return `${formattedContent}\n\n---\n\n**This response was too large and may have been cut short. If you would like to see the rest of this response, ask me this:**\n\n> I did not receive your full last response. Please re-send me the remainder of the final response starting from the text:\n>\n> "${contentslice}"`;
-		  }, [parseDeepseekResponse]);
+				// Check if content contains 'think', 'system' or 'user' tags
+				if (/<\/?(?:think|user|system)>/i.test(content)) {
+					// Parse the Deepseek response
+					const parsedContent = parseDeepseekResponse(content);
+
+					// Combine the parsed sections into a single string, using Markdown syntax
+					if (parsedContent.user) {
+						formattedContent += `## User Input Summary\n\n${parsedContent.user}\n\n`;
+					}
+
+					if (parsedContent.think) {
+						formattedContent += `## Thinking Process\n\n${parsedContent.think}\n\n`;
+					}
+
+					if (parsedContent.system) {
+						formattedContent += `## System\n\n${parsedContent.system}\n\n`;
+					}
+
+					if (parsedContent.response) {
+						formattedContent += `## Response\n\n${parsedContent.response}`;
+					}
+
+					formattedContent = formattedContent.trim();
+				} else {
+					// If no tags are present, use the raw content
+					formattedContent = content.trim();
+				}
+				return formattedContent;
+			},
+			[parseDeepseekResponse],
+		);
 
 		const reformatFilename = useCallback((filename) => {
 			if (!filename) return "";
@@ -174,7 +128,7 @@ const ChatMessage = memo(
 							s3Key: reformatFilename(item.document.s3source.s3key),
 						});
 					}
-          if (item.video?.s3source?.s3key) {
+					if (item.video?.s3source?.s3key) {
 						acc.push({
 							type: "video",
 							s3Key: reformatFilename(item.video.s3source.s3key),
@@ -190,7 +144,7 @@ const ChatMessage = memo(
 		}, [content, hasError, raw_message, reformatFilename]);
 
 		const handleRefresh = useCallback(() => {
-			onSend(null, null, true,false);
+			onSend(null, null, true, false);
 		}, [onSend]);
 
 		const isAssistant = role === "Assistant" || role === "assistant";
@@ -230,33 +184,32 @@ const ChatMessage = memo(
 					</>
 				);
 			}
-
 			return (
 				<>
 					<MathJaxContext>
 						<MathJax>
 							<ReactMarkdown
-								remarkPlugins={[remarkGfm,remarkMath]}
+								remarkPlugins={[remarkGfm, remarkMath]}
 								rehypePlugins={[rehypeKatex]}
 								components={{
 									math: ({ value }) => (
 										<div>
-										  <MathJax>{`\\[${value}\\]`}</MathJax>
+											<MathJax>{`\\[${value}\\]`}</MathJax>
 										</div>
-									  ),
-									  inlineMath: ({ value }) => (
+									),
+									inlineMath: ({ value }) => (
 										<span>
-										  <MathJax>{`\\(${value}\\)`}</MathJax>
+											<MathJax>{`\\(${value}\\)`}</MathJax>
 										</span>
-									  ),
+									),
 									code({ node, inline, className, children, ...props }) {
 										const match = /language-(\w+)/.exec(className || "");
 										const language = match ? match[1] : "";
 										return !inline && language && language.trim() !== "" ? (
 											<CodeBlock
-											code={String(children).trim()}
-											language={language}
-											style={okaidia}
+												code={String(children).trim()}
+												language={language}
+												style={okaidia}
 											/>
 										) : (
 											<code className={className}>{children}</code>
@@ -416,17 +369,20 @@ const ChatMessage = memo(
 					</MathJaxContext>
 					{attachments.length > 0 && (
 						<Box mt={2} display="flex" flexWrap="wrap" gap={1}>
-							{attachments.map((attachment, index) => (
+							{attachments.map((attachment) => (
 								<Chip
-									key={index}
+									key={attachment.s3Key}
 									label={attachment.s3Key}
-                  color={
-                    attachment.type === "image" ? "primary" :
-                    attachment.type === "video" ? "secondary" :
-                    attachment.type === "document" ? "warning" :
-                    "success"
-                    }	
-									sx={{ml: 1}}
+									color={
+										attachment.type === "image"
+											? "primary"
+											: attachment.type === "video"
+												? "secondary"
+												: attachment.type === "document"
+													? "warning"
+													: "success"
+									}
+									sx={{ ml: 1 }}
 									size="small"
 								/>
 							))}

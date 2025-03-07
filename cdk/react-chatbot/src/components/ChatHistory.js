@@ -1,55 +1,123 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useRef, forwardRef, memo } from 'react';
-import ChatMessage from './ChatMessage';
-import { Box } from '@mui/material';
+import React, { useEffect, useRef, forwardRef, memo } from "react";
+import ChatMessage from "./ChatMessage";
+import { Box } from "@mui/material";
 
-const ChatHistory = memo(forwardRef(({ user, messages, selectedMode, setMessages, appSessionid, loadConversationHistory,loadConversationList, onSend,requireConversationLoad,setRequireConversationLoad,setAppSessionId,selectedChatId,reactThemeMode,websocketConnectionId }, ref) => {
-  const lastMessageRef = useRef(null);
+const ChatHistory = memo(
+	forwardRef(
+		(
+			{
+				user,
+				messages,
+				selectedMode,
+				setMessages,
+				selectedConversation,
+				loadConversationHistory,
+				loadConversationList,
+				onSend,
+				requireConversationLoad,
+				setRequireConversationLoad,
+				reactThemeMode,
+				websocketConnectionId,
+				conversationList,
+			},
+			ref,
+		) => {
+			const lastMessageRef = useRef(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
-  useEffect(() => {
-      if (requireConversationLoad && websocketConnectionId !== null) {
-        if (appSessionid && appSessionid !== '') {
-          const chatHistory = localStorage.getItem(`chatHistory-${appSessionid}`);
-          setMessages(chatHistory ? JSON.parse(chatHistory) : []);
-          loadConversationHistory(appSessionid);
-        }else{
-          setAppSessionId(
-            `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
-          );
-        }
-        if (requireConversationLoad){
-          loadConversationList()
-          setRequireConversationLoad(false);
-        }
-      }
-  }, [selectedMode, user, appSessionid,websocketConnectionId]);
-  
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
-    useEffect(() => {
-    lastMessageRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+			// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+			useEffect(() => {
+				if (requireConversationLoad && websocketConnectionId !== null) {
+					if (selectedConversation?.session_id) {
+						// Reload conversation from conversation list (for the most up to date attributes)
+						selectedConversation = conversationList.find(
+							(item) => item.session_id === selectedConversation.session_id,
+						);
 
-  return (
-    <Box ref={ref} className="chat-history" sx={{ flex: 1, flexGrow: 1, paddingLeft: 'calc(var(--sidebar-width) + 10px)', paddingRight: '10px', p: 2, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {messages?.map((message, index) => (
-        <div key={message.id || index} >
-          <ChatMessage
-            {...message}
-            imageAlt={message.imageAlt || ''}
-            isImage={message.isImage || false}
-            isVideo={message.isVideo || false}
-            prompt={message.prompt || ''}
-            onSend={onSend}
-            isLastMessage={index === messages.length - 1}
-            reactThemeMode={reactThemeMode}
-          />
-        </div>
-      ))}
-      <div ref={lastMessageRef} />
-    </Box>
-  );
+						const chatHistory = localStorage.getItem(
+							`chatHistory-${selectedConversation?.session_id}`,
+						);
+						const chatHistoryExists =
+							chatHistory !== null &&
+							chatHistory &&
+							JSON.parse(chatHistory).length > 0;
+						// get last element of JSON.parse(chatHistory)
+						let lastLoadedChatMessage = null;
+						if (chatHistoryExists) {
+							setMessages(chatHistory ? JSON.parse(chatHistory) : []);
+							lastLoadedChatMessage = JSON.parse(chatHistory).slice(-1)[0];
+							if (
+								lastLoadedChatMessage.message_id !==
+								selectedConversation.last_message_id
+							) {
+								console.log("Loading Chat History");
+								loadConversationHistory(
+									selectedConversation?.session_id,
+									chatHistoryExists,
+									lastLoadedChatMessage?.message_id,
+								);
+							} else {
+								console.log("Chat History already loaded");
+							}
+						} else {
+							loadConversationHistory(
+								selectedConversation?.session_id,
+								chatHistoryExists,
+								lastLoadedChatMessage?.message_id,
+							);
+						}
+					}
+					if (requireConversationLoad) {
+						loadConversationList();
+						setRequireConversationLoad(false);
+					}
+				}
+			}, [
+				selectedMode,
+				user,
+				selectedConversation?.session_id,
+				websocketConnectionId,
+			]);
 
-}));
+			// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+			useEffect(() => {
+				lastMessageRef.current?.scrollIntoView({ behavior: "smooth" });
+			}, [messages]);
+
+			return (
+				<Box
+					ref={ref}
+					className="chat-history"
+					sx={{
+						flex: 1,
+						flexGrow: 1,
+						paddingLeft: "calc(var(--sidebar-width) + 10px)",
+						paddingRight: "10px",
+						p: 2,
+						overflowY: "auto",
+						display: "flex",
+						flexDirection: "column",
+					}}
+				>
+					{messages?.map((message, index) => (
+						<div key={message.id || index}>
+							<ChatMessage
+								{...message}
+								imageAlt={message.imageAlt || ""}
+								isImage={message.isImage || false}
+								isVideo={message.isVideo || false}
+								prompt={message.prompt || ""}
+								onSend={onSend}
+								isLastMessage={index === messages.length - 1}
+								reactThemeMode={reactThemeMode}
+							/>
+						</div>
+					))}
+					<div ref={lastMessageRef} />
+				</Box>
+			);
+		},
+	),
+);
 
 export default ChatHistory;

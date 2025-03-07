@@ -21,6 +21,7 @@ conversations_table = boto3.resource("dynamodb").Table(conversations_table_name)
 logger = Logger(service="BedrockAgentsClient")
 metrics = Metrics()
 tracer = Tracer()
+ENABLE_CITATIONS = False
 
 
 # AWS API Gateway Management API client
@@ -81,11 +82,16 @@ def process_websocket_message(request_body, force_null_kb_session_id):
     if kb_session_id == "undefined":
         kb_session_id = ""
 
-    tracer.put_annotation(key="SessionID", value=session_id)
-    tracer.put_annotation(key="UserID", value=user_id)
-    tracer.put_annotation(key="MessageType", value=message_type)
-    tracer.put_annotation(key="ConnectionID", value=connection_id)
-    tracer.put_annotation(key="KBSessionID", value=kb_session_id)
+    if session_id:
+        tracer.put_annotation(key="SessionID", value=session_id)
+    if user_id:
+        tracer.put_annotation(key="UserID", value=user_id)
+    if message_type:
+        tracer.put_annotation(key="MessageType", value=message_type)
+    if connection_id:
+        tracer.put_annotation(key="ConnectionID", value=connection_id)
+    if kb_session_id:
+        tracer.put_annotation(key="KBSessionID", value=kb_session_id)
 
     # Check if the WebSocket connection is open
     try:
@@ -128,6 +134,8 @@ def process_websocket_message(request_body, force_null_kb_session_id):
             selected_knowledgebase_id = selected_mode.get("knowledgeBaseId")
             selected_kb_mode = request_body.get("selectedKbMode", "none")
             selected_model_id = selected_kb_mode.get("modelArn")
+            selected_model_name = selected_model_id
+
             retrieveAndGenerateConfigurationData = {
                 "knowledgeBaseConfiguration": {
                     "knowledgeBaseId": selected_knowledgebase_id,
@@ -162,6 +170,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
                     if (
                         "Knowledge base configurations cannot be modified for an ongoing session"
                         in str(e)
+                        or "is not valid. Please check and try again" in str(e)
                     ):
                         # reset kb_session_id and loop
                         kb_session_id = None
@@ -203,6 +212,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
                 user_id,
                 selected_knowledgebase_id,
                 selected_model_id,
+                selected_model_name,
                 selected_model_category,
                 persisted_chat_title,
             )
@@ -408,9 +418,10 @@ def process_bedrock_knowledgebase_response_stream(
 
         elif "citation" in event:
             # Collect citations to send later
-            citation_data = event["citation"]
-            if citation_data:
-                citations_list.append(citation_data)
+            if ENABLE_CITATIONS:
+                citation_data = event["citation"]
+                if citation_data:
+                    citations_list.append(citation_data)
 
     # Send chat title
     commons.send_websocket_message(
@@ -709,6 +720,7 @@ def store_bedrock_knowledgebase_response(
     user_id,
     selected_knowledgebase_id,
     selected_model_id,
+    selected_model_name,
     selected_model_category,
     chat_title,
 ):
@@ -738,6 +750,7 @@ def store_bedrock_knowledgebase_response(
             "last_modified_date": {"N": current_timestamp},
             "selected_knowledgebase_id": {"S": selected_knowledgebase_id},
             "selected_model_id": {"S": selected_model_id},
+            "selected_model_name": {"S": selected_model_name},
             "kb_session_id": {"S": kb_session_id},
             "category": {"S": selected_model_category},
             "conversation_history": {"S": conversation_json},

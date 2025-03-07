@@ -58,20 +58,11 @@ const LeftSideBar = ({
 	handleNewChat,
 	handleDeleteChat,
 	conversationList,
+	handleSelectChat,
 	conversationListLoading,
-	selectedChatId,
-	setSelectedChatId,
-	setAppSessionId,
-	setRequireConversationLoad,
-	handleModeChange,
-	getModeObjectFromModelID,
-	setKBSessionId,
-	onSelectedKbMode,
-	bedrockKnowledgeBases,
-	setExpandedCategories,
+	selectedConversation,
 	isDisabled,
 	reactThemeMode,
-	setMessages
 }) => {
 	const sidebarStyle = {
 		height: "100%",
@@ -81,57 +72,6 @@ const LeftSideBar = ({
 		bgcolor:
 			reactThemeMode === "light" ? "background.paper" : "background.default",
 		color: reactThemeMode === "light" ? "text.primary" : "text.secondary",
-	};
-
-	const handleSelectChat = (
-		sessionId,
-		selectedModelId,
-		selected_knowledgebase_id,
-		kb_session_id,
-		category,
-	) => {
-		if (isDisabled) {
-			return;
-		}
-		setMessages([])
-		setRequireConversationLoad(true);
-		setSelectedChatId(sessionId);
-		if (sessionId && !sessionId.includes("undefined")) {
-			localStorage.setItem("selectedChatId", sessionId);
-		}
-		setAppSessionId(sessionId);
-		const selMode = getModeObjectFromModelID(category, selectedModelId);
-		if (selected_knowledgebase_id && kb_session_id) {
-			setKBSessionId(kb_session_id);
-			const selectedObject = bedrockKnowledgeBases.find(
-				(model) => model.knowledgeBaseId === selected_knowledgebase_id,
-			);
-			onSelectedKbMode(selMode);
-			setExpandedCategories((prev) => {
-				return {
-					...Object.keys(prev).reduce((acc, key) => {
-						acc[key] = false;
-						return acc;
-					}, {}),
-					[selectedObject.category]: true,
-				};
-			});
-			handleModeChange(selectedObject, true);
-			localStorage.setItem("selectedKbMode", JSON.stringify(selectedObject));
-			localStorage.setItem(`kbSessionId-${sessionId}`, kb_session_id);
-		} else if (selMode) {
-			setExpandedCategories((prev) => {
-				return {
-					...Object.keys(prev).reduce((acc, key) => {
-						acc[key] = false;
-						return acc;
-					}, {}),
-					[selMode.category]: true,
-				};
-			});
-
-			handleModeChange(selMode, true);
-		}
 	};
 
 	return (
@@ -148,7 +88,7 @@ const LeftSideBar = ({
 					Chats{" "}
 					{conversationList.length > 1 && (
 						<Typography component="span" variant="subtitle1">
-						({conversationList.length})
+							({conversationList.length})
 						</Typography>
 					)}
 				</Typography>
@@ -157,85 +97,87 @@ const LeftSideBar = ({
 				</IconButton>
 			</Box>
 			<List className="left-sidebar" sx={{ flexGrow: 1, overflowY: "auto" }}>
-				{conversationList.map((conversation) => (
-					<ListItem
-						key={conversation.session_id}
-						onClick={() => {
-							if (!isDisabled && selectedChatId !== conversation.session_id) {
-								handleSelectChat(
-									conversation.session_id,
-									conversation.selected_model_id,
-									conversation.selected_knowledgebase_id,
-									conversation.kb_session_id,
-									conversation.category,
-								);
-							}
-						}}
-						className={
-							selectedChatId === conversation.session_id ? "Mui-selected" : ""
-						}
-						disabled={isDisabled}
-						sx={{
-							display: "flex",
-							alignItems: "center",
-							pr: 2,
-							...(selectedChatId === conversation.session_id && {
-								bgcolor:
-									reactThemeMode === "light" ? "action.selected" : "grey.700",
-							}),
-						}}
-					>
-						{conversation.category && (
-							<Tooltip
-								title={`Model: ${formatModelId(conversation?.selected_model_id || conversation?.selected_knowledgebase_id || conversation?.flow_alias_id || conversation?.selected_agent_alias_id)}`}
-								arrow
-							>
-								<Box
-									sx={{
-										width: 24,
-										height: 24,
-										borderRadius: "50%",
-										backgroundColor: getCategoryIdentifier(
-											conversation.category,
-										).color,
-										display: "flex",
-										justifyContent: "center",
-										alignItems: "center",
-										marginRight: 2,
-										cursor: isDisabled ? "default" : "help",
-										flexShrink: 0,
-										opacity: isDisabled ? 0.5 : 1,
-									}}
-								>
-									<Typography
-										variant="caption"
-										sx={{ color: "white", fontSize: "0.7rem" }}
-									>
-										{getCategoryIdentifier(conversation.category).text}
-									</Typography>
-								</Box>
-							</Tooltip>
-						)}
-						<ListItemText
-							primary={conversation.title}
-							secondary={formatDate(conversation.last_modified_date)}
-							sx={{ flex: 1, minWidth: 0, opacity: isDisabled ? 0.5 : 1 }}
-						/>
-						<IconButton
-							edge="end"
-							aria-label="delete"
-							onClick={(e) => {
-								if (!isDisabled) {
-									e.stopPropagation();
-									handleDeleteChat(conversation.session_id);
+				{conversationList.map((conversation) => {
+					return (
+						<ListItem
+							key={conversation.session_id}
+							onClick={() => {
+								if (
+									!isDisabled &&
+									selectedConversation?.session_id !== conversation.session_id
+								) {
+									handleSelectChat(conversation);
 								}
 							}}
+							className={
+								selectedConversation?.session_id === conversation.session_id
+									? "Mui-selected"
+									: ""
+							}
 							disabled={isDisabled}
+							sx={{
+								display: "flex",
+								alignItems: "center",
+								pr: 2,
+								...(selectedConversation?.session_id ===
+									conversation.session_id && {
+									bgcolor:
+										reactThemeMode === "light" ? "action.selected" : "grey.700",
+								}),
+							}}
 						>
-							<DeleteIcon />
-						</IconButton>
-					</ListItem>
-				))}
+							{conversation.category && (
+								<Tooltip
+									title={`Model: ${formatModelId(conversation?.selected_model_id || conversation?.selected_knowledgebase_id || conversation?.flow_alias_id || conversation?.selected_agent_alias_id)}`}
+									arrow
+								>
+									<Box
+										sx={{
+											width: 24,
+											height: 24,
+											borderRadius: "50%",
+											backgroundColor: getCategoryIdentifier(
+												conversation.category,
+											).color,
+											display: "flex",
+											justifyContent: "center",
+											alignItems: "center",
+											marginRight: 2,
+											cursor: isDisabled ? "default" : "help",
+											flexShrink: 0,
+											opacity: isDisabled ? 0.5 : 1,
+										}}
+									>
+										<Typography
+											variant="caption"
+											sx={{ color: "white", fontSize: "0.7rem" }}
+										>
+											{getCategoryIdentifier(conversation.category).text}
+										</Typography>
+									</Box>
+								</Tooltip>
+							)}
+							<ListItemText
+								primary={conversation.title}
+								secondary={formatDate(conversation.last_modified_date)}
+								sx={{ flex: 1, minWidth: 0, opacity: isDisabled ? 0.5 : 1 }}
+							/>
+							<IconButton
+								edge="end"
+								aria-label="delete"
+								onClick={(e) => {
+									if (!isDisabled) {
+										e.stopPropagation();
+										handleDeleteChat(conversation.session_id);
+									}
+								}}
+								disabled={isDisabled}
+							>
+								<DeleteIcon />
+							</IconButton>
+						</ListItem>
+					);
+				})}
 			</List>
 			{conversationListLoading && (
 				<Box
