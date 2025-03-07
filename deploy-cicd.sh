@@ -47,17 +47,28 @@ done
 create_eventbridge_rule() {
     local schedule=$1
     local rule_name="$CODEBUILD_PROJECT_NAME-trigger"
+    local region=$(aws configure get region)
+    
+    # Debug output
+    echo "Using region: $region"
+    echo "CodeBuild project name: $CODEBUILD_PROJECT_NAME"
     
     # Create the EventBridge rule
     aws events put-rule \
         --name "$rule_name" \
         --schedule-expression "$schedule" \
-        --state "ENABLED"
+        --state "ENABLED" \
+        --region "$region"
 
     # Create the target for the rule
     aws events put-targets \
         --rule "$rule_name" \
-        --targets "[{\"Id\": \"1\", \"Arn\": \"arn:aws:codebuild:$(aws configure get region):$(aws sts get-caller-identity --query Account --output text):project/$CODEBUILD_PROJECT_NAME\", \"RoleArn\": \"arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/service-role/Amazon_EventBridge_Invoke_CodeBuild\"}]"
+        --region "$region" \
+        --targets "[{\"Id\": \"1\", \"Arn\": \"arn:aws:codebuild:$region:$(aws sts get-caller-identity --query Account --output text):project/$CODEBUILD_PROJECT_NAME\", \"RoleArn\": \"arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/service-role/Amazon_EventBridge_Invoke_CodeBuild\"}]"
+    
+    # Confirm created resources
+    echo "EventBridge rule ARN: $(aws events describe-rule --name "$rule_name" --region "$region" --query 'Arn' --output text)"
+    echo "Target ARN: arn:aws:codebuild:$region:$(aws sts get-caller-identity --query Account --output text):project/$CODEBUILD_PROJECT_NAME"
 }
 
 # Function to delete existing resources
