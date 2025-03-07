@@ -32,6 +32,7 @@ from constructs import Construct
 from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3  # type: ignore
 import requests
 import time
+import json
 import os
 from aws_cdk.aws_route53 import PublicHostedZone
 import cdk_nag
@@ -1055,12 +1056,16 @@ class ChatbotWebsiteStack(Stack):
             ),
             managed_login_version=cognito.ManagedLoginVersion.NEWER_MANAGED_LOGIN,
         )
+        with open('cdk/cognito_ui_settings.json', 'r') as file:
+            settings_dict = json.load(file)
+
         cognito.CfnManagedLoginBranding(
             self,
             "CognitoManagedLoginBranding",
             user_pool_id=user_pool.user_pool_id,
             client_id=user_pool_client.user_pool_client_id,
-            use_cognito_provided_values=True,
+            use_cognito_provided_values=False,
+            settings=settings_dict,
         )
 
         # Create the EventBridge Scheduler schedule
