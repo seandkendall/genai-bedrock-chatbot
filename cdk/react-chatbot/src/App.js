@@ -479,6 +479,17 @@ const App = memo(({ signOut, user, awsRum }) => {
 			};
 			setPricePer1000InputTokens(modelPriceInfo.pricePer1000InputTokens);
 			setPricePer1000OutputTokens(modelPriceInfo.pricePer1000OutputTokens);
+
+			// TODO: Print console.log so the user know if we found the model in modelPrices and what the price will be
+			if (modelPrices[modelId]) {
+				console.log(
+					`Found pricing for model ${modelId}: $${modelPriceInfo.pricePer1000InputTokens} per 1000 input tokens, $${modelPriceInfo.pricePer1000OutputTokens} per 1000 output tokens`,
+				);
+			} else {
+				console.log(
+					`Model ${modelId} not found in pricing table. Using default pricing: $${modelPriceInfo.pricePer1000InputTokens} per 1000 input tokens, $${modelPriceInfo.pricePer1000OutputTokens} per 1000 output tokens`,
+				);
+			}
 		} else {
 			const modelPriceInfo = {
 				pricePer1000InputTokens: 0.003,
@@ -486,6 +497,9 @@ const App = memo(({ signOut, user, awsRum }) => {
 			};
 			setPricePer1000InputTokens(modelPriceInfo.pricePer1000InputTokens);
 			setPricePer1000OutputTokens(modelPriceInfo.pricePer1000OutputTokens);
+			console.log(
+				`No model selected. Using default pricing: $${modelPriceInfo.pricePer1000InputTokens} per 1000 input tokens, $${modelPriceInfo.pricePer1000OutputTokens} per 1000 output tokens`,
+			);
 		}
 	};
 
