@@ -61,7 +61,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 
 	const [selectedConversation, setSelectedConversation] = useState(() => {
 		const storedValue = localStorage.getItem("selectedConversation");
-		if (storedValue) {
+		if (storedValue && storedValue !== undefined) {
 			try {
 				const storedValueJson = JSON.parse(storedValue);
 				return storedValueJson;
@@ -69,8 +69,9 @@ const App = memo(({ signOut, user, awsRum }) => {
 				// If parsing fails, remove the invalid value from localStorage
 				localStorage.removeItem("selectedConversation");
 				console.warn(
-					"Invalid JSON in localStorage, removed 'selectedConversation'",
+					"Invalid JSON in localStorage, removed 'selectedConversation'. Corrupt value in next log:",
 				);
+				console.warn(storedValue);
 			}
 		}
 		return {
@@ -645,9 +646,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 		chatHistoryExists,
 		lastLoadedChatMessageId,
 	) => {
-		// if (chatHistoryExists) {
-		// 	return;
-		// }
 		if (
 			models &&
 			selectedMode &&
@@ -793,22 +791,24 @@ const App = memo(({ signOut, user, awsRum }) => {
 			return { document: { s3source: { s3key: attachment.url } } };
 		});
 	}
-	
+
 	axiosRetry(axios, {
 		retries: 3, // Number of retry attempts
 		retryDelay: (retryCount) => {
-		  return retryCount * 1000; // Time delay between retries (increases with each retry)
+			return retryCount * 1000; // Time delay between retries (increases with each retry)
 		},
 		retryCondition: (error) => {
-		  // Retry on network errors and 5xx responses
-		  return error.response?.status === 504 || 
-				 axiosRetry.isNetworkOrIdempotentRequestError(error);
+			// Retry on network errors and 5xx responses
+			return (
+				error.response?.status === 504 ||
+				axiosRetry.isNetworkOrIdempotentRequestError(error)
+			);
 		},
 		onRetry: (retryCount, error) => {
-		  console.log(`Retry attempt ${retryCount} for error:`, error.message);
-		}
-	  });
-	  
+			console.log(`Retry attempt ${retryCount} for error:`, error.message);
+		},
+	});
+
 	const sendMessageViaRest = async (data, endpoint, action) => {
 		awsRum.recordEvent("chatbot_rest_call", {
 			action: action,
@@ -1283,7 +1283,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 				if (message.modelscan === true) setIsRefreshing(false);
 
 				setModelsLoaded(true);
-			} else if (message.type === "conversation_history") {
+			} else if (
+				message.type === "conversation_history" ||
+				message.type === "conversation_history_tail"
+			) {
 				// Do nothing, UseEffect will handle this
 				// to find this code, search for:
 				// if (message.type !== "conversation_history") return;
@@ -1786,6 +1789,8 @@ function convertRoleToHuman(input) {
 			};
 		}
 		if (item?.role?.toLowerCase() === "assistant") {
+			console.log("SDK ASSISTANT MESSAGE FROM BACKEND:");
+			console.log(item);
 			return {
 				...item,
 				role: "assistant",

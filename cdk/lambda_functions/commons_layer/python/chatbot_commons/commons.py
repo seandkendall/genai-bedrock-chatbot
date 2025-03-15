@@ -404,6 +404,7 @@ def generate_video(
                     ExpectedBucketOwner=aws_account_id,
                     ExpectedSourceBucketOwner=aws_account_id,
                     Bucket=video_bucket,
+                    Key=f"{s3_location}",
                 )
                 s3_client.delete_object(
                     Bucket=video_bucket, Key=f"{s3_location_original}"

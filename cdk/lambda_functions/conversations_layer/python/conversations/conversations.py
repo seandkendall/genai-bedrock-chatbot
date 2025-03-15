@@ -16,6 +16,91 @@ def delete_conversation_history(dynamodb, conversations_table_name, logger, sess
         logger.error(f"Error deleting conversation history (9781): {str(e)}")
 
 
+def send_conversation_history_to_web_client(
+    conversation_history,
+    logger,
+    commons,
+    apigateway_management_api,
+    connection_id,
+    session_id,
+    conversation_history_in_s3,
+    message_tail,
+):
+    """
+    Sends conversation history to a web client through WebSocket.
+
+    This function takes a conversation history, optionally truncates it to the last
+    N messages, splits it into manageable chunks, and sends these chunks to a web client
+    via WebSocket connection.
+
+    Parameters:
+    -----------
+    conversation_history : list
+        The complete conversation history to be sent.
+
+    logger : logging.Logger
+        Logger instance to record operations.
+
+    commons : object
+        Common utilities object containing shared methods.
+
+    apigateway_management_api : object
+        API Gateway Management API client for WebSocket communication.
+
+    connection_id : str
+        WebSocket connection identifier for the target client.
+
+    session_id : str
+        Identifier for the current conversation session.
+
+    conversation_history_in_s3 : bool
+        Flag indicating whether the conversation history was loaded from S3.
+
+    message_tail : int or None
+        If provided as a positive integer, only the last `message_tail` messages
+        from conversation history will be sent.
+
+    Returns:
+    --------
+    None
+        The function sends WebSocket messages but doesn't return any values.
+
+    Notes:
+    ------
+    - The function sends either full history or a tail based on the message_tail parameter
+    - Conversation history is split into chunks before sending
+    - Each chunk is sent with metadata including progress indicators and source information
+    """
+    message_type = "conversation_history"
+    # if message_tail is not null and is an integer and is > 0
+    # then we need to send the last message_tail messages from the conversation history
+    # to the web client
+    if message_tail is not None and isinstance(message_tail, int) and message_tail > 0:
+        # Send the last message_tail messages from the conversation history to the web client
+        conversation_history = conversation_history[-message_tail:]
+        logger.info(f"Sending last {message_tail} messages to web client")
+        message_type = "conversation_history_tail"
+    # Split the conversation history into chunks
+    conversation_history_chunks = split_message(conversation_history, logger)
+    # Send the conversation history chunks to the WebSocket client
+    total_chunks = len(conversation_history_chunks)
+    for index, chunk in enumerate(conversation_history_chunks, start=1):
+        commons.send_websocket_message(
+            logger,
+            apigateway_management_api,
+            connection_id,
+            {
+                "type": message_type,
+                "session_id": session_id,
+                "last_message": index == total_chunks,
+                "loaded_from_s3": conversation_history_in_s3,
+                "chunk": chunk.decode("utf-8"),
+                "current_chunk": index,
+                "total_chunks": total_chunks,
+            },
+        )
+
+
 def load_and_send_conversation_history(
     session_id: str,
     connection_id: str,
@@ -74,26 +159,26 @@ def load_and_send_conversation_history(
                     title_string,
                     conversation_history,
                 )
-
-            # Split the conversation history into chunks
-            conversation_history_chunks = split_message(conversation_history, logger)
-            # Send the conversation history chunks to the WebSocket client
-            total_chunks = len(conversation_history_chunks)
-            for index, chunk in enumerate(conversation_history_chunks, start=1):
-                commons.send_websocket_message(
-                    logger,
-                    apigateway_management_api,
-                    connection_id,
-                    {
-                        "type": "conversation_history",
-                        "session_id": session_id,
-                        "last_message": index == total_chunks,
-                        "loaded_from_s3": conversation_history_in_s3,
-                        "chunk": chunk.decode("utf-8"),
-                        "current_chunk": index,
-                        "total_chunks": total_chunks,
-                    },
-                )
+            send_conversation_history_to_web_client(
+                conversation_history,
+                logger,
+                commons,
+                apigateway_management_api,
+                connection_id,
+                session_id,
+                conversation_history_in_s3,
+                2,
+            )
+            send_conversation_history_to_web_client(
+                conversation_history,
+                logger,
+                commons,
+                apigateway_management_api,
+                connection_id,
+                session_id,
+                conversation_history_in_s3,
+                None,
+            )
         else:
             if return_conversation_without_sending:
                 return (False, "", [])
@@ -101,7 +186,11 @@ def load_and_send_conversation_history(
                 logger,
                 apigateway_management_api,
                 connection_id,
-                {"type": "no_conversation_to_load", "last_message": True,"session_id": session_id,},
+                {
+                    "type": "no_conversation_to_load",
+                    "last_message": True,
+                    "session_id": session_id,
+                },
             )
             return []
 
