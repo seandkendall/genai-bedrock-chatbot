@@ -29,10 +29,6 @@ import "./ChatMessage.css";
 
 const ChatMessage = memo(
 	({ message, onSend, isLastMessage, reactThemeMode }) => {
-		const [expanded, setExpanded] = useState(message?.is_reasoning === true);
-		const handleAccordionChange = (event, isExpanded) => {
-			setExpanded(isExpanded);
-		};
 		const parseDeepseekResponse = useCallback((content) => {
 			const sections = { user: "", think: "", response: "", system: "" };
 			const sectionRegex = /<(user|think|system)>([\s\S]*?)<\/\1>/gi;
@@ -98,13 +94,13 @@ const ChatMessage = memo(
 				message?.raw_message?.error && message.raw_message?.error.trim() !== "",
 			[message],
 		);
+		const [expanded, setExpanded] = useState(message?.is_reasoning === true);
 
-		const { messageContent, attachments, reasoningContent } = useMemo(() => {
+		const { messageContent, attachments } = useMemo(() => {
 			if (hasError) {
 				return {
 					messageContent: message?.raw_message?.error,
-					attachments: [],
-					reasoningContent: "",
+					attachments: []
 				};
 			}
 
@@ -113,12 +109,6 @@ const ChatMessage = memo(
 				const textContent = message.content
 					.filter((item) => item.text)
 					.map((item) => item.text)
-					.join(" ");
-
-				// Extract reasoning content
-				const reasoningContent = message.content
-					.filter((item) => item.reasoning)
-					.map((item) => item.reasoning)
 					.join(" ");
 
 				const newAttachments = message.content.reduce((acc, item) => {
@@ -145,15 +135,13 @@ const ChatMessage = memo(
 
 				return {
 					messageContent: textContent,
-					attachments: newAttachments,
-					reasoningContent: reasoningContent,
+					attachments: newAttachments
 				};
 			}
 
 			return {
 				messageContent: message.content,
-				attachments: [],
-				reasoningContent: "",
+				attachments: []
 			};
 		}, [message.content, hasError, message, reformatFilename]);
 
@@ -161,11 +149,7 @@ const ChatMessage = memo(
 			onSend(null, null, true, false);
 		}, [onSend]);
 
-		const isAssistant =
-			message.role === "Assistant" || message.role === "assistant";
 		const isHuman = message.role === "Human" || message.role === "user";
-		const hasReasoning = reasoningContent && reasoningContent.trim().length > 1;
-
 		// biome-ignore lint/correctness/useExhaustiveDependencies: Not Needed
 		const renderContent = useCallback(() => {
 			if (message.isImage) {
@@ -197,6 +181,13 @@ const ChatMessage = memo(
 						<video controls>
 							<source src={messageContent} type="video/mp4" />
 						</video>
+					</>
+				);
+			}
+			if (message.role === "Human" || message.role === "user") {
+				return (
+					<>
+						<Typography>{messageContent}</Typography>
 					</>
 				);
 			}
@@ -379,10 +370,7 @@ const ChatMessage = memo(
 									),
 								}}
 							>
-								{formatContent(
-									messageContent,
-									message.outputTokenCount,
-								)}
+								{formatContent(messageContent, message.outputTokenCount)}
 							</ReactMarkdown>
 						</MathJax>
 					</MathJaxContext>
@@ -436,13 +424,13 @@ const ChatMessage = memo(
 								? "#FFCCCB" //Light Error Background color
 								: isHuman
 									? "grey.200" //Light Human Background color
-									: "background.paper" //Light Assistant Background color
+									: "background.paper" //Light assistant Background color
 							: hasError
 								? "#DC3545" //Dark Error Background color
 								: isHuman
 									? "grey.800" //Dark Human Background color
-									: "grey.600", //Dark Assistant Background color
-					boxShadow: isAssistant ? "0 1px 2px rgba(0, 0, 0, 0.1)" : "none",
+									: "grey.600", //Dark assistant Background color
+					boxShadow: (message?.role?.toLowerCase() === "assistant") ? "0 1px 2px rgba(0, 0, 0, 0.1)" : "none",
 					userSelect: "text",
 				}}
 			>
@@ -453,7 +441,7 @@ const ChatMessage = memo(
 							timestamp={message.timestamp}
 							model={message.model}
 						/>
-						{isAssistant && (
+						{(message?.role?.toLowerCase() === "assistant") && (
 							<>
 								{message.isStreaming && (
 									<Box ml={1}>
@@ -486,34 +474,34 @@ const ChatMessage = memo(
 						</Tooltip>
 					)}
 				</Box>
-				{isAssistant && hasReasoning && (
-					<Accordion
-						expanded={expanded}
-						onChange={handleAccordionChange}
-						sx={{
-							mb: 2,
-							backgroundColor:
-								reactThemeMode === "dark" ? "#323232" : "#f0f4f8", // Darker than #2a2a2a for contrast
-							"&:before": { display: "none" },
-						}}
-					>
-						<AccordionSummary
-							expandIcon={<ExpandMoreIcon />}
-							aria-controls="reasoning-content"
-							id="reasoning-panel-header"
-							className="reasoning-panel-header" 
+				{(message?.role?.toLowerCase() === "assistant") &&
+					message?.reasoning &&
+					message?.reasoning?.trim().length > 1 && (
+						<Accordion
+							expanded={(message?.is_reasoning === true) || expanded}
+							onChange={() => setExpanded(!expanded)}
+							sx={{
+								mb: 2,
+								backgroundColor:
+									reactThemeMode === "dark" ? "#323232" : "#f0f4f8", // Darker than #2a2a2a for contrast
+								"&:before": { display: "none" },
+							}}
 						>
-							<Typography variant="subtitle1">
-								{message.is_reasoning
-									? "AI Reasoning (in progress...)"
-									: "AI Reasoning"}
-							</Typography>
-						</AccordionSummary>
-						<AccordionDetails>
-							{reasoningContent}
-						</AccordionDetails>
-					</Accordion>
-				)}
+							<AccordionSummary
+								expandIcon={<ExpandMoreIcon />}
+								aria-controls="reasoning-content"
+								id="reasoning-panel-header"
+								className="reasoning-panel-header"
+							>
+								<Typography variant="subtitle1">
+									{message?.is_reasoning === true
+										? "AI Reasoning (in progress...)"
+										: "AI Reasoning"}
+								</Typography>
+							</AccordionSummary>
+							<AccordionDetails><ReactMarkdown>{message?.reasoning}</ReactMarkdown></AccordionDetails>
+						</Accordion>
+					)}
 				<Box mt={1}>{renderContent()}</Box>
 			</Box>
 		);

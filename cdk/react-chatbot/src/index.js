@@ -8,14 +8,17 @@ import * as Sentry from "@sentry/react";
 
 import configJson from "./config.json";
 let awsRum = null;
-
-Sentry.init({
-	dsn: "https://c71115934787e1391fbbc2b03ea811b1@o4508960664846336.ingest.us.sentry.io/4508960667205632",
-	integrations: [Sentry.browserTracingIntegration()],
-	tracesSampleRate: 1.0,
-	tracePropagationTargets: ["localhost", "https://dznw81y4yvz5r.cloudfront.net/","dznw81y4yvz5r.cloudfront.net"],
-});
-
+const sentry_dsn = configJson?.sentry_dsn
+if (sentry_dsn && sentry_dsn?.length > 0) {
+	Sentry.init({
+		dsn: sentry_dsn,
+		integrations: [Sentry.browserTracingIntegration(),Sentry.replayIntegration()],
+		tracesSampleRate: 1.0,
+		replaysSessionSampleRate: 0.1,
+  		replaysOnErrorSampleRate: 1.0,
+		tracePropagationTargets: ["localhost",configJson.aws_chatbot_url,`${configJson.aws_chatbot_url}/`,configJson.aws_chatbot_url.replace("https://", "")],
+	});
+}
 try {
 	const config = {
 		sessionSampleRate: 1,

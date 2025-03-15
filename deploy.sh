@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 export AWS_PAGER=""
 ORIGINAL_ARGS=("$@")
+sentry_dsn=""
 
 display_help() {
     echo "Usage: $0 [OPTIONS]"
@@ -11,6 +12,7 @@ display_help() {
     echo "  -c, --context CONTEXT      Specify the context"
     echo "  --debug                    Enable debug mode"
     echo "  --deepseek                 Deploy DeepSeek as a Custom Model Import in Bedrock"
+    echo "  --sentry-dsn DSN           Specify Sentry.io DSN for error tracking"
     echo "  --profile PROFILE          Specify the AWS profile"
     echo "  -t, --tags TAGS            Specify tags"
     echo "  -f, --force                Force deployment"
@@ -257,6 +259,12 @@ while [[ $# -gt 0 ]]; do
     --deepseek)
         deepseek_flag="y"
         shift
+        ;;
+    --sentry-dsn)
+        sentry_dsn="$2"
+        echo "Sentry DSN: $sentry_dsn"
+        echo "$sentry_dsn" > sentry.ref
+        shift 2
         ;;
     --profile)
         profile_flag="--profile $2"
@@ -538,6 +546,9 @@ if [ $? -eq 0 ]; then
 fi
 
 aws_application=""
+if [ -z "$sentry_dsn" ] && [ -f "sentry.ref" ]; then
+    sentry_dsn=$(cat sentry.ref)
+fi
 
 loop_count=0
 while [ -z "$aws_application" ] && [ $loop_count -lt 2 ]; do
@@ -550,7 +561,7 @@ while [ -z "$aws_application" ] && [ $loop_count -lt 2 ]; do
         aws_application=""
     fi
     # Deploy the CDK app
-    cdk deploy --outputs-file outputs.json --context imported_models="$imported_models" --context aws_application="$aws_application" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+    cdk deploy --outputs-file outputs.json --context imported_models="$imported_models" --context aws_application="$aws_application" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context sentryDsn="$sentry_dsn" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
     if [ $? -ne 0 ]; then
         echo "Error: CDK deployment failed. Exiting script."
         exit 1
@@ -579,6 +590,11 @@ rum_identity_pool_id=$(jq -r '.ChatbotWebsiteStack.rumidentitypoolid' ./outputs.
 awschatboturl=$(jq -r '.ChatbotWebsiteStack.AWSChatBotURL' ./outputs.json)
 rum_application_monitor_arn=$(jq -r '.ChatbotWebsiteStack.RUMAppMonitorARN' ./outputs.json)
 rum_application_id=$(echo $rum_application_monitor_arn | awk -F/ '{print $NF}')
+sentry_dsn=$(jq -r '.ChatbotWebsiteStack.SentryDSN' ./outputs.json)
+# Save to ref file
+if [ -n "$sentry_dsn" ] && [ ${#sentry_dsn} -gt 2 ]; then
+    echo "$sentry_dsn" > sentry.ref
+fi
 
 cloudwatchlogslivetailurl=$(jq -r '.ChatbotWebsiteStack.CloudWatchLogsLiveTailURL' ./outputs.json)
 
@@ -622,7 +638,9 @@ new_config_content=$(
   "rum_application_id":"${rum_application_id}",
   "rum_application_version":"1.0.0",
   "rum_application_region":"${region}",
-  "rum_identity_pool_id":"${rum_identity_pool_id}"
+  "rum_identity_pool_id":"${rum_identity_pool_id}",
+  "sentry_dsn":"${sentry_dsn}",
+  "aws_chatbot_url":"${awschatboturl}"
 }
 HEREDOC_DELIMITER
 )

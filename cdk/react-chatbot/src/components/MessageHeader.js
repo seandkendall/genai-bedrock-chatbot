@@ -26,7 +26,7 @@ const MessageHeader = ({ role, timestamp, model }) => {
 	const formatRole = (role) => {
 		if (role === "user") {
 			return "Human";
-		}if (role === "assistant") {
+		}if (role?.toLowerCase() === "assistant") {
 			return "Assistant";
 		}
 		return role;

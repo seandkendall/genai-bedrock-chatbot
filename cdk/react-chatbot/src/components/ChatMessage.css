@@ -8,7 +8,6 @@
 
   /* Dark mode chat message variables */
   --dark-chat-human-bg: #1e3a5f;
-  --dark-chat-assistant-bg: #1c787b;
   --dark-chat-assistant-shadow: rgba(0, 0, 0, 0.3);
 
   /* Text colors */
@@ -143,11 +142,13 @@ details[open] summary {
 }
 
 .chat-accordion.light-mode {
-  background-color: #f0f4f8;
+  background-color: #6ba5df;
+  /* background-color: #f0f4f8; */
 }
 
 .chat-accordion.dark-mode {
-  background-color: #323232;
+  background-color: #00fbf7;
+  /* background-color: #323232; */
 }
 
 .chat-accordion .accordion-title {
@@ -204,10 +205,6 @@ details[open] summary {
   background-color: rgba(0, 0, 0, 0.05);
 }
 
-.reasoning-panel-header .MuiAccordionSummary-root {
-  background-color: lime !important;
-}
-
 
 
 /* Dark mode adjustments */
@@ -245,31 +242,18 @@ details[open] summary {
   }
 
   /* Material UI adjustments for dark mode */
-  .MuiPaper-root.MuiAccordion-root.chat-accordion {
-    background-color: #323232 !important;
-  }
 
   .MuiPaper-root.MuiAccordion-root,
   .MuiAccordion-root {
-    background-color: #323232 !important;
     border: 1px solid rgba(255, 255, 255, 0.12);
   }
 
   .MuiAccordionDetails-root {
-    background-color: #323232 !important;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
-  }
-
-  .MuiAccordionSummary-root {
-    background-color: #3a3a3a !important;
   }
 
   /* Make sure chat message content is visible */
   .message-content {
     color: var(--dark-text);
-  }
-
-  .reasoning-panel-header {
-    background-color: lime !important;
   }
 }

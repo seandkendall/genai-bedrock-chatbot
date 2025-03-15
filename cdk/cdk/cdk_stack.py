@@ -24,6 +24,7 @@ from aws_cdk import (  # type: ignore
     aws_scheduler_targets_alpha as scheduler_targets,
     aws_lambda_event_sources as lambda_event_sources,
     aws_rum as rum,
+    aws_ssm as ssm,
 )
 from aws_cdk.aws_cognito_identitypool_alpha import (
     IdentityPool,
@@ -80,6 +81,28 @@ class ChatbotWebsiteStack(Stack):
         deploy_example_incidents_agent_input = self.node.try_get_context(
             "deployExample"
         )
+        sentry_dsn = self.node.try_get_context("sentryDsn")
+        if sentry_dsn is not None and sentry_dsn != "":
+            ssm.StringParameter(
+                self,
+                "SentryDSNParameter",
+                parameter_name="/genaichatbot/sentry_dsn",
+                description="Sentry DSN URL Value if you would like to use Sentry to monitor the app",
+                string_value=sentry_dsn,
+            )
+            CfnOutput(self, "SentryDSN", value=sentry_dsn)
+        else:
+            # Load sentryDSN value from SSM if parameter exists
+            try:
+                sentry_dsn = ssm.StringParameter.value_from_ssm_parameter(
+                    self, "/genaichatbot/sentry_dsn"
+                )
+                CfnOutput(self, "SentryDSN", value=sentry_dsn)
+            except Exception:
+                print(
+                    "No Sentry DSN URL Found. No Sentry Config will be deployed in the app"
+                )
+
         self.aws_application = self.node.try_get_context("aws_application")
         imported_models = self.node.try_get_context("imported_models")
 

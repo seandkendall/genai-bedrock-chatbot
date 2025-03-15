@@ -9,6 +9,7 @@ import React, {
 	Suspense,
 } from "react";
 import axios from "axios";
+import axiosRetry from "axios-retry";
 import DOMPurify from "dompurify";
 import Header from "./components/Header";
 import ChatHistory from "./components/ChatHistory";
@@ -267,7 +268,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 	useEffect(() => {
 		// if messages has > 0 elements, print to console
 		if (messages.length > 0 && !messagesProcessing) {
-			//Remove any error messages and the cooresponding message before (which is the user message) only for persistence
+			// Remove any error messages and the corresponding message before (which is the user message) only for persistence
 			const filteredMessages = messages.filter((message, index, array) => {
 				if (
 					index > 0 &&
@@ -287,12 +288,58 @@ const App = memo(({ signOut, user, awsRum }) => {
 				}
 				return true;
 			});
+
+			// Transform the message format
+			const transformedMessages = filteredMessages.map((message) => {
+				// If message doesn't have content array, return it unchanged
+				if (!message.content || !Array.isArray(message.content)) {
+					return message;
+				}
+
+				// Create a new message object with all original properties
+				const newMessage = { ...message };
+
+				// Store the original content array
+				const originalContent = [...message.content];
+
+				// Extract text and reasoning from content array
+				const textItem = originalContent.find((item) => "text" in item);
+				const reasoningItem = originalContent.find(
+					(item) => "reasoning" in item,
+				);
+
+				// Filter out items that are not text or reasoning
+				const otherItems = originalContent.filter(
+					(item) => !("text" in item) && !("reasoning" in item),
+				);
+
+				// Add text as content if found
+				if (textItem) {
+					newMessage.content = textItem.text;
+				} else {
+					// If no text item, but we're changing the structure, set content to empty string or remove it
+					newMessage.content = undefined;
+				}
+
+				// Add reasoning if found
+				if (reasoningItem) {
+					newMessage.reasoning = reasoningItem.reasoning;
+				}
+
+				// Add content_items if there are other items
+				if (otherItems.length > 0) {
+					newMessage.content_items = otherItems;
+				}
+
+				return newMessage;
+			});
+
 			localStorage.setItem(
 				`chatHistory-${selectedConversation?.session_id}`,
-				JSON.stringify(filteredMessages),
+				JSON.stringify(transformedMessages),
 			);
 		}
-	}, [messages]);
+	}, [messages, messagesProcessing, selectedConversation]);
 
 	const getModeObjectFromModelID = (category, selectedModelId) => {
 		let selectedObject = null;
@@ -746,7 +793,22 @@ const App = memo(({ signOut, user, awsRum }) => {
 			return { document: { s3source: { s3key: attachment.url } } };
 		});
 	}
-
+	
+	axiosRetry(axios, {
+		retries: 3, // Number of retry attempts
+		retryDelay: (retryCount) => {
+		  return retryCount * 1000; // Time delay between retries (increases with each retry)
+		},
+		retryCondition: (error) => {
+		  // Retry on network errors and 5xx responses
+		  return error.response?.status === 504 || 
+				 axiosRetry.isNetworkOrIdempotentRequestError(error);
+		},
+		onRetry: (retryCount, error) => {
+		  console.log(`Retry attempt ${retryCount} for error:`, error.message);
+		}
+	  });
+	  
 	const sendMessageViaRest = async (data, endpoint, action) => {
 		awsRum.recordEvent("chatbot_rest_call", {
 			action: action,
@@ -770,9 +832,8 @@ const App = memo(({ signOut, user, awsRum }) => {
 					},
 				},
 			);
-			// const { url, fields } = response.data;
 		} catch (error) {
-			console.error("Error sending message:", error);
+			console.error("Error sending message after all retries:", error);
 			throw error;
 		}
 	};
@@ -1308,16 +1369,18 @@ const App = memo(({ signOut, user, awsRum }) => {
 				if (lastMessage && !lastMessage.content) {
 					lastMessage.content = "";
 				}
-				if (lastMessage && lastMessage.role === "assistant") {
+				if (lastMessage && lastMessage?.role?.toLowerCase() === "assistant") {
 					const newContent = message.delta?.text
-						? lastMessage.content + message.delta.text
+						? is_reasoning
+							? lastMessage.reasoning + message.delta.text
+							: lastMessage.content + message.delta.text
 						: message.error
 							? message.error
 							: "no content";
 					updatedMessages[lastIndex] = {
 						...lastMessage,
-						content: is_reasoning ? "" : newContent,
-						reasoning: is_reasoning ? newContent : "",
+						content: is_reasoning ? lastMessage.content : newContent,
+						reasoning: is_reasoning ? newContent : lastMessage.reasoning,
 						is_reasoning: Boolean(message?.is_reasoning),
 						message_id: message.message_id,
 						raw_message: message,
@@ -1470,10 +1533,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 	const handleDeleteChat = (chatId) => {
 		//Show Message to user, telling them the chat was deleted
 		triggerInfoErrorPopupMessage("Chat/Conversation Deleted", "success");
+		setRequireConversationLoad(false);
 		//logic for handling the current loaded chat
 		if (selectedConversation.session_id === chatId) {
 			localStorage.removeItem(`kbSessionId-${selectedConversation.session_id}`);
-			setSelectedConversation({});
 			localStorage.removeItem("selectedConversation");
 			setSelectedConversation({
 				session_id: `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
@@ -1486,18 +1549,13 @@ const App = memo(({ signOut, user, awsRum }) => {
 		//delete the chat
 		clearConversationHistory(chatId);
 		// remove conversation matching chatId from conversationList
-		setConversationList(
-			conversationList.filter(
-				(conversation) => conversation.session_id !== chatId,
-			),
+		const new_conversation_list = conversationList.filter(
+			(conversation) => conversation.session_id !== chatId,
 		);
+		setConversationList(new_conversation_list);
 		localStorage.setItem(
 			"load_conversation_list",
-			JSON.stringify(
-				conversationList.filter(
-					(conversation) => conversation.session_id !== chatId,
-				),
-			),
+			JSON.stringify(new_conversation_list),
 		);
 	};
 
@@ -1727,10 +1785,10 @@ function convertRoleToHuman(input) {
 				role: "Human",
 			};
 		}
-		if (item.role === "assistant") {
+		if (item?.role?.toLowerCase() === "assistant") {
 			return {
 				...item,
-				role: "Assistant",
+				role: "assistant",
 			};
 		}
 		return item;

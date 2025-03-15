@@ -23,6 +23,7 @@
 		"aws-amplify": "^6.13.4",
 		"aws-rum-web": "^1.20.0",
 		"axios": "^1.8.2",
+		"axios-retry": "^4.5.0",
 		"better-react-mathjax": "^2.0.3",
 		"dompurify": "^3.2.4",
 		"eslint-config-react-app": "^7.0.1",
@@ -47,10 +48,17 @@
 		"test": "jest"
 	},
 	"eslintConfig": {
-		"extends": ["react-app", "react-app/jest"]
+		"extends": [
+			"react-app",
+			"react-app/jest"
+		]
 	},
 	"browserslist": {
-		"production": [">0.2%", "not dead", "not op_mini all"],
+		"production": [
+			">0.2%",
+			"not dead",
+			"not op_mini all"
+		],
 		"development": [
 			"last 1 chrome version",
 			"last 1 firefox version",
