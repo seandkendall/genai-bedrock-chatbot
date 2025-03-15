@@ -23,6 +23,7 @@ import { FaSignOutAlt, FaInfoCircle, FaCog } from "react-icons/fa";
 import { ExpandMore, ExpandLess } from "@mui/icons-material";
 import Popup from "./Popup";
 import "./Header.css";
+import QRCodePopup from "./QRCodePopup";
 
 const NoMaxWidthTooltip = styled(({ className, ...props }) => (
 	<Tooltip {...props} classes={{ popper: className }} />
@@ -73,7 +74,7 @@ const Header = ({
 	region,
 }) => {
 	const [anchorEl, setAnchorEl] = React.useState(null);
-
+	const [qrCodeOpen, setQrCodeOpen] = useState(false);
 	const [showInfoTooltip, setShowInfoTooltip] = useState(false);
 	const [dropdownOpen, setDropdownOpen] = useState(false);
 	const { elapsedTime, startTimer, stopTimer, resetTimer } = useTimer();
@@ -93,6 +94,10 @@ const Header = ({
 		return text.length > maxLength
 			? `${text.substring(0, maxLength)}...`
 			: text;
+	};
+
+	const handleOpenQRCode = () => {
+		setQrCodeOpen(true);
 	};
 
 	const isUserAllowed = () => {
@@ -116,7 +121,6 @@ const Header = ({
 			event.preventDefault();
 			event.stopPropagation();
 		}
-
 		setExpandedCategories((prev) => {
 			const currentState = prev[category];
 
@@ -149,7 +153,7 @@ const Header = ({
 	};
 
 	const renderSelectOptions = (options, maxLength) => {
-		return options.flatMap(({ title, data }) =>
+		return options.flatMap(({ title, data }, categoryIndex) =>
 			data.length > 0
 				? [
 						<MenuItem
@@ -167,7 +171,6 @@ const Header = ({
 							}}
 						>
 							{title}
-							{/* ExpandLess onClick, do nothing, disable actions */}
 							{expandedCategories[title] ? (
 								<ExpandLess onClick={(event) => event.preventDefault()} />
 							) : (
@@ -175,47 +178,87 @@ const Header = ({
 							)}
 						</MenuItem>,
 						...(expandedCategories[title]
-							? data.map((item) => (
-									<MenuItem
-										key={`${title}%${item.mode_selector}`}
-										value={`${title}%${item.mode_selector}`}
-										sx={{ pl: 4 }}
-									>
-										{truncateText(
-											(() => {
-												switch (title) {
-													case "Bedrock Models":
-														return isMobile
-															? `${item.modelName}`
-															: `${item.providerName} ${item.modelName}`;
-													case "Bedrock Image Models":
-														return isMobile
-															? `${item.modelName}`
-															: `${item.providerName} ${item.modelName}`;
-													case "Bedrock Video Models":
-														return isMobile
-															? `${item.modelName}`
-															: `${item.providerName} ${item.modelName}`;
-													case "Imported Models":
-														return isMobile
-															? `${item.modelName}`
-															: `${item.providerName} ${item.modelName}`;
-													case "Bedrock KnowledgeBases":
-														return item.name;
-													case "Bedrock Agents":
-														return isMobile
-															? `${item.agentAliasName}`
-															: `${item.agent_name} (${item.agentAliasName})`;
-													case "Bedrock Prompt Flows":
-														return item.name;
-													default:
-														return "Unknown";
-												}
-											})(),
-											maxLength,
-										)}
-									</MenuItem>
-								))
+							? [...data]
+									.sort((a, b) => {
+										// For most categories, sort by model name
+										let aName;
+										let bName;
+
+										switch (title) {
+											case "Bedrock Models":
+											case "Bedrock Image Models":
+											case "Bedrock Video Models":
+											case "Imported Models":
+												aName = isMobile
+													? a.modelName
+													: `${a.providerName} ${a.modelName}`;
+												bName = isMobile
+													? b.modelName
+													: `${b.providerName} ${b.modelName}`;
+												break;
+											case "Bedrock KnowledgeBases":
+												aName = a.name;
+												bName = b.name;
+												break;
+											case "Bedrock Agents":
+												aName = isMobile
+													? a.agentAliasName
+													: `${a.agent_name} (${a.agentAliasName})`;
+												bName = isMobile
+													? b.agentAliasName
+													: `${b.agent_name} (${b.agentAliasName})`;
+												break;
+											case "Bedrock Prompt Flows":
+												aName = a.name;
+												bName = b.name;
+												break;
+											default:
+												aName = "Unknown";
+												bName = "Unknown";
+										}
+
+										return aName.localeCompare(bName);
+									})
+									.map((item, index) => (
+										<MenuItem
+											key={`${title}-${item.mode_selector || index}`}
+											value={`${title}%${item.mode_selector}`}
+										>
+											{truncateText(
+												(() => {
+													switch (title) {
+														case "Bedrock Models":
+															return isMobile
+																? `${item.modelName}`
+																: `${item.providerName} ${item.modelName}`;
+														case "Bedrock Image Models":
+															return isMobile
+																? `${item.modelName}`
+																: `${item.providerName} ${item.modelName}`;
+														case "Bedrock Video Models":
+															return isMobile
+																? `${item.modelName}`
+																: `${item.providerName} ${item.modelName}`;
+														case "Imported Models":
+															return isMobile
+																? `${item.modelName}`
+																: `${item.providerName} ${item.modelName}`;
+														case "Bedrock KnowledgeBases":
+															return item.name;
+														case "Bedrock Agents":
+															return isMobile
+																? `${item.agentAliasName}`
+																: `${item.agent_name} (${item.agentAliasName})`;
+														case "Bedrock Prompt Flows":
+															return item.name;
+														default:
+															return "Unknown";
+													}
+												})(),
+												maxLength,
+											)}
+										</MenuItem>
+									))
 							: []),
 					]
 				: [],
@@ -223,47 +266,88 @@ const Header = ({
 	};
 
 	const renderSelectOptionsKB = (options, maxLength) => {
-		return options.flatMap(({ title, data }) =>
+		return options.flatMap(({ title, data }, categoryIndex) =>
 			data.length > 0
 				? [
-						<MenuItem key={`title-${title}`} value={title} disabled>
+						<MenuItem key={`kb-header-${title}`} disabled value={title}>
 							{title}
 						</MenuItem>,
-						...data.map((item) => (
-							<MenuItem
-								key={`${title}%${item.mode_selector}`}
-								value={`${title}%${item.mode_selector}`}
-							>
-								{truncateText(
-									(() => {
-										switch (title) {
-											case "Bedrock Models":
-												if (isMobile) {
-													return `${item.modelName}`;
-												}
-												return `${item.providerName} ${item.modelName}`;
-											case "Bedrock Image Models":
-												if (isMobile) {
-													return `${item.modelName}`;
-												}
-												return `${item.providerName} ${item.modelName}`;
-											case "Bedrock KnowledgeBases":
-												return item.name;
-											case "Bedrock Agents":
-												if (isMobile) {
-													return `${item.agentAliasName}`;
-												}
-												return `${item.agent_name} (${item.agentAliasName})`;
-											case "Bedrock Prompt Flows":
-												return item.name;
-											default:
-												return "Unknown";
-										}
-									})(),
-									maxLength,
-								)}
-							</MenuItem>
-						)),
+						...[...data]
+							.sort((a, b) => {
+								let aName;
+								let bName;
+
+								switch (title) {
+									case "Bedrock Models":
+										aName = isMobile
+											? a.modelName
+											: `${a.providerName} ${a.modelName}`;
+										bName = isMobile
+											? b.modelName
+											: `${b.providerName} ${b.modelName}`;
+										break;
+									case "Bedrock Image Models":
+										aName = isMobile
+											? a.modelName
+											: `${a.providerName} ${a.modelName}`;
+										bName = isMobile
+											? b.modelName
+											: `${b.providerName} ${b.modelName}`;
+										break;
+									case "Bedrock KnowledgeBases":
+										aName = a.name;
+										bName = b.name;
+										break;
+									case "Bedrock Agents":
+										aName = isMobile
+											? a.agentAliasName
+											: `${a.agent_name} (${a.agentAliasName})`;
+										bName = isMobile
+											? b.agentAliasName
+											: `${b.agent_name} (${b.agentAliasName})`;
+										break;
+									default:
+										aName = "Unknown";
+										bName = "Unknown";
+								}
+
+								return aName.localeCompare(bName);
+							})
+							.map((item, index) => (
+								<MenuItem
+									key={`kb-item-${title}-${item.mode_selector || index}`}
+									value={`${title}%${item.mode_selector}`}
+								>
+									{truncateText(
+										(() => {
+											switch (title) {
+												case "Bedrock Models":
+													if (isMobile) {
+														return `${item.modelName}`;
+													}
+													return `${item.providerName} ${item.modelName}`;
+												case "Bedrock Image Models":
+													if (isMobile) {
+														return `${item.modelName}`;
+													}
+													return `${item.providerName} ${item.modelName}`;
+												case "Bedrock KnowledgeBases":
+													return item.name;
+												case "Bedrock Agents":
+													if (isMobile) {
+														return `${item.agentAliasName}`;
+													}
+													return `${item.agent_name} (${item.agentAliasName})`;
+												case "Bedrock Prompt Flows":
+													return item.name;
+												default:
+													return "Unknown";
+											}
+										})(),
+										maxLength,
+									)}
+								</MenuItem>
+							)),
 					]
 				: [],
 		);
@@ -330,7 +414,7 @@ const Header = ({
 	};
 
 	const onSelectedKbModeChange = (event) => {
-		if (event && event.target && event.target.value) {
+		if (event?.target?.value) {
 			const [category, modeSelector] = event.target.value.split("%");
 			let selectedObject = null;
 			switch (category) {
@@ -518,9 +602,21 @@ const Header = ({
 						className="header-title"
 						sx={{ flexGrow: 1, display: "flex", alignItems: "center" }}
 					>
-						{isMobile
-							? chatbotTitle.substring(0, 3).toUpperCase()
-							: chatbotTitle}
+						<Typography
+							variant="h6"
+							component="div"
+							onClick={handleOpenQRCode}
+							sx={{
+								cursor: "pointer",
+								"&:hover": {
+									textDecoration: "underline",
+								},
+							}}
+						>
+							{isMobile
+								? chatbotTitle.substring(0, 3).toUpperCase()
+								: chatbotTitle}
+						</Typography>
 						<NoMaxWidthTooltip
 							title={
 								<Box>
@@ -808,6 +904,7 @@ const Header = ({
 					onClose={() => setShowPopup(false)}
 				/>
 			)}
+			<QRCodePopup open={qrCodeOpen} onClose={() => setQrCodeOpen(false)} />
 		</>
 	);
 };

@@ -24,7 +24,6 @@ display_help() {
     echo "For more information, please refer to the documentation."
 }
 
-
 # Define colors
 has_colors() {
     local has_colors=false
@@ -48,7 +47,7 @@ get_allowlist_domains() {
     while true; do
         read -p "Enter the allowlist domains separated by commas (Example: @amazon.com,@example.ca): " domains
         local valid=true
-        IFS=',' read -ra domain_array <<< "$domains"
+        IFS=',' read -ra domain_array <<<"$domains"
         for domain in "${domain_array[@]}"; do
             if ! validate_domain "$domain"; then
                 valid=false
@@ -65,7 +64,7 @@ get_allowlist_domains() {
 
 # Function to check if Docker is installed
 check_docker_installed() {
-    if ! command -v docker &> /dev/null; then
+    if ! command -v docker &>/dev/null; then
         return 1
     fi
     return 0
@@ -73,7 +72,7 @@ check_docker_installed() {
 
 # Function to check if Docker is running
 check_docker_running() {
-    if ! docker info &> /dev/null; then
+    if ! docker info &>/dev/null; then
         return 1
     fi
     return 0
@@ -81,11 +80,11 @@ check_docker_running() {
 
 # Function to install Docker on Linux (supports apt-get and yum)
 install_docker_linux() {
-    if command -v apt-get &> /dev/null; then
+    if command -v apt-get &>/dev/null; then
         echo "Installing Docker using apt-get..."
         sudo apt-get update
         sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-    elif command -v yum &> /dev/null; then
+    elif command -v yum &>/dev/null; then
         echo "Installing Docker using yum..."
         sudo yum install -y yum-utils device-mapper-persistent-data lvm2
         sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
@@ -98,14 +97,14 @@ install_docker_linux() {
 
 # Function to install Docker on macOS using Homebrew
 install_docker_macos() {
-    if ! command -v brew &> /dev/null; then
+    if ! command -v brew &>/dev/null; then
         echo "Homebrew not found. Please install Homebrew first."
         exit 1
     fi
 
     echo "Installing Docker using Homebrew..."
     brew install --cask docker
-    
+
     # Start Docker Desktop after installation (if not already running)
     open /Applications/Docker.app || echo "Failed to start Docker Desktop. Please start it manually."
 }
@@ -128,28 +127,28 @@ start_docker_linux() {
 # Function to check and start Docker Desktop on macOS
 start_docker_macos() {
     # Check if Docker Desktop is running by looking for its process (Docker Desktop app uses com.docker.docker)
-    if ! pgrep -f 'Docker.app' &> /dev/null; then
+    if ! pgrep -f 'Docker.app' &>/dev/null; then
         echo "Starting Docker Desktop..."
         open /Applications/Docker.app
-        
+
         # Wait for a few seconds to allow the app to start up properly before checking again.
         sleep 10
-        
+
         # Check again if it's running now.
-        if ! pgrep -f 'Docker.app' &> /dev/null; then
+        if ! pgrep -f 'Docker.app' &>/dev/null; then
             echo "Failed to start Docker Desktop. Please start it manually."
             exit 1
         fi
-        
+
         # Wait for the daemon to be fully ready.
         echo "Waiting for Docker daemon to be ready..."
-        while ! check_docker_running; do 
-            sleep 5 
+        while ! check_docker_running; do
+            sleep 5
             echo "Still waiting for Docker daemon..."
         done
-        
+
         echo "Docker Desktop started successfully."
-    else 
+    else
         echo "Docker Desktop is already running."
     fi
 }
@@ -187,35 +186,40 @@ fi
 if ! check_docker_installed; then
     echo "Docker is not installed."
 
-    case "$(uname -s)" in 
-        Linux*)
-            echo "Installing Docker on Linux..."
-            install_docker_linux ;;
-        Darwin*)
-            echo "Installing Docker on macOS..."
-            install_docker_macos ;;
-        *)
-            echo "Unsupported operating system."
-            exit 1 ;;
+    case "$(uname -s)" in
+    Linux*)
+        echo "Installing Docker on Linux..."
+        install_docker_linux
+        ;;
+    Darwin*)
+        echo "Installing Docker on macOS..."
+        install_docker_macos
+        ;;
+    *)
+        echo "Unsupported operating system."
+        exit 1
+        ;;
     esac
 
 elif ! check_docker_running; then
     echo "Docker is installed but not running."
 
-    case "$(uname -s)" in 
-        Linux*)
-            start_docker_linux ;;
-        Darwin*)
-            start_docker_macos ;;
-        *)
-            echo "Unsupported operating system."
-            exit 1 ;;
+    case "$(uname -s)" in
+    Linux*)
+        start_docker_linux
+        ;;
+    Darwin*)
+        start_docker_macos
+        ;;
+    *)
+        echo "Unsupported operating system."
+        exit 1
+        ;;
     esac
 
-else 
+else
     echo "Docker is already installed and running."
 fi
-
 
 if $(has_colors); then
     # Use color codes
@@ -234,40 +238,67 @@ redeploy=false
 POSITIONAL_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -h|--help)
-            display_help
-            exit 0
-            ;;
-        -a|--app) app_flag="--app $2"; shift 2;;
-        -c|--context) context_flag="--context $2"; shift 2;;
-        --debug) debug_flag="--debug"; shift;;
-        --deepseek) deepseek_flag="y"; shift;;
-        --profile) profile_flag="--profile $2"; shift 2;;
-        -t|--tags) tags_flag="--tags $2"; shift 2;;
-        -f|--force) force_flag="--force"; shift;;
-        -v|--verbose) verbose_flag="--verbose"; shift;;
-        -r|--role-arn) role_arn_flag="--role-arn $2"; shift 2;;
-        --allowlist)
-            allowListDomain="$2"
-            shift 2
-            ;;
-        --deploy-agents-example)
-            deployExample='y'
-            shift
-            ;;
-        --headless)
-            is_headless=true
-            run_bootstrap=true
-            shift
-            ;;
-        --redeploy)
-            redeploy=true
-            shift
-            ;;
-        *)
-            POSITIONAL_ARGS+=("$1")
-            shift
-            ;;
+    -h | --help)
+        display_help
+        exit 0
+        ;;
+    -a | --app)
+        app_flag="--app $2"
+        shift 2
+        ;;
+    -c | --context)
+        context_flag="--context $2"
+        shift 2
+        ;;
+    --debug)
+        debug_flag="--debug"
+        shift
+        ;;
+    --deepseek)
+        deepseek_flag="y"
+        shift
+        ;;
+    --profile)
+        profile_flag="--profile $2"
+        shift 2
+        ;;
+    -t | --tags)
+        tags_flag="--tags $2"
+        shift 2
+        ;;
+    -f | --force)
+        force_flag="--force"
+        shift
+        ;;
+    -v | --verbose)
+        verbose_flag="--verbose"
+        shift
+        ;;
+    -r | --role-arn)
+        role_arn_flag="--role-arn $2"
+        shift 2
+        ;;
+    --allowlist)
+        allowListDomain="$2"
+        shift 2
+        ;;
+    --deploy-agents-example)
+        deployExample='y'
+        shift
+        ;;
+    --headless)
+        is_headless=true
+        run_bootstrap=true
+        shift
+        ;;
+    --redeploy)
+        redeploy=true
+        shift
+        ;;
+    *)
+        POSITIONAL_ARGS+=("$1")
+        shift
+        ;;
     esac
 done
 
@@ -284,19 +315,17 @@ deployExample=${deployExample:-'n'}
 deepseek_flag=${deepseek_flag:-'n'}
 
 projects=$(aws codebuild list-projects \
-  --query "projects[?starts_with(@, 'GenAIChatBotCustomModel')]" \
-  --output json)
+    --query "projects[?starts_with(@, 'GenAIChatBotCustomModel')]" \
+    --output json)
 
 # Check if any projects are found
 if [[ $(echo "$projects" | jq 'length') -gt 0 ]]; then
-  # Override the flag if a project is found
-  deepseek_flag='y'
+    # Override the flag if a project is found
+    deepseek_flag='y'
 fi
 
-
 # Check if AWS CDK is installed
-if ! command -v cdk &> /dev/null
-then
+if ! command -v cdk &>/dev/null; then
     echo -e "${RED_COLOR}Error: AWS CDK is not installed. Please install the AWS CDK or run the setup script.${DEFAULT_COLOR}"
     echo -e "${GREEN_COLOR}To install the AWS CDK manually, follow the instructions at: https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html${DEFAULT_COLOR}"
     echo -e "${GREEN_COLOR}Alternatively, you can run the setup script by executing: ./setup.sh${DEFAULT_COLOR}"
@@ -304,27 +333,25 @@ then
 fi
 
 # Check if jq is installed
-if ! command -v jq &> /dev/null
-then
+if ! command -v jq &>/dev/null; then
     echo -e "${RED_COLOR}Error: jq is not installed. Please install jq and try again.${DEFAULT_COLOR}"
     case "$(uname -s)" in
-        Linux*) echo -e "${GREEN_COLOR}On Linux, you can install jq with: sudo apt-get install jq${DEFAULT_COLOR}" ;;
-        Darwin*) echo -e "${GREEN_COLOR}On macOS, you can install jq with: brew install jq${DEFAULT_COLOR}" ;; 
-        CYGWIN*|MINGW*|MSYS*) echo -e "${GREEN_COLOR}On Windows with PowerShell, you can install jq with: choco install jq${DEFAULT_COLOR}" ;;
-        *) echo -e "${RED_COLOR}Unsupported operating system. Please install jq manually.${DEFAULT_COLOR}" ;;
+    Linux*) echo -e "${GREEN_COLOR}On Linux, you can install jq with: sudo apt-get install jq${DEFAULT_COLOR}" ;;
+    Darwin*) echo -e "${GREEN_COLOR}On macOS, you can install jq with: brew install jq${DEFAULT_COLOR}" ;;
+    CYGWIN* | MINGW* | MSYS*) echo -e "${GREEN_COLOR}On Windows with PowerShell, you can install jq with: choco install jq${DEFAULT_COLOR}" ;;
+    *) echo -e "${RED_COLOR}Unsupported operating system. Please install jq manually.${DEFAULT_COLOR}" ;;
     esac
     exit 1
 fi
 
 # Check if AWS CLI is installed
-if ! command -v aws &> /dev/null
-then
+if ! command -v aws &>/dev/null; then
     echo -e "${RED_COLOR}Error: AWS CLI is not installed. Please install the AWS CLI and configure your AWS credentials before running this script.${DEFAULT_COLOR}"
     case "$(uname -s)" in
-        Linux*) echo -e "${GREEN_COLOR}On Linux, you can install the AWS CLI with: sudo apt-get install awscli${DEFAULT_COLOR}" ;;
-        Darwin*) echo -e "${GREEN_COLOR}On macOS, you can install the AWS CLI with: brew install awscli${DEFAULT_COLOR}" ;;
-        CYGWIN*|MINGW*|MSYS*) echo -e "${GREEN_COLOR}On Windows, you can download and install the AWS CLI from: https://aws.amazon.com/cli/${DEFAULT_COLOR}" ;;
-        *) echo -e "${RED_COLOR}Unsupported operating system. Please visit https://aws.amazon.com/cli/ for installation instructions.${DEFAULT_COLOR}" ;;
+    Linux*) echo -e "${GREEN_COLOR}On Linux, you can install the AWS CLI with: sudo apt-get install awscli${DEFAULT_COLOR}" ;;
+    Darwin*) echo -e "${GREEN_COLOR}On macOS, you can install the AWS CLI with: brew install awscli${DEFAULT_COLOR}" ;;
+    CYGWIN* | MINGW* | MSYS*) echo -e "${GREEN_COLOR}On Windows, you can download and install the AWS CLI from: https://aws.amazon.com/cli/${DEFAULT_COLOR}" ;;
+    *) echo -e "${RED_COLOR}Unsupported operating system. Please visit https://aws.amazon.com/cli/ for installation instructions.${DEFAULT_COLOR}" ;;
     esac
     echo -e "${GREEN_COLOR}After installing the AWS CLI, run 'aws configure' to set up your AWS credentials.${DEFAULT_COLOR}"
     echo -e "${GREEN_COLOR}Visit https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html for more information.${DEFAULT_COLOR}"
@@ -372,11 +399,11 @@ if [ -n "$user_pool_id" ] && [ "$user_pool_id" != "None" ]; then
         echo -e "${DEFAULT_COLOR}User pool found with ID $user_pool_id and domain $cognitoDomain"
     else
         echo -e "${DEFAULT_COLOR}User pool found with ID $user_pool_id, but no Domain"
-        cognitoDomain="genchatbot-$(LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 8)-$(date +%y%m%d%H%M)"
+        cognitoDomain="genchatbot-$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 8)-$(date +%y%m%d%H%M)"
         echo -e "${DEFAULT_COLOR}New Domain Set: $cognitoDomain"
     fi
 else
-    cognitoDomain="genchatbot-$(LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 8)-$(date +%y%m%d%H%M)"
+    cognitoDomain="genchatbot-$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 8)-$(date +%y%m%d%H%M)"
     echo -e "${DEFAULT_COLOR}No User Pool or Domain Found, Creating New Domain: $cognitoDomain"
 fi
 
@@ -395,22 +422,21 @@ get_certificate_arn() {
     echo "$certificate_arn"
 }
 
-
 if [[ -n "$allowListDomain" ]]; then
-    echo "$allowListDomain" > allowlistdomain.ref
+    echo "$allowListDomain" >allowlistdomain.ref
 elif [[ -f allowlistdomain.ref ]]; then
     allowListDomain=$(cat allowlistdomain.ref)
 elif [[ -z "$is_headless" ]] || [[ "$is_headless" != "true" ]]; then
     read -p "Would you like to add one or more email domains to an allowlist for user registration? (y/n) " add_allowlist
     case "${add_allowlist,,}" in
-        y|yes)
-            allowListDomain=$(get_allowlist_domains)
-            echo "$allowListDomain" > allowlistdomain.ref
-            ;;
-        *)
-            : > allowlistdomain.ref  # Create empty file
-            allowListDomain=""
-            ;;
+    y | yes)
+        allowListDomain=$(get_allowlist_domains)
+        echo "$allowListDomain" >allowlistdomain.ref
+        ;;
+    *)
+        : >allowlistdomain.ref # Create empty file
+        allowListDomain=""
+        ;;
     esac
 else
     allowListDomain=""
@@ -431,6 +457,7 @@ cp ./lambda_functions/conversations_layer/python/conversations/conversations.py 
 
 # Install Python dependencies
 python3 -m pip install -r requirements.txt
+python3 -m pip install --upgrade pip || true
 
 #WORKAROUND FOR CDK BOOTSTRAP NOT CREATING AN ECR REPOSITORY#
 stack_output=$(aws cloudformation describe-stacks --stack-name CDKToolkit)
@@ -459,11 +486,11 @@ if [ -n "$image_repository_name" ]; then
         }
       ]
     }'
-    
+
     # Check if the repository exists
     if ! aws ecr describe-repositories --repository-names "$image_repository_name" 2>/dev/null; then
         echo "Repository does not exist. Creating repository with immutable tags, AES256 encryption, and manual scanning..."
-        
+
         # Create the repository with immutable tags, AES256 encryption, and manual scanning
         aws ecr create-repository \
             --repository-name "$image_repository_name" \
@@ -473,7 +500,7 @@ if [ -n "$image_repository_name" ]; then
         aws ecr set-repository-policy \
             --repository-name "$image_repository_name" \
             --policy-text "$policy_document"
-            
+
         echo "Repository created successfully."
     else
         echo "Repository already exists."
@@ -489,33 +516,13 @@ bootstrap_ref_file="bootstrap.ref"
 if [ -f "$bootstrap_ref_file" ]; then
     echo "Skipping CDK bootstrap process."
 else
-    if [ -n "$run_bootstrap" ]; then
-        # If --headless flag is used, run cdk bootstrap
-        echo "Running CDK bootstrap..."
-        cdk bootstrap --all --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context allowlistDomain="$allowListDomain"
-        if [ $? -eq 0 ]; then
-            echo "CDK bootstrap completed successfully."
-        else
-            echo "Failed to run CDK bootstrap."
-            exit 1
-        fi
+    echo "Running CDK bootstrap..."
+    cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context allowlistDomain="$allowListDomain"
+    if [ $? -eq 0 ]; then
+        echo "CDK bootstrap completed successfully."
     else
-        read -p "Do you want to run cdk Bootstrap now (if you don't know, assume Yes)? (y/n) " run_bootstrap
-        case "$run_bootstrap" in
-            [yY][eE][sS]|[yY])
-                echo "Running CDK bootstrap..."
-                cdk bootstrap --all --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context allowlistDomain="$allowListDomain"
-                if [ $? -eq 0 ]; then
-                    echo "CDK bootstrap completed successfully."
-                else
-                    echo "Failed to run CDK bootstrap."
-                    exit 1
-                fi
-                ;;
-            *)
-                echo "Skipping CDK bootstrap process."
-                ;;
-        esac
+        echo "Failed to run CDK bootstrap."
+        exit 1
     fi
 fi
 touch "$bootstrap_ref_file"
@@ -543,11 +550,11 @@ while [ -z "$aws_application" ] && [ $loop_count -lt 2 ]; do
         aws_application=""
     fi
     # Deploy the CDK app
-    cdk deploy --outputs-file outputs.json --context imported_models="$imported_models" --context aws_application="$aws_application" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag --all
+    cdk deploy --outputs-file outputs.json --context imported_models="$imported_models" --context aws_application="$aws_application" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
     if [ $? -ne 0 ]; then
         echo "Error: CDK deployment failed. Exiting script."
         exit 1
-    fi    
+    fi
     loop_count=$((loop_count + 1))
 done
 
@@ -579,33 +586,34 @@ cloudwatchlogslivetailurl=$(jq -r '.ChatbotWebsiteStack.CloudWatchLogsLiveTailUR
 mkdir -p ./react-chatbot/src/
 
 variables_file="./react-chatbot/src/variables.js"
-new_variables_content=$(cat <<HEREDOC_DELIMITER
+new_variables_content=$(
+    cat <<HEREDOC_DELIMITER
 const websocketUrl = '$websocketapiendpoint';
 
 export { websocketUrl };
 HEREDOC_DELIMITER
 )
 
-
 if [ -f "$variables_file" ]; then
     # File exists, compare contents
     existing_variables_content=$(cat "$variables_file")
     if [ "$existing_variables_content" != "$new_variables_content" ]; then
         # Contents are different, update the file
-        printf "%s" "$new_variables_content" > "$variables_file"
+        printf "%s" "$new_variables_content" >"$variables_file"
         echo "variables.js file updated."
     else
         echo "variables.js file is up-to-date."
     fi
 else
     # File doesn't exist, create it
-    printf "%s" "$new_variables_content" > "$variables_file"
+    printf "%s" "$new_variables_content" >"$variables_file"
     echo "variables.js file created."
 fi
 
 # Generate ./react-chatbot/src/config.json
 config_file="./react-chatbot/src/config.json"
-new_config_content=$(cat <<HEREDOC_DELIMITER
+new_config_content=$(
+    cat <<HEREDOC_DELIMITER
 {
   "aws_project_region": "${region}",
   "aws_cognito_region": "${region}",
@@ -624,14 +632,14 @@ if [ -f "$config_file" ]; then
     existing_config_content=$(cat "$config_file")
     if [ "$existing_config_content" != "$new_config_content" ]; then
         # Contents are different, update the file
-        printf "%s" "$new_config_content" > "$config_file"
+        printf "%s" "$new_config_content" >"$config_file"
         echo "config.json file updated."
     else
         echo "config.json file is up-to-date."
     fi
 else
     # File doesn't exist, create it
-    printf "%s" "$new_config_content" > "$config_file"
+    printf "%s" "$new_config_content" >"$config_file"
     echo "config.json file created."
 fi
 
@@ -656,8 +664,8 @@ cd ../static-website-source
 aws s3 sync . s3://$s3bucket/ --delete
 
 aws dynamodb put-item \
-        --table-name "$table_name" \
-        --item '{
+    --table-name "$table_name" \
+    --item '{
             "user": {"S": "system"},
             "config_type": {"S": "deployed-hash"},
             "deployed_hash": {"S": "'"$latest_commit"'"}

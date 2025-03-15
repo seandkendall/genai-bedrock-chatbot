@@ -109,6 +109,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
     prompt = request_body.get("prompt", "")
     chat_title = prompt[:16] if len(prompt) > 16 else prompt
     message_id = request_body.get("message_id", "")
+    new_message_id = commons.generate_random_string()
     if message_type == "clear_conversation":
         conversations.delete_conversation_history(
             dynamodb, conversations_table_name, logger, session_id
@@ -127,6 +128,8 @@ def process_websocket_message(request_body, force_null_kb_session_id):
             logger,
             commons,
             apigateway_management_api,
+            False,
+            False,
         )
         return
     else:
@@ -179,8 +182,19 @@ def process_websocket_message(request_body, force_null_kb_session_id):
                         logger.error("Error 187464: " + str(e))
 
             needs_load_from_s3, chat_title_loaded, original_existing_history = (
-                conversations.query_existing_history(
-                    dynamodb, conversations_table_name, logger, session_id
+                conversations.load_and_send_conversation_history(
+                    session_id,
+                    connection_id,
+                    user_id,
+                    dynamodb,
+                    conversations_table_name,
+                    s3_client,
+                    conversation_history_bucket,
+                    logger,
+                    commons,
+                    apigateway_management_api,
+                    False,
+                    True,
                 )
             )
             existing_history = copy.deepcopy(original_existing_history)
@@ -193,7 +207,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
             response_text, kb_session_id = (
                 process_bedrock_knowledgebase_response_stream(
                     response,
-                    message_id,
+                    new_message_id,
                     connection_id,
                     session_id,
                     selected_model_category,
@@ -215,6 +229,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
                 selected_model_name,
                 selected_model_category,
                 persisted_chat_title,
+                new_message_id,
             )
 
         elif selected_model_category == "Bedrock Agents":
@@ -229,10 +244,23 @@ def process_websocket_message(request_body, force_null_kb_session_id):
                 inputText=prompt,
                 sessionId=session_id,
             )
-            needs_load_from_s3, chat_title_loaded, original_existing_history = (
-                conversations.query_existing_history(
-                    dynamodb, conversations_table_name, logger, session_id
-                )
+            (
+                needs_load_fneeds_load_from_s3,
+                chat_title_loaded,
+                original_existing_history,
+            ) = conversations.load_and_send_conversation_history(
+                session_id,
+                connection_id,
+                user_id,
+                dynamodb,
+                conversations_table_name,
+                s3_client,
+                conversation_history_bucket,
+                logger,
+                commons,
+                apigateway_management_api,
+                False,
+                True,
             )
             persisted_chat_title = (
                 chat_title_loaded
@@ -243,7 +271,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
             new_conversation = bool(not existing_history or len(existing_history) == 0)
             response_text, contains_errors = process_bedrock_agents_response(
                 iter(response[response_stream_key]),
-                message_id,
+                new_message_id,
                 connection_id,
                 selected_model_category,
                 "Agent-" + selected_mode.get("agentAliasId"),
@@ -265,6 +293,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
                     None,
                     selected_model_category,
                     persisted_chat_title,
+                    new_message_id,
                 )
         elif selected_model_category == "Bedrock Prompt Flows":
             response_stream_key = "responseStream"
@@ -282,8 +311,19 @@ def process_websocket_message(request_body, force_null_kb_session_id):
                 ],
             )
             needs_load_from_s3, chat_title_loaded, original_existing_history = (
-                conversations.query_existing_history(
-                    dynamodb, conversations_table_name, logger, session_id
+                conversations.load_and_send_conversation_history(
+                    session_id,
+                    connection_id,
+                    user_id,
+                    dynamodb,
+                    conversations_table_name,
+                    s3_client,
+                    conversation_history_bucket,
+                    logger,
+                    commons,
+                    apigateway_management_api,
+                    False,
+                    True,
                 )
             )
             persisted_chat_title = (
@@ -295,7 +335,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
             new_conversation = bool(not existing_history or len(existing_history) == 0)
             response_text, contains_errors = process_bedrock_agents_response(
                 iter(response[response_stream_key]),
-                message_id,
+                new_message_id,
                 connection_id,
                 selected_model_category,
                 "PromptFlow-" + selected_mode.get("id"),
@@ -317,6 +357,7 @@ def process_websocket_message(request_body, force_null_kb_session_id):
                     flow_alias_id,
                     selected_model_category,
                     persisted_chat_title,
+                    new_message_id,
                 )
 
 
@@ -428,7 +469,12 @@ def process_bedrock_knowledgebase_response_stream(
         logger,
         apigateway_management_api,
         connection_id,
-        {"type": "message_title", "message_id": message_id, "title": chat_title},
+        {
+            "type": "message_title",
+            "message_id": message_id,
+            "session_id": session_id,
+            "title": chat_title,
+        },
     )
 
     # Send collected citations
@@ -723,6 +769,7 @@ def store_bedrock_knowledgebase_response(
     selected_model_name,
     selected_model_category,
     chat_title,
+    new_message_id,
 ):
     """Stores the KB response in DynamoDB"""
     conversation_history = existing_history + [
@@ -736,7 +783,7 @@ def store_bedrock_knowledgebase_response(
             "role": "assistant",
             "content": [{"text": response_text}],
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "message_id": commons.generate_random_string(),
+            "message_id": new_message_id,
         },
     ]
     conversation_json = json.dumps(conversation_history)
@@ -772,6 +819,7 @@ def store_bedrock_agents_response(
     flow_alias_id,
     category,
     chat_title,
+    new_message_id,
 ):
     """Stores the Agent response in DynamoDB"""
     conversation_history = existing_history + [
@@ -785,7 +833,7 @@ def store_bedrock_agents_response(
             "role": "assistant",
             "content": [{"text": response_text}],
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "message_id": commons.generate_random_string(),
+            "message_id": new_message_id,
         },
     ]
     conversation_json = json.dumps(conversation_history)

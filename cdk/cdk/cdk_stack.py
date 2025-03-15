@@ -29,7 +29,7 @@ from aws_cdk.aws_cognito_identitypool_alpha import (
     IdentityPool,
 )
 from constructs import Construct
-from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3  # type: ignore
+from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3
 import requests
 import time
 import json
@@ -520,6 +520,7 @@ class ChatbotWebsiteStack(Stack):
                 "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                 "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
                 "CONVERSATION_HISTORY_BUCKET": conversation_history_bucket.bucket_name,
+                "AWS_ACCOUNT_ID": self.account,
                 "POWERTOOLS_SERVICE_NAME": "VIDEO_GENERATION_SERVICE",
             },
         )
@@ -747,6 +748,7 @@ class ChatbotWebsiteStack(Stack):
             environment={
                 "CONFIG_DYNAMODB_TABLE": dynamodb_configurations_table.table_name,
                 "USER_POOL_ID": user_pool.user_pool_id,
+                "AWS_ACCOUNT_ID": self.account,
                 "REGION": region,
                 "ALLOWLIST_DOMAIN": allowlist_domain_string,
                 "WEBSOCKET_API_ENDPOINT": websocket_api_endpoint,
@@ -1056,7 +1058,7 @@ class ChatbotWebsiteStack(Stack):
             ),
             managed_login_version=cognito.ManagedLoginVersion.NEWER_MANAGED_LOGIN,
         )
-        with open('cdk/cognito_ui_settings.json', 'r') as file:
+        with open("cdk/cognito_ui_settings.json", "r") as file:
             settings_dict = json.load(file)
 
         cognito.CfnManagedLoginBranding(

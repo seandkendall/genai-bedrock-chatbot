@@ -25,6 +25,7 @@ conversations_table_name = os.environ["CONVERSATIONS_DYNAMODB_TABLE"]
 conversations_table = boto3.resource("dynamodb").Table(conversations_table_name)
 conversation_history_bucket = os.environ["CONVERSATION_HISTORY_BUCKET"]
 attachment_bucket_name = os.environ["ATTACHMENT_BUCKET_NAME"]
+aws_account_id = os.environ["AWS_ACCOUNT_ID"]
 
 apigateway_management_api = boto3.client(
     "apigatewaymanagementapi",
@@ -57,6 +58,7 @@ def lambda_handler(event, context):
         chat_title = prompt[:16] if len(prompt) > 16 else prompt
 
         message_id = event.get("message_id", None)
+        new_message_id = commons.generate_random_string()
         message_received_timestamp_utc = event.get(
             "timestamp", datetime.now(timezone.utc).isoformat()
         )
@@ -82,6 +84,8 @@ def lambda_handler(event, context):
                 logger,
                 commons,
                 apigateway_management_api,
+                False,
+                False,
             )
             return
         # Resolution and aspect_ratio only used for Luma models
@@ -144,11 +148,23 @@ def lambda_handler(event, context):
             images_array,
             resolution,
             aspect_ratio,
+            aws_account_id,
         )
 
         needs_load_from_s3, chat_title_loaded, original_existing_history = (
-            conversations.query_existing_history(
-                dynamodb, conversations_table_name, logger, session_id
+            conversations.load_and_send_conversation_history(
+                session_id,
+                connection_id,
+                user_id,
+                dynamodb,
+                conversations_table_name,
+                s3_client,
+                conversation_history_bucket,
+                logger,
+                commons,
+                apigateway_management_api,
+                False,
+                True,
             )
         )
         existing_history = copy.deepcopy(original_existing_history)
@@ -166,6 +182,7 @@ def lambda_handler(event, context):
                 connection_id,
                 {
                     "type": "message_start",
+                    "message_id": new_message_id,
                     "message": {"model": model_id},
                     "session_id": session_id,
                     "delta": {"text": error_message},
@@ -178,7 +195,8 @@ def lambda_handler(event, context):
                 connection_id,
                 {
                     "type": "message_title",
-                    "message_id": message_id,
+                    "message_id": new_message_id,
+                    "session_id": session_id,
                     "title": persisted_chat_title,
                 },
             )
@@ -189,6 +207,7 @@ def lambda_handler(event, context):
                 connection_id,
                 {
                     "type": "message_stop",
+                    "message_id": new_message_id,
                     "session_id": session_id,
                     "message_counter": 1,
                     "new_conversation": new_conversation,
@@ -210,11 +229,11 @@ def lambda_handler(event, context):
             connection_id,
             {
                 "type": "video_generated",
+                "message_id": new_message_id,
+                "session_id": session_id,
                 "video_url": video_url,
                 "prompt": prompt,
                 "modelId": model_id,
-                "message_id": message_id,
-                "session_id": session_id,
                 "timestamp": message_received_timestamp_utc,
             },
         )
@@ -225,7 +244,7 @@ def lambda_handler(event, context):
             connection_id,
             {
                 "type": "message_title",
-                "message_id": message_id,
+                "message_id": new_message_id,
                 "session_id": session_id,
                 "title": persisted_chat_title,
             },
@@ -237,12 +256,12 @@ def lambda_handler(event, context):
             connection_id,
             {
                 "type": "message_stop",
+                "message_id": new_message_id,
+                "session_id": session_id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "modelId": model_id,
                 "new_conversation": new_conversation,
-                "session_id": session_id,
                 "backend_type": "video_generated",
-                "message_id": message_id,
             },
         )
 
@@ -256,6 +275,7 @@ def lambda_handler(event, context):
             model_id,
             selected_model_category,
             persisted_chat_title,
+            new_message_id,
         )
 
         return {"statusCode": 200, "body": json.dumps("Video generated successfully")}
@@ -282,6 +302,7 @@ def store_bedrock_videos_response(
     model_id,
     selected_model_category,
     chat_title,
+    new_message_id,
 ):
     """Stores the bedrock video conversation"""
     conversation_history = existing_history + [
@@ -299,7 +320,7 @@ def store_bedrock_videos_response(
             "isVideo": True,
             "videoAlt": prompt,
             "prompt": prompt,
-            "message_id": commons.generate_random_string(),
+            "message_id": new_message_id,
         },
     ]
     conversation_json = json.dumps(conversation_history)

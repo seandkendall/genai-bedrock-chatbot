@@ -13,7 +13,7 @@ try:
     from PIL import Image
 
     pil_available = True
-except ImportError as e:
+except ImportError:
     pil_available = False
 
 GREEN_SCREEN_COLOR = (4, 244, 4)
@@ -346,6 +346,7 @@ def generate_video(
     images,
     resolution,
     aspect_ratio,
+    aws_account_id,
 ):
     """Generates a video through GenAi on Amazon Bedrock"""
     logger.info(
@@ -400,8 +401,9 @@ def generate_video(
                         "Bucket": video_bucket,
                         "Key": f"{s3_location_original}",
                     },
+                    ExpectedBucketOwner=aws_account_id,
+                    ExpectedSourceBucketOwner=aws_account_id,
                     Bucket=video_bucket,
-                    Key=f"{s3_location}",
                 )
                 s3_client.delete_object(
                     Bucket=video_bucket, Key=f"{s3_location_original}"
@@ -832,7 +834,7 @@ def convert_image_to_png(file_content, logger):
             # Get the PNG binary content
             png_content = png_buffer.getvalue()
 
-            logger.info(f"Image successfully converted to PNG format.")
+            logger.info("Image successfully converted to PNG format.")
             return png_content
     except Exception as e:
         logger.error(f"Error converting image to PNG: {str(e)}")

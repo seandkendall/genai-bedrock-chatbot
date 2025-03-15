@@ -102,6 +102,7 @@ def lambda_handler(event, context):
 @tracer.capture_method
 def process_websocket_message(request_body):
     """Function to process a websocket message"""
+    # amazonq-ignore-next-line
     global system_prompt
     access_token = request_body.get("access_token", {})
     session_id = request_body.get("session_id", "XYZ")
@@ -146,6 +147,11 @@ def process_websocket_message(request_body):
         )
         return
     elif message_type == "load":
+        conversation_history_in_s3 = (
+            request_body.get("conversation_history_in_s3", {}).get("BOOL", False)
+            if isinstance(request_body.get("conversation_history_in_s3"), dict)
+            else request_body.get("conversation_history_in_s3", False)
+        )
         # Load conversation history from DynamoDB
         conversations.load_and_send_conversation_history(
             session_id,
@@ -158,11 +164,18 @@ def process_websocket_message(request_body):
             logger,
             commons,
             apigateway_management_api,
+            conversation_history_in_s3,
+            False,
         )
         return
     else:
         # Handle other message types (e.g., prompt)
         prompt = request_body.get("prompt", "")
+        conversation_history_in_s3 = (
+            request_body.get("conversation_history_in_s3", {}).get("BOOL", False)
+            if isinstance(request_body.get("conversation_history_in_s3"), dict)
+            else request_body.get("conversation_history_in_s3", False)
+        )
         attachments = request_body.get("attachments", [])
         selected_mode = request_body.get("selected_mode", {})
         selected_model_id = selected_mode.get("modelId", "")
@@ -234,8 +247,19 @@ def process_websocket_message(request_body):
 
         # Query existing history for the session from DynamoDB
         needs_load_from_s3, chat_title, original_existing_history = (
-            conversations.query_existing_history(
-                dynamodb, conversations_table_name, logger, session_id
+            conversations.load_and_send_conversation_history(
+                session_id,
+                connection_id,
+                user_id,
+                dynamodb,
+                conversations_table_name,
+                s3_client,
+                conversation_history_bucket,
+                logger,
+                commons,
+                apigateway_management_api,
+                conversation_history_in_s3,
+                True,
             )
         )
         if needs_load_from_s3:
@@ -265,6 +289,7 @@ def process_websocket_message(request_body):
             title_gen_model = title_gen_model.split("/")[1]
 
         message_id = request_body.get("message_id", None)
+        new_message_id = commons.generate_random_string()
         message_received_timestamp_utc = request_body.get(
             "timestamp", datetime.now(tz=timezone.utc).isoformat()
         )
@@ -387,7 +412,8 @@ def process_websocket_message(request_body):
                         title_prompt_request,
                         title_gen_model if title_gen_model else selected_model_id,
                         connection_id,
-                        message_id,
+                        new_message_id,
+                        session_id,
                     )
                 except Exception:
                     chat_title = f"New Conversation: {hash(prompt) % 1000000:06x}"
@@ -451,6 +477,7 @@ def process_websocket_message(request_body):
                 ) = auto_generate(
                     connection_id,
                     session_id,
+                    new_message_id,
                     tokenizer,
                     selected_model_id,
                     selected_model_name,
@@ -466,6 +493,7 @@ def process_websocket_message(request_body):
                     converse_content_with_s3_pointers,
                     prompt,
                     assistant_response,
+                    None,  # reasoning_text if exists
                     user_id,
                     input_tokens,
                     output_tokens,
@@ -476,6 +504,7 @@ def process_websocket_message(request_body):
                     new_conversation,
                     selected_model_category,
                     message_stop_reason,
+                    new_message_id,
                 )
             else:
                 response = bedrock_runtime.converse_stream(
@@ -488,6 +517,7 @@ def process_websocket_message(request_body):
             if "imported-model" not in selected_model_id:
                 (
                     assistant_response,
+                    reasoning_text,
                     input_tokens,
                     output_tokens,
                     message_end_timestamp_utc,
@@ -500,6 +530,7 @@ def process_websocket_message(request_body):
                     converse_content_with_s3_pointers,
                     new_conversation,
                     session_id,
+                    new_message_id,
                 )
                 store_conversation_history_converse(
                     session_id,
@@ -508,6 +539,7 @@ def process_websocket_message(request_body):
                     converse_content_with_s3_pointers,
                     prompt,
                     assistant_response,
+                    reasoning_text,
                     user_id,
                     input_tokens,
                     output_tokens,
@@ -518,6 +550,7 @@ def process_websocket_message(request_body):
                     new_conversation,
                     selected_model_category,
                     message_stop_reason,
+                    new_message_id,
                 )
         except Exception as e:
             if "ResourceNotFoundException" in str(e):
@@ -562,7 +595,11 @@ def process_websocket_message(request_body):
 
 @tracer.capture_method
 def get_title_from_message(
-    messages: list, selected_model_id: str, connection_id: str, message_id: str
+    messages: list,
+    selected_model_id: str,
+    connection_id: str,
+    message_id: str,
+    session_id: str,
 ) -> str:
     response = bedrock_runtime.converse_stream(
         messages=messages, modelId=selected_model_id, additionalModelRequestFields={}
@@ -576,6 +613,7 @@ def get_title_from_message(
         {
             "type": "message_title",
             "message_id": message_id,
+            "session_id": session_id,
             "title": chat_title["title"],
         },
     )
@@ -664,6 +702,7 @@ def store_conversation_history_converse(
     converse_content_array,
     user_message,
     assistant_message,
+    reasoning_text,
     user_id,
     input_tokens,
     output_tokens,
@@ -674,6 +713,7 @@ def store_conversation_history_converse(
     new_conversation,
     selected_model_category,
     message_stop_reason,
+    new_message_id,
 ):
     """Function to store conversation history in DDB or S3 in the converse format"""
     # logger.info(f"Storing conversation for session ID: {session_id}")
@@ -690,8 +730,10 @@ def store_conversation_history_converse(
         return
 
     prefix = rf"{user_id}/{session_id}"
-    new_message_id = commons.generate_random_string()
     # Prepare the updated conversation history once
+    assistant_content_array = [{"text": assistant_message}]
+    if reasoning_text and len(reasoning_text) > 1:
+        assistant_content_array.append({"reasoning": reasoning_text})
     conversation_history = existing_history + [
         {
             "role": "user",
@@ -701,7 +743,7 @@ def store_conversation_history_converse(
         },
         {
             "role": "assistant",
-            "content": [{"text": assistant_message}],
+            "content": assistant_content_array,
             "message_stop_reason": message_stop_reason,
             "timestamp": message_end_timestamp_utc,
             "message_id": new_message_id,
@@ -837,6 +879,7 @@ def generate(
     buffer,
     char_count,
     session_id,
+    message_id,
     tokenizer,
     selected_model_id,
     selected_model_name,
@@ -905,7 +948,7 @@ def generate(
                                     "type": "content_block_delta",
                                     "message": {"model": selected_model_name},
                                     "delta": {"text": combined_text},
-                                    "message_id": counter,
+                                    "message_id": message_id,
                                     "session_id": session_id,
                                 },
                             )
@@ -918,6 +961,7 @@ def generate(
                             {
                                 "type": "message_stop",
                                 "session_id": session_id,
+                                "message_id": message_id,
                                 "message_counter": counter,
                                 "message_stop_reason": message_stop_reason,
                                 "needs_code_end": needs_code_end,
@@ -941,7 +985,7 @@ def generate(
                                     else "content_block_delta",
                                     "message": {"model": selected_model_name},
                                     "delta": {"text": event_json["generation"]},
-                                    "message_id": counter,
+                                    "message_id": message_id,
                                     "session_id": session_id,
                                 },
                             )
@@ -959,7 +1003,7 @@ def generate(
                                         "type": "content_block_delta",
                                         "message": {"model": selected_model_name},
                                         "delta": {"text": combined_text},
-                                        "message_id": counter,
+                                        "message_id": message_id,
                                         "session_id": session_id,
                                     },
                                 )
@@ -1009,12 +1053,14 @@ def generate(
             "error": f'Failed to get response after maximum retries. \n\nCustom Model "{selected_model_name}"',
         },
     )
+    # amazonq-ignore-next-line
     raise Exception("Failed to get response after maximum retries")
 
 
 def auto_generate(
     connection_id,
     session_id,
+    message_id,
     tokenizer,
     selected_model_id,
     selected_model_name,
@@ -1042,6 +1088,7 @@ def auto_generate(
         buffer,
         char_count,
         session_id,
+        message_id,
         tokenizer,
         selected_model_id,
         selected_model_name,
@@ -1072,6 +1119,7 @@ def auto_generate(
             buffer,
             char_count,
             session_id,
+            message_id,
             tokenizer,
             selected_model_id,
             selected_model_name,

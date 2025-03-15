@@ -1,10 +1,14 @@
-import json, boto3, base64, uuid, os
+import json
+import boto3
+import base64
+import uuid
+import os
+import copy
 from datetime import datetime, timezone
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from botocore.config import Config
 from chatbot_commons import commons
 from conversations import conversations
-import copy
 
 logger = Logger(service="BedrockImage")
 metrics = Metrics()
@@ -48,6 +52,7 @@ def lambda_handler(event, context):
         height_width = event.get("heightWidth", "1024x1024")
         height, width = map(int, height_width.split("x"))
         message_id = event.get("message_id", None)
+        new_message_id = commons.generate_random_string()
         message_received_timestamp_utc = event.get(
             "timestamp", datetime.now(timezone.utc).isoformat()
         )
@@ -74,6 +79,8 @@ def lambda_handler(event, context):
                 logger,
                 commons,
                 apigateway_management_api,
+                False,
+                False,
             )
             return
         # if model_id contains titan or nova then
@@ -101,8 +108,19 @@ def lambda_handler(event, context):
             raise ValueError(f"Unsupported model: {model_id}")
 
         needs_load_from_s3, chat_title_loaded, original_existing_history = (
-            conversations.query_existing_history(
-                dynamodb, conversations_table_name, logger, session_id
+            conversations.load_and_send_conversation_history(
+                session_id,
+                connection_id,
+                user_id,
+                dynamodb,
+                conversations_table_name,
+                s3_client,
+                conversation_history_bucket,
+                logger,
+                commons,
+                apigateway_management_api,
+                False,
+                True,
             )
         )
         existing_history = copy.deepcopy(original_existing_history)
@@ -121,6 +139,7 @@ def lambda_handler(event, context):
                 {
                     "type": "message_start",
                     "message": {"model": model_id},
+                    "message_id": new_message_id,
                     "session_id": session_id,
                     "delta": {"text": error_message},
                     "message_counter": 0,
@@ -132,7 +151,7 @@ def lambda_handler(event, context):
                 connection_id,
                 {
                     "type": "message_title",
-                    "message_id": message_id,
+                    "message_id": new_message_id,
                     "session_id": session_id,
                     "title": persisted_chat_title,
                 },
@@ -144,6 +163,7 @@ def lambda_handler(event, context):
                 connection_id,
                 {
                     "type": "message_stop",
+                    "message_id": new_message_id,
                     "session_id": session_id,
                     "message_counter": 1,
                     "new_conversation": True,
@@ -170,7 +190,7 @@ def lambda_handler(event, context):
                 "image_url": image_url,
                 "prompt": prompt,
                 "modelId": model_id,
-                "message_id": message_id,
+                "message_id": new_message_id,
                 "session_id": session_id,
                 "timestamp": message_received_timestamp_utc,
             },
@@ -182,7 +202,7 @@ def lambda_handler(event, context):
             connection_id,
             {
                 "type": "message_title",
-                "message_id": message_id,
+                "message_id": new_message_id,
                 "session_id": session_id,
                 "title": persisted_chat_title,
             },
@@ -198,8 +218,8 @@ def lambda_handler(event, context):
                 "modelId": model_id,
                 "new_conversation": new_conversation,
                 "session_id": session_id,
+                "message_id": new_message_id,
                 "backend_type": "image_generated",
-                "message_id": message_id,
             },
         )
         store_bedrock_images_response(
@@ -212,6 +232,7 @@ def lambda_handler(event, context):
             model_id,
             selected_model_category,
             persisted_chat_title,
+            new_message_id,
         )
 
         # logger.info("Image URL sent successfully")
@@ -262,6 +283,7 @@ def store_bedrock_images_response(
     model_id,
     selected_model_category,
     chat_title,
+    new_message_id,
 ):
     conversation_history = existing_history + [
         {
@@ -278,7 +300,7 @@ def store_bedrock_images_response(
             "isImage": True,
             "imageAlt": prompt,
             "prompt": prompt,
-            "message_id": commons.generate_random_string(),
+            "message_id": new_message_id,
         },
     ]
     conversation_json = json.dumps(conversation_history)

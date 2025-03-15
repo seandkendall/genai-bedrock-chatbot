@@ -16,32 +16,6 @@ def delete_conversation_history(dynamodb, conversations_table_name, logger, sess
         logger.error(f"Error deleting conversation history (9781): {str(e)}")
 
 
-def query_existing_history(dynamodb, conversations_table_name, logger, session_id):
-    """Function to query existing history from DDB"""
-    try:
-        response = dynamodb.get_item(
-            TableName=conversations_table_name,
-            Key={"session_id": {"S": session_id}},
-            ProjectionExpression="title,conversation_history",
-        )
-        if "Item" in response:
-            conversation_history_string = response["Item"]["conversation_history"]["S"]
-            title_string = response["Item"]["title"]["S"]
-            needs_load_from_s3 = "s3source" in conversation_history_string
-            return (
-                needs_load_from_s3,
-                title_string,
-                json.loads(conversation_history_string),
-            )
-
-        return False, "", []
-
-    except Exception as e:
-        logger.exception(e)
-        logger.error("Error querying existing history: " + str(e))
-        return False, "", []
-
-
 def load_and_send_conversation_history(
     session_id: str,
     connection_id: str,
@@ -53,23 +27,30 @@ def load_and_send_conversation_history(
     logger,
     commons,
     apigateway_management_api,
+    conversation_history_in_s3,
+    return_conversation_without_sending,
 ):
     """Function to load and send conversation history"""
     try:
+        projection_expression = "session_id,category,conversation_history,conversation_history_in_s3,last_message_id,last_modified_date,selected_model_id,title,user_id"
+        if conversation_history_in_s3:
+            projection_expression = "session_id,category,conversation_history_in_s3,last_message_id,last_modified_date,selected_model_id,title,user_id"
+
         response = dynamodb.get_item(
-            TableName=conversations_table_name, Key={"session_id": {"S": session_id}}
+            TableName=conversations_table_name,
+            Key={"session_id": {"S": session_id}},
+            ProjectionExpression=projection_expression,
         )
 
         if "Item" in response:
             item = response["Item"]
-            conversation_history_in_s3 = False
-            conversation_history_in_s3_value = item.get(
-                "conversation_history_in_s3", False
+
+            conversation_history_in_s3 = (
+                item.get("conversation_history_in_s3", {}).get("BOOL", False)
+                if isinstance(item.get("conversation_history_in_s3"), dict)
+                else item.get("conversation_history_in_s3", False)
             )
-            if isinstance(conversation_history_in_s3_value, dict):
-                conversation_history_in_s3 = conversation_history_in_s3_value.get(
-                    "BOOL", False
-                )
+
             if conversation_history_in_s3:
                 prefix = rf"{user_id}/{session_id}"
                 # Load conversation history from S3
@@ -85,6 +66,15 @@ def load_and_send_conversation_history(
                 conversation_history_str = item["conversation_history"]["S"]
                 conversation_history = json.loads(conversation_history_str)
 
+            if return_conversation_without_sending:
+                title_string = item["title"]["S"]
+                needs_load_from_s3 = "s3source" in json.dumps(conversation_history)
+                return (
+                    needs_load_from_s3,
+                    title_string,
+                    conversation_history,
+                )
+
             # Split the conversation history into chunks
             conversation_history_chunks = split_message(conversation_history, logger)
             # Send the conversation history chunks to the WebSocket client
@@ -96,13 +86,17 @@ def load_and_send_conversation_history(
                     connection_id,
                     {
                         "type": "conversation_history",
+                        "session_id": session_id,
                         "last_message": index == total_chunks,
+                        "loaded_from_s3": conversation_history_in_s3,
                         "chunk": chunk.decode("utf-8"),
                         "current_chunk": index,
                         "total_chunks": total_chunks,
                     },
                 )
         else:
+            if return_conversation_without_sending:
+                return (False, "", [])
             commons.send_websocket_message(
                 logger,
                 apigateway_management_api,

@@ -64,29 +64,50 @@ def lambda_handler(event, context):
 def get_conversation_list_from_dynamodb_conversation_history_table(user_id):
     """Function to get conversation list from DynamoDB, sorted by last_modified_date desc."""
     try:
-        response = conversations_table.query(
-            IndexName="user_id-index",
-            KeyConditionExpression=Key("user_id").eq(user_id),
-            ProjectionExpression="#session_id, #selected_model_id,#selected_model_name, #last_modified_date, #title, #category,#kb_session_id,#selected_knowledgebase_id,#flow_id,#flow_alias_id,#selected_agent_id,#selected_agent_alias_id,#last_message_id",
-            ExpressionAttributeNames={
-                "#session_id": "session_id",
-                "#title": "title",
-                "#selected_model_id": "selected_model_id",
-                "#selected_model_name": "selected_model_name",
-                "#last_modified_date": "last_modified_date",
-                "#category": "category",
-                "#kb_session_id": "kb_session_id",
-                "#selected_knowledgebase_id": "selected_knowledgebase_id",
-                "#flow_id": "flow_id",
-                "#flow_alias_id": "flow_alias_id",
-                "#selected_agent_id": "selected_agent_id",
-                "#selected_agent_alias_id": "selected_agent_alias_id",
-                "#last_message_id": "last_message_id",
-            },
-            ScanIndexForward=False,
-        )
-        # Return an empty list if no items are found
-        return response.get("Items", [])
+        items = []
+        last_evaluated_key = None
+
+        while True:
+            query_params = {
+                "IndexName": "user_id-index",
+                "KeyConditionExpression": Key("user_id").eq(user_id),
+                "ProjectionExpression": "#session_id, #selected_model_id,#selected_model_name, #last_modified_date, #title, #category,#kb_session_id,#selected_knowledgebase_id,#flow_id,#flow_alias_id,#selected_agent_id,#selected_agent_alias_id,#conversation_history_in_s3,#last_message_id",
+                "ExpressionAttributeNames": {
+                    "#session_id": "session_id",
+                    "#title": "title",
+                    "#selected_model_id": "selected_model_id",
+                    "#selected_model_name": "selected_model_name",
+                    "#last_modified_date": "last_modified_date",
+                    "#category": "category",
+                    "#kb_session_id": "kb_session_id",
+                    "#selected_knowledgebase_id": "selected_knowledgebase_id",
+                    "#flow_id": "flow_id",
+                    "#flow_alias_id": "flow_alias_id",
+                    "#selected_agent_id": "selected_agent_id",
+                    "#selected_agent_alias_id": "selected_agent_alias_id",
+                    "#conversation_history_in_s3": "conversation_history_in_s3",
+                    "#last_message_id": "last_message_id",
+                },
+                "ScanIndexForward": False,
+            }
+
+            # Add ExclusiveStartKey if we have a LastEvaluatedKey from previous query
+            if last_evaluated_key:
+                query_params["ExclusiveStartKey"] = last_evaluated_key
+
+            response = conversations_table.query(**query_params)
+
+            # Add items from this query batch
+            items.extend(response.get("Items", []))
+
+            # Get the LastEvaluatedKey from response
+            last_evaluated_key = response.get("LastEvaluatedKey")
+
+            # If there's no LastEvaluatedKey, we've got all items
+            if not last_evaluated_key:
+                break
+
+        return items
     except Exception as e:
         logger.exception(e)
         logger.error("Error querying DynamoDB (7266)")

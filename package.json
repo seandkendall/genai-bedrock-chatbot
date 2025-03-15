@@ -1,11 +1,11 @@
 {
 	"dependencies": {
-		"@aws-cdk/aws-cognito-identitypool-alpha": "^2.181.1-alpha.0",
-		"@aws-cdk/aws-lambda-python-alpha": "^2.181.1-alpha.0",
-		"@aws-cdk/aws-scheduler-alpha": "^2.181.1-alpha.0",
-		"@aws-cdk/aws-scheduler-targets-alpha": "^2.181.1-alpha.0",
-		"@aws-cdk/aws-servicecatalogappregistry-alpha": "^2.181.1-alpha.0",
-		"aws-cdk": "^2.181.1",
+		"@aws-cdk/aws-cognito-identitypool-alpha": "^2.184.0-alpha.0",
+		"@aws-cdk/aws-lambda-python-alpha": "^2.184.0-alpha.0",
+		"@aws-cdk/aws-scheduler-alpha": "^2.184.0-alpha.0",
+		"@aws-cdk/aws-scheduler-targets-alpha": "^2.184.0-alpha.0",
+		"@aws-cdk/aws-servicecatalogappregistry-alpha": "^2.184.0-alpha.0",
+		"aws-cdk": "^2.184.0",
 		"cdk-nag": "^2.35.31"
 	}
 }
