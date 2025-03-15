@@ -193,6 +193,7 @@ def process_websocket_message(request_body):
                 connection_id,
                 {
                     "type": "error",
+                    "session_id": session_id,
                     "error": f"Too many attachments. Maximum allowed is {MAX_CONTENT_ITEMS}.",
                 },
             )
@@ -207,6 +208,7 @@ def process_websocket_message(request_body):
                 connection_id,
                 {
                     "type": "error",
+                    "session_id": session_id,
                     "error": f"Too many images. Maximum allowed is {MAX_IMAGES}.",
                 },
             )
@@ -219,6 +221,7 @@ def process_websocket_message(request_body):
                 connection_id,
                 {
                     "type": "error",
+                    "session_id": session_id,
                     "error": f"Too many documents. Maximum allowed is {MAX_DOCUMENTS}.",
                 },
             )
@@ -241,7 +244,7 @@ def process_websocket_message(request_body):
                 logger,
                 apigateway_management_api,
                 connection_id,
-                {"type": "error", "error": error_message},
+                {"type": "error", "session_id": session_id,"error": error_message},
             )
             return {"statusCode": 400}
 
@@ -563,6 +566,7 @@ def process_websocket_message(request_body):
                     connection_id,
                     {
                         "type": "error",
+                        "session_id": session_id,
                         "error": f"Imported Model: {selected_model_name} Not Found. Please re-scan models.",
                     },
                 )
@@ -578,6 +582,7 @@ def process_websocket_message(request_body):
                     connection_id,
                     {
                         "type": "error",
+                        "session_id": session_id,
                         "error": f"You have not enabled the selected model. Please visit the following link to request model access: [{model_access_url}]({model_access_url})",
                     },
                 )
@@ -588,6 +593,7 @@ def process_websocket_message(request_body):
                     connection_id,
                     {
                         "type": "error",
+                        "session_id": session_id,
                         "error": f"An Error has occurred, please try again: {str(e)}",
                     },
                 )
@@ -1050,6 +1056,7 @@ def generate(
         connection_id,
         {
             "type": "error",
+            "session_id": session_id,
             "error": f'Failed to get response after maximum retries. \n\nCustom Model "{selected_model_name}"',
         },
     )

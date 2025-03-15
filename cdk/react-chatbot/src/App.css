@@ -1,13 +1,31 @@
 /* General Styles */
 :root {
   --sidebar-width: 250px;
+
+  /* Light mode variables */
+  --light-bg: #ffffff;
+  --light-text: #333333;
+  --light-chat-human-bg: #e1f5fe;
+  --light-chat-assistant-bg: #f5f5f5;
+  --light-chat-assistant-shadow: rgba(0, 0, 0, 0.1);
+
+  /* Dark mode variables */
+  --dark-bg: #121212;
+  --dark-text: #f5f5f5;
+  --dark-chat-human-bg: #1e3a5f;
+  /* Darker blue */
+  --dark-chat-assistant-bg: #2a2a2a;
+  /* This should contrast with #121212 */
+  --dark-chat-assistant-shadow: rgba(0, 0, 0, 0.3);
 }
 
-html, body {
+html,
+body {
   overflow-x: hidden;
   margin: 0;
   padding: 0;
 }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
@@ -42,98 +60,6 @@ body {
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-}
-
-.chat-message {
-  width: calc(100% - 20px);
-  max-width: calc(100% - 20px);
-  margin-bottom: 10px;
-  padding: 10px;
-  border-radius: 10px;
-  position: relative;
-  word-wrap: break-word;
-}
-
-.human {
-  align-self: flex-end;
-  background-color: var(--light-chat-human-bg);
-}
-
-.assistant {
-  align-self: flex-start;
-  background-color: var(--light-chat-assistant-bg);
-  box-shadow: 0 1px 2px var(--light-chat-assistant-shadow);
-}
-
-@media (prefers-color-scheme: dark) {
-  .human {
-    background-color: var(--dark-chat-human-bg);
-  }
-
-  .assistant {
-    background-color: var(--dark-chat-assistant-bg);
-    box-shadow: 0 1px 2px var(--dark-chat-assistant-shadow);
-  }
-}
-
-.message-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.message-header-content {
-  display: flex;
-  align-items: center;
-}
-
-.message-header-content > span {
-  font-weight: bold;
-}
-
-.response-time-wrapper {
-  font-weight: normal;
-  color: #888;
-  font-size: 0.7rem;
-  margin-left: 5px;
-}
-
-.loading-spinner {
-  margin-left: 5px;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.copy-icon {
-  cursor: pointer;
-}
-
-.copy-btn {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background-color: transparent;
-  border: none;
-  color: white;
-  cursor: pointer;
-  font-size: 16px;
-}
-
-.copy-btn:hover {
-  color: #007aff;
-}
-
-.copied {
-  color: green;
-}
-
-.message-content {
-  word-wrap: break-word;
-  white-space: pre-wrap;
 }
 
 /* Message Input Styles */
@@ -216,7 +142,8 @@ body {
   border-right: 1px solid var(--light-sidebar-border);
   overflow-y: auto;
   z-index: 90;
-  transition: width 0.3s ease; /* Add smooth transition */
+  transition: width 0.3s ease;
+  /* Add smooth transition */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -292,15 +219,15 @@ body {
   border-radius: 50%;
 }
 
-.toggle-switch input:checked + .toggle-btn {
+.toggle-switch input:checked+.toggle-btn {
   background-color: #007aff;
 }
 
-.toggle-switch input:focus + .toggle-btn {
+.toggle-switch input:focus+.toggle-btn {
   box-shadow: 0 0 1px #007aff;
 }
 
-.toggle-switch input:checked + .toggle-btn:before {
+.toggle-switch input:checked+.toggle-btn:before {
   transform: translateX(20px);
 }
 
@@ -350,7 +277,8 @@ body {
   }
 
   .left-sidebar {
-    width: 250px; /* Keep full width on mobile */
+    width: 250px;
+    /* Keep full width on mobile */
     transform: translateX(0);
     visibility: visible;
     display: block;

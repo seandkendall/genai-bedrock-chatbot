@@ -101,7 +101,7 @@ def load_and_send_conversation_history(
                 logger,
                 apigateway_management_api,
                 connection_id,
-                {"type": "no_conversation_to_load", "last_message": True},
+                {"type": "no_conversation_to_load", "last_message": True,"session_id": session_id,},
             )
             return []
 

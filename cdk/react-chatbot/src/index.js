@@ -4,9 +4,17 @@ import "./index.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { AwsRum } from "aws-rum-web";
+import * as Sentry from "@sentry/react";
 
 import configJson from "./config.json";
 let awsRum = null;
+
+Sentry.init({
+	dsn: "https://c71115934787e1391fbbc2b03ea811b1@o4508960664846336.ingest.us.sentry.io/4508960667205632",
+	integrations: [Sentry.browserTracingIntegration()],
+	tracesSampleRate: 1.0,
+	tracePropagationTargets: ["localhost", "https://dznw81y4yvz5r.cloudfront.net/","dznw81y4yvz5r.cloudfront.net"],
+});
 
 try {
 	const config = {

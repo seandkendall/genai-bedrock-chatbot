@@ -1,14 +1,14 @@
 # https://pypi.org/project/boto3/
-boto3>=1.37.11
+boto3>=1.37.12
 PyJWT
 django
 pytz
 requests
 transformers
-aws-cdk.aws-servicecatalogappregistry-alpha>=2.184.0a0
+aws-cdk.aws-servicecatalogappregistry-alpha>=2.184.1a0
 aws-solutions-constructs.aws-cloudfront-s3==2.77.0
-aws-cdk.aws-scheduler-alpha>=2.184.0a0
-aws-cdk.aws-scheduler-targets-alpha>=2.184.0a0
-aws-cdk.aws-lambda-python-alpha>=2.184.0a0
-aws-cdk.aws-cognito-identitypool-alpha>=2.184.0a0
+aws-cdk.aws-scheduler-alpha>=2.184.1a0
+aws-cdk.aws-scheduler-targets-alpha>=2.184.1a0
+aws-cdk.aws-lambda-python-alpha>=2.184.1a0
+aws-cdk.aws-cognito-identitypool-alpha>=2.184.1a0
 aws-lambda-powertools[all]

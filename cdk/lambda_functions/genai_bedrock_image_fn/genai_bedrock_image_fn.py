@@ -245,7 +245,7 @@ def lambda_handler(event, context):
             logger,
             apigateway_management_api,
             connection_id,
-            {"type": "error", "error": str(e)},
+            {"type": "error", "session_id": session_id,"error": str(e)},
         )
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
 

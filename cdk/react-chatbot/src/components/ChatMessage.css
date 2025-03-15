@@ -1,22 +1,275 @@
+/* File: ChatMessages.css */
+/* CSS Variables for chat messages */
+:root {
+  /* Light mode chat message variables */
+  --light-chat-human-bg: #e1f5fe;
+  --light-chat-assistant-bg: #f5f5f5;
+  --light-chat-assistant-shadow: rgba(0, 0, 0, 0.1);
+
+  /* Dark mode chat message variables */
+  --dark-chat-human-bg: #1e3a5f;
+  --dark-chat-assistant-bg: #1c787b;
+  --dark-chat-assistant-shadow: rgba(0, 0, 0, 0.3);
+
+  /* Text colors */
+  --light-text: #333333;
+  --dark-text: #f5f5f5;
+}
+
+/* Original details/summary styling */
 details {
-    border: 1px solid #aaa;
-    border-radius: 4px;
-    padding: .5em .5em 0;
-    margin-bottom: 1em;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  padding: .5em .5em 0;
+  margin-bottom: 1em;
+}
+
+summary {
+  font-weight: bold;
+  margin: -.5em -.5em 0;
+  padding: .5em;
+  cursor: pointer;
+}
+
+details[open] {
+  padding: .5em;
+}
+
+details[open] summary {
+  border-bottom: 1px solid #aaa;
+  margin-bottom: .5em;
+}
+
+/* Chat message styling */
+.chat-message {
+  width: calc(100% - 20px);
+  max-width: calc(100% - 20px);
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  position: relative;
+  word-wrap: break-word;
+}
+
+.human {
+  align-self: flex-end;
+  background-color: var(--light-chat-human-bg);
+}
+
+.assistant {
+  align-self: flex-start;
+  background-color: var(--light-chat-assistant-bg);
+  box-shadow: 0 1px 2px var(--light-chat-assistant-shadow);
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.message-header-content {
+  display: flex;
+  align-items: center;
+}
+
+.message-header-content>span {
+  font-weight: bold;
+}
+
+.response-time-wrapper {
+  font-weight: normal;
+  color: #888;
+  font-size: 0.7rem;
+  margin-left: 5px;
+}
+
+.loading-spinner {
+  margin-left: 5px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
   }
-  
-  summary {
-    font-weight: bold;
-    margin: -.5em -.5em 0;
-    padding: .5em;
-    cursor: pointer;
+
+  to {
+    transform: rotate(360deg);
   }
-  
-  details[open] {
-    padding: .5em;
+}
+
+.copy-icon {
+  cursor: pointer;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.copy-btn:hover {
+  color: #007aff;
+}
+
+.copied {
+  color: green;
+}
+
+.message-content {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* Accordion Styles for Chat Messages */
+.chat-accordion {
+  margin-bottom: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.chat-accordion .MuiAccordionSummary-content {
+  margin: 8px 0;
+}
+
+.chat-accordion .MuiAccordionDetails-root {
+  padding: 16px;
+}
+
+.chat-accordion.light-mode {
+  background-color: #f0f4f8;
+}
+
+.chat-accordion.dark-mode {
+  background-color: #323232;
+}
+
+.chat-accordion .accordion-title {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+/* Markdown content styling */
+.message-content pre {
+  background-color: #f5f5f5;
+  padding: 1em;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.message-content code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.message-content pre>code {
+  background-color: transparent;
+  padding: 0;
+  font-size: 0.9em;
+  color: inherit;
+}
+
+.message-content blockquote {
+  margin: 0.5em 0;
+  padding-left: 1em;
+  border-left: 4px solid #ddd;
+  color: #666;
+}
+
+.message-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.message-content th,
+.message-content td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.message-content th {
+  font-weight: bold;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.reasoning-panel-header .MuiAccordionSummary-root {
+  background-color: lime !important;
+}
+
+
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .human {
+    background-color: var(--dark-chat-human-bg) !important;
   }
-  
-  details[open] summary {
-    border-bottom: 1px solid #aaa;
-    margin-bottom: .5em;
+
+  .assistant {
+    background-color: var(--dark-chat-assistant-bg) !important;
+    box-shadow: 0 1px 2px var(--dark-chat-assistant-shadow);
   }
+
+  /* Markdown formatting in dark mode */
+  .message-content pre {
+    background-color: #2d3748;
+  }
+
+  .message-content code {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .message-content blockquote {
+    border-left-color: #4a5568;
+    color: #a0aec0;
+  }
+
+  .message-content th,
+  .message-content td {
+    border-bottom-color: #4a5568;
+  }
+
+  .message-content th {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  /* Material UI adjustments for dark mode */
+  .MuiPaper-root.MuiAccordion-root.chat-accordion {
+    background-color: #323232 !important;
+  }
+
+  .MuiPaper-root.MuiAccordion-root,
+  .MuiAccordion-root {
+    background-color: #323232 !important;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .MuiAccordionDetails-root {
+    background-color: #323232 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .MuiAccordionSummary-root {
+    background-color: #3a3a3a !important;
+  }
+
+  /* Make sure chat message content is visible */
+  .message-content {
+    color: var(--dark-text);
+  }
+
+  .reasoning-panel-header {
+    background-color: lime !important;
+  }
+}

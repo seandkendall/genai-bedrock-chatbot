@@ -1071,10 +1071,10 @@ class ChatbotWebsiteStack(Stack):
         )
 
         # Create the EventBridge Scheduler schedule
-        scheduler_group = scheduler.Group(
+        scheduler_group = scheduler.ScheduleGroup(
             self,
             "ChatbotSchedulerGroup",
-            group_name=scheduler_group_name,
+            schedule_group_name=scheduler_group_name,
             removal_policy=RemovalPolicy.DESTROY,
         )
         module_scan_schedule = scheduler.Schedule(
@@ -1088,7 +1088,7 @@ class ChatbotWebsiteStack(Stack):
             ),
             description="Schedule to run the model_scan_function Lambda function",
             enabled=False,
-            group=scheduler_group,
+            schedule_group=scheduler_group,
         )
         # add env variable to lambda function model_scan_function
         config_function.add_environment(

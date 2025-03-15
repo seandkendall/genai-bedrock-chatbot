@@ -76,8 +76,12 @@ const App = memo(({ signOut, user, awsRum }) => {
 			session_id: `session-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`,
 		};
 	});
-
-	const [requireConversationLoad, setRequireConversationLoad] = useState(true);
+	const [requireConversationLoad, setRequireConversationLoad] = useState(() => {
+		return !(
+			Object.keys(selectedConversation).length === 1 &&
+			selectedConversation.session_id
+		);
+	});
 	const [isDisabled, setIsDisabled] = useState(false);
 	const [selectedMode, setSelectedMode] = useState(() => {
 		const storedValue = localStorage.getItem("selectedMode");
@@ -186,7 +190,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				Math.min(1000 * 2 ** attemptNumber, 30000), // Exponential backoff up to 30 seconds
 		},
 	);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Intentional
 	useEffect(() => {
 		if (readyState === WebSocket.OPEN) {
 			sendMessage(JSON.stringify({ type: "ping" }));
@@ -294,7 +298,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 		let selectedObject = null;
 		if (
 			category === "Bedrock Models" ||
-			category === "Imported Models" ||
 			category === "Bedrock KnowledgeBases"
 		) {
 			selectedObject = models.find((item) => item.modelId === selectedModelId);
@@ -346,9 +349,13 @@ const App = memo(({ signOut, user, awsRum }) => {
 		if (isDisabled) {
 			return;
 		}
-		setRequireConversationLoad(true);
+		// If session_id is the only attribute in the json object, no need to load, because its a new conversation
+		const load_conversation = !(
+			Object.keys(conversation).length === 1 && conversation.session_id
+		);
+		setRequireConversationLoad(load_conversation);
 		setSelectedConversation(conversation);
-		if (conversation) {
+		if (conversation && load_conversation) {
 			localStorage.setItem(
 				"selectedConversation",
 				JSON.stringify(conversation),
@@ -390,13 +397,18 @@ const App = memo(({ signOut, user, awsRum }) => {
 					[selMode.category]: true,
 				};
 			});
-
 			handleModeChange(selMode, true);
 		}
 	};
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Not needed
 	useEffect(() => {
-		if (selectedConversation) {
+		if (
+			selectedConversation &&
+			!(
+				Object.keys(selectedConversation).length === 1 &&
+				selectedConversation.session_id
+			)
+		) {
 			handleSelectChat(selectedConversation);
 		}
 	}, [selectedConversation]);
@@ -602,6 +614,8 @@ const App = memo(({ signOut, user, awsRum }) => {
 			const data = {
 				type: "load",
 				session_id: sessId ? sessId : selectedConversation?.session_id,
+				conversation_history_in_s3:
+					selectedConversation?.conversation_history_in_s3,
 				last_loaded_message_id: lastLoadedChatMessageId,
 				kb_session_id: kbSessionId,
 				selected_mode: selectedMode,
@@ -633,6 +647,12 @@ const App = memo(({ signOut, user, awsRum }) => {
 			const message = JSON.parse(lastMessage.data);
 			const message_temp_cache = [];
 			if (message.type !== "conversation_history") return;
+
+			const message_session_id = message.session_id;
+			if (message_session_id !== selectedConversation?.session_id) {
+				return;
+			}
+
 			const current_chunk = message.current_chunk || 1;
 			const last_message = message.last_message;
 			let messageChunk = JSON.parse(message.chunk);
@@ -773,7 +793,9 @@ const App = memo(({ signOut, user, awsRum }) => {
 		}
 
 		if (retryPreviousMessage) {
+			// biome-ignore lint/style/noParameterAssign: Intentional
 			message = previousSentMessage.message;
+			// biome-ignore lint/style/noParameterAssign: Intentional
 			attachments = previousSentMessage.attachments;
 		} else {
 			setPreviousSentMessage({ message: message, attachments: attachments });
@@ -810,9 +832,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 			.find((part) => part.type === "timeZoneName").value;
 
 		const data = {
-			prompt: sanitizedMessage,
 			type: "chat",
 			message_id: randomMessageId,
+			conversation_history_in_s3:
+				selectedConversation?.conversation_history_in_s3,
 			timestamp: message_timestamp,
 			timestamp_local_timezone: timezone,
 			session_id: newConversationSessionId
@@ -826,6 +849,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			accessToken: `${accessToken}`,
 			reloadPromptConfig: reloadPromptConfig,
 			systemPromptUserOrSystem: systemPromptUserOrSystem,
+			prompt: sanitizedMessage,
 			attachments: await Promise.all(
 				attachments
 					.map(async (file) => {
@@ -873,8 +897,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 			{
 				role: "assistant",
 				content: "",
+				reasoning: "",
 				isStreaming: true,
 				isVideoStreaming: false,
+				is_reasoning: false,
 				timestamp: null,
 			},
 		]);
@@ -924,6 +950,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			{
 				role: "assistant",
 				content: `Generating Image of: *${prompt}* with model: *${selectedMode.modelName}*. Please wait.. `,
+				reasoning: "",
 				isStreaming: true,
 				isVideoStreaming: false,
 				timestamp: null,
@@ -931,6 +958,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				isImage: false,
 				isVideo: false,
 				imageAlt: prompt,
+				is_reasoning: false,
 			},
 		]);
 
@@ -1002,6 +1030,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			{
 				role: "assistant",
 				content: `Generating Video of: *${prompt}* with model: *${selectedMode.modelName}*. Please wait... \n\rThis could take 3 - 5 Minutes... `,
+				reasoning: "",
 				isStreaming: true,
 				isVideoStreaming: false,
 				timestamp: null,
@@ -1009,6 +1038,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				isImage: false,
 				isVideo: false,
 				imageAlt: prompt,
+				is_reasoning: false,
 			},
 		]);
 
@@ -1021,13 +1051,16 @@ const App = memo(({ signOut, user, awsRum }) => {
 		if (lastMessage !== null) {
 			const message = JSON.parse(lastMessage.data);
 
+			// is this a reasoning message?
+			message.is_reasoning = Boolean(message?.is_reasoning);
+
 			// Handle session ID updates from the server
 			if (
 				message.kb_session_id &&
 				(!kbSessionId || (kbSessionId && kbSessionId !== message.kb_session_id))
 			) {
 				// Skip updating the session if the response contains a specific error message
-				if (message && message.delta && message.delta.text) {
+				if (message?.delta?.text) {
 					const textValue = message.delta.text;
 					if (
 						textValue.includes(
@@ -1045,7 +1078,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 					}
 				}
 			}
-
 			if (
 				typeof message === "string" &&
 				message.includes("You have not been allow-listed for this application")
@@ -1120,6 +1152,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 					updatedMessages[lastIndex] = {
 						...updatedMessages[lastIndex],
 						content: message.video_url,
+						reasoning: "",
 						prompt: message.prompt,
 						message_id: message.message_id,
 						isStreaming: false,
@@ -1131,6 +1164,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 						inputTokenCount: 0,
 						timestamp: message.timestamp,
 						raw_message: message,
+						is_reasoning: false,
 					};
 					return updatedMessages;
 				});
@@ -1147,6 +1181,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 					updatedMessages[lastIndex] = {
 						...updatedMessages[lastIndex],
 						content: message.image_url,
+						reasoning: "",
 						prompt: message.prompt,
 						message_id: message.message_id,
 						isStreaming: false,
@@ -1158,6 +1193,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 						inputTokenCount: 0,
 						timestamp: message.timestamp,
 						raw_message: message,
+						is_reasoning: false,
 					};
 					return updatedMessages;
 				});
@@ -1265,6 +1301,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		handleMaxTokenMessage(message);
 		if (message?.delta?.text) {
 			setMessages((prevMessages) => {
+				const is_reasoning = Boolean(message?.is_reasoning);
 				const updatedMessages = [...(prevMessages ? prevMessages : [])];
 				const lastIndex = updatedMessages.length - 1;
 				const lastMessage = updatedMessages[lastIndex];
@@ -1279,7 +1316,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 							: "no content";
 					updatedMessages[lastIndex] = {
 						...lastMessage,
-						content: newContent,
+						content: is_reasoning ? "" : newContent,
+						reasoning: is_reasoning ? newContent : "",
+						is_reasoning: Boolean(message?.is_reasoning),
+						message_id: message.message_id,
 						raw_message: message,
 					};
 				}
@@ -1380,6 +1420,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				model: usedModel,
 				outputTokenCount: outputTokenCount,
 				inputTokenCount: inputTokenCount,
+				is_reasoning: Boolean(messageStopReplaced?.is_reasoning),
 				raw_message: messageStopReplaced,
 			};
 
@@ -1604,6 +1645,8 @@ const App = memo(({ signOut, user, awsRum }) => {
 								reactThemeMode={reactThemeMode}
 								websocketConnectionId={websocketConnectionId}
 								conversationList={conversationList}
+								setIsRefreshingMessage={setIsRefreshingMessage}
+								setIsRefreshing={setIsRefreshing}
 							/>
 						</div>
 						<MessageInput
