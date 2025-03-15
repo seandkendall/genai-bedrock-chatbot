@@ -291,7 +291,7 @@ const SettingsModal = ({
 		setStylePreset,
 	]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies:
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Excluding configLoaded and updateLocalState from deps array since they shouldn't trigger reloads
 	useEffect(() => {
 		if (!configLoaded) {
 			loadConfig("system");
@@ -300,7 +300,15 @@ const SettingsModal = ({
 		}
 	}, [configLoaded, loadConfig, updateLocalState]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies:
+	// biome-ignore lint/correctness/useExhaustiveDependencies: setReactThemeMode is intentionally omitted to prevent recursive theme updates
+	useEffect(() => {
+		if (localState.reactThemeMode) {
+			setReactThemeMode(localState.reactThemeMode);
+			localStorage.setItem("react_theme_mode", localState.reactThemeMode);
+		}
+	}, [localState.reactThemeMode]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: setReloadPromptConfig is stable and doesn't need to be in deps array
 	useEffect(() => {
 		setReloadPromptConfig(true);
 	}, [
@@ -330,7 +338,7 @@ const SettingsModal = ({
 
 	const prevLastMessage = usePrevious(lastMessage, null);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies:
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Complex dependency relationships with message handling make including all deps impractical
 	useEffect(() => {
 		if (lastMessage !== null && lastMessage !== prevLastMessage) {
 			try {
@@ -510,7 +518,7 @@ const SettingsModal = ({
 		[toggleEventBridgeSchedule],
 	);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Excluding updateLocalState and related setters from deps to prevent unnecessary recreations
 	const handleSave = useCallback(() => {
 		setError("");
 		setPricePer1000InputTokens(localState.pricePer1000InputTokens);
