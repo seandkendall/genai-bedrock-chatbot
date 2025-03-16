@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Typography, Tooltip } from "@mui/material";
+import { Typography, Tooltip, Box } from "@mui/material";
 
 const MessageHeader = ({ role, timestamp, model }) => {
 	const [showTooltip, setShowTooltip] = useState(false);
@@ -26,7 +26,8 @@ const MessageHeader = ({ role, timestamp, model }) => {
 	const formatRole = (role) => {
 		if (role === "user") {
 			return "Human";
-		}if (role?.toLowerCase() === "assistant") {
+		}
+		if (role?.toLowerCase() === "assistant") {
 			return "Assistant";
 		}
 		return role;
@@ -34,15 +35,30 @@ const MessageHeader = ({ role, timestamp, model }) => {
 
 	return (
 		<Tooltip
-			open={showTooltip}
-			title={formatTimestamp(timestamp, model)}
-			arrow
+			title={timestamp ? formatTimestamp(timestamp, model) : ""}
+			open={showTooltip && Boolean(timestamp)}
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
+			arrow
 		>
-			<Typography variant="subtitle2" fontWeight="bold">
-				{formatRole(role)}
-			</Typography>
+			<Box
+				sx={{
+					display: "flex",
+					justifyContent: "space-between",
+					width: "100%",
+					pr: 4,
+				}}
+			>
+				<Typography
+					variant="subtitle2"
+					component="span"
+					fontWeight="bold"
+					onMouseEnter={handleMouseEnter}
+					onMouseLeave={handleMouseLeave}
+				>
+					{formatRole(role)}
+				</Typography>
+			</Box>
 		</Tooltip>
 	);
 };

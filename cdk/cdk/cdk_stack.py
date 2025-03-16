@@ -94,9 +94,11 @@ class ChatbotWebsiteStack(Stack):
         else:
             # Load sentryDSN value from SSM if parameter exists
             try:
-                sentry_dsn = ssm.StringParameter.value_from_ssm_parameter(
-                    self, "/genaichatbot/sentry_dsn"
-                )
+                sentry_dsn = ssm.StringParameter.from_string_parameter_attributes(
+                    self,
+                    "SentryDSNParameter",
+                    parameter_name="/genaichatbot/sentry_dsn",
+                ).string_value
                 CfnOutput(self, "SentryDSN", value=sentry_dsn)
             except Exception:
                 print(

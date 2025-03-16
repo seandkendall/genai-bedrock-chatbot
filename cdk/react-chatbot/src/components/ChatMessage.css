@@ -88,6 +88,20 @@ details[open] summary {
   animation: spin 1s linear infinite;
 }
 
+.copy-icon-button {
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.chat-message:hover .copy-icon-button {
+  opacity: 1;
+}
+
+.copy-success {
+  color: #4caf50 !important;
+}
+
+
 @keyframes spin {
   from {
     transform: rotate(0deg);

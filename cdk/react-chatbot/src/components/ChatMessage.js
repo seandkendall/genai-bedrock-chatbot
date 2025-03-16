@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { memo, useMemo, useCallback, useState } from "react";
+import React, { memo, useMemo, useCallback, useState, useRef } from "react";
 import {
 	Box,
 	Typography,
@@ -13,6 +13,9 @@ import {
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import CheckIcon from "@mui/icons-material/Check";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -29,6 +32,9 @@ import "./ChatMessage.css";
 
 const ChatMessage = memo(
 	({ message, onSend, isLastMessage, reactThemeMode }) => {
+		const [copied, setCopied] = useState(false);
+		const messageRef = useRef(null);
+
 		const parseDeepseekResponse = useCallback((content) => {
 			const sections = { user: "", think: "", response: "", system: "" };
 			const sectionRegex = /<(user|think|system)>([\s\S]*?)<\/\1>/gi;
@@ -42,6 +48,29 @@ const ChatMessage = memo(
 			sections.response = content.replace(sectionRegex, "").trim();
 			return sections;
 		}, []);
+
+		const handleCopyMessage = () => {
+			if (message.content) {
+				// Extract text content if it's in an array format
+				let textToCopy = "";
+				if (Array.isArray(message.content)) {
+					textToCopy = message.content
+						.filter((item) => item.text)
+						.map((item) => item.text)
+						.join(" ");
+				} else {
+					textToCopy = message.content;
+				}
+
+				navigator.clipboard
+					.writeText(textToCopy)
+					.then(() => {
+						setCopied(true);
+						setTimeout(() => setCopied(false), 2000);
+					})
+					.catch((err) => console.error("Failed to copy text: ", err));
+			}
+		};
 
 		const formatContent = useCallback(
 			(content, outputTokenCount) => {
@@ -100,7 +129,7 @@ const ChatMessage = memo(
 			if (hasError) {
 				return {
 					messageContent: message?.raw_message?.error,
-					attachments: []
+					attachments: [],
 				};
 			}
 
@@ -135,13 +164,13 @@ const ChatMessage = memo(
 
 				return {
 					messageContent: textContent,
-					attachments: newAttachments
+					attachments: newAttachments,
 				};
 			}
 
 			return {
 				messageContent: message.content,
-				attachments: []
+				attachments: [],
 			};
 		}, [message.content, hasError, message, reformatFilename]);
 
@@ -430,18 +459,43 @@ const ChatMessage = memo(
 								: isHuman
 									? "grey.800" //Dark Human Background color
 									: "grey.600", //Dark assistant Background color
-					boxShadow: (message?.role?.toLowerCase() === "assistant") ? "0 1px 2px rgba(0, 0, 0, 0.1)" : "none",
+					boxShadow:
+						message?.role?.toLowerCase() === "assistant"
+							? "0 1px 2px rgba(0, 0, 0, 0.1)"
+							: "none",
 					userSelect: "text",
 				}}
+				ref={messageRef}
 			>
 				<Box display="flex" alignItems="center" justifyContent="space-between">
 					<Box display="flex" alignItems="center">
+						{(message.role === "Human" || message.role === "user") && (
+							<Tooltip title={copied ? "Copied!" : "Copy message"}>
+								<IconButton
+									onClick={handleCopyMessage}
+									size="small"
+									sx={{
+										position: "absolute",
+										top: "8px",
+										right: "8px",
+										color: copied ? "success.main" : "action.active",
+									}}
+								>
+									{copied ? (
+										<CheckIcon fontSize="small" />
+									) : (
+										<ContentCopyIcon fontSize="small" />
+									)}
+								</IconButton>
+							</Tooltip>
+						)}
+
 						<MessageHeader
 							role={message.role}
 							timestamp={message.timestamp}
 							model={message.model}
 						/>
-						{(message?.role?.toLowerCase() === "assistant") && (
+						{message?.role?.toLowerCase() === "assistant" && (
 							<>
 								{message.isStreaming && (
 									<Box ml={1}>
@@ -474,11 +528,11 @@ const ChatMessage = memo(
 						</Tooltip>
 					)}
 				</Box>
-				{(message?.role?.toLowerCase() === "assistant") &&
+				{message?.role?.toLowerCase() === "assistant" &&
 					message?.reasoning &&
 					message?.reasoning?.trim().length > 1 && (
 						<Accordion
-							expanded={(message?.is_reasoning === true) || expanded}
+							expanded={message?.is_reasoning === true || expanded}
 							onChange={() => setExpanded(!expanded)}
 							sx={{
 								mb: 2,
@@ -499,10 +553,38 @@ const ChatMessage = memo(
 										: "AI Reasoning"}
 								</Typography>
 							</AccordionSummary>
-							<AccordionDetails><ReactMarkdown>{message?.reasoning}</ReactMarkdown></AccordionDetails>
+							<AccordionDetails>
+								<ReactMarkdown>{message?.reasoning}</ReactMarkdown>
+							</AccordionDetails>
 						</Accordion>
 					)}
 				<Box mt={1}>{renderContent()}</Box>
+				<Tooltip title="Scroll to message top">
+					<IconButton
+						onClick={() =>
+							messageRef.current?.scrollIntoView({ behavior: "smooth" })
+						}
+						size="small"
+						sx={{
+							position: "absolute",
+							bottom: "8px",
+							right: "8px",
+							bgcolor:
+								reactThemeMode === "dark"
+									? "rgba(255, 255, 255, 0.1)"
+									: "rgba(0, 0, 0, 0.05)",
+							"&:hover": {
+								bgcolor:
+									reactThemeMode === "dark"
+										? "rgba(255, 255, 255, 0.2)"
+										: "rgba(0, 0, 0, 0.1)",
+							},
+							padding: "4px",
+						}}
+					>
+						<KeyboardArrowUpIcon fontSize="small" />
+					</IconButton>
+				</Tooltip>
 			</Box>
 		);
 	},
