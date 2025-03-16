@@ -553,9 +553,7 @@ const ChatMessage = memo(
 										: "AI Reasoning"}
 								</Typography>
 							</AccordionSummary>
-							<AccordionDetails>
-								<ReactMarkdown>{message?.reasoning}</ReactMarkdown>
-							</AccordionDetails>
+							<AccordionDetails>{message?.reasoning}</AccordionDetails>
 						</Accordion>
 					)}
 				<Box mt={1}>{renderContent()}</Box>
