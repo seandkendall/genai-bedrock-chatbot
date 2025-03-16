@@ -1803,8 +1803,55 @@ function convertRoleToHuman(input) {
 			};
 		}
 		if (item?.role?.toLowerCase() === "assistant") {
-			console.log("SDK ASSISTANT MESSAGE FROM BACKEND:");
-			console.log(item);
+			// Check if content array exists
+			if (Array.isArray(item.content)) {
+				const contentItems = [];
+				let reasoning;
+				let contentText;
+
+				// Process each content array item using for...of
+				for (const contentItem of item.content) {
+					if (contentItem.text !== undefined) {
+						contentText = contentItem.text;
+					} else if (contentItem.reasoning !== undefined) {
+						reasoning = contentItem.reasoning;
+					} else {
+						contentItems.push(contentItem);
+					}
+				}
+
+				// Create a new item with the required properties
+				const newItem = {
+					...item,
+					role: "assistant",
+				};
+
+				// Instead of deleting and re-adding content, create a new object without content
+				const { content: originalContent, ...restProps } = newItem;
+
+				// Build final object with all required properties
+				const finalItem = {
+					...restProps,
+				};
+
+				// Add the extracted properties to the root object
+				if (reasoning !== undefined) {
+					finalItem.reasoning = reasoning;
+				}
+
+				if (contentText !== undefined) {
+					finalItem.content = contentText;
+				}
+
+				// Only add content_items if there are other items
+				if (contentItems.length > 0) {
+					finalItem.content_items = contentItems;
+				}
+
+				return finalItem;
+			}
+
+			// If no content array processing needed
 			return {
 				...item,
 				role: "assistant",
