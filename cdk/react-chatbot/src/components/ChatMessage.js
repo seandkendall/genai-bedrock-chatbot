@@ -73,7 +73,7 @@ const ChatMessage = memo(
 		};
 
 		const formatContent = useCallback(
-			(content, outputTokenCount) => {
+			(content, outputTokenCount,trimLongMessages) => {
 				let formattedContent = "";
 
 				// Check if content contains 'think', 'system' or 'user' tags
@@ -102,6 +102,10 @@ const ChatMessage = memo(
 				} else {
 					// If no tags are present, use the raw content
 					formattedContent = content.trim();
+				}
+				// if formattedContent length > 200 then return substring, only keeping last 100 characters
+				if (trimLongMessages && formattedContent.length > 200) {
+					formattedContent = `${formattedContent.substring(formattedContent.length - 100,)}. ...`;
 				}
 				return formattedContent;
 			},
@@ -399,7 +403,7 @@ const ChatMessage = memo(
 									),
 								}}
 							>
-								{formatContent(messageContent, message.outputTokenCount)}
+								{formatContent(messageContent, message.outputTokenCount,false)}
 							</ReactMarkdown>
 						</MathJax>
 					</MathJaxContext>
