@@ -362,7 +362,7 @@ const ChatMessage = memo(
 									thead: ({ node, ...props }) => (
 										<thead
 											style={{
-												backgroundColor: "#f5f5f5",
+												backgroundColor: reactThemeMode === "dark" ? "#424242" : "#f5f5f5",
 												borderBottom: "2px solid #ddd",
 											}}
 											{...props}
