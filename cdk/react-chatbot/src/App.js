@@ -40,6 +40,9 @@ async function getCurrentSession() {
 }
 
 Amplify.configure(amplifyConfig);
+const awsChatbotUrl = amplifyConfig.aws_chatbot_url;
+const restSendMessageEndpoint = `${awsChatbotUrl}/rest/send-message`
+
 
 const App = memo(({ signOut, user, awsRum }) => {
 	const [partialMessages, setPartialMessages] = useState([]);
@@ -652,7 +655,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		sendMessageViaRest(data, "/rest/send-message", "loadConversationList");
+		sendMessageViaRest(data, restSendMessageEndpoint, "loadConversationList");
 	};
 
 	const loadConversationHistory = async (
@@ -681,7 +684,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				idToken: `${idToken}`,
 				accessToken: `${accessToken}`,
 			};
-			sendMessageViaRest(data, "/rest/send-message", "loadConversationHistory");
+			sendMessageViaRest(data, restSendMessageEndpoint, "loadConversationHistory");
 		}
 	};
 
@@ -696,7 +699,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		sendMessageViaRest(data, "/rest/send-message", "clearConversationHistory");
+		sendMessageViaRest(data, restSendMessageEndpoint, "clearConversationHistory");
 	};
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Not Needed
@@ -981,7 +984,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-		sendMessageViaRest(data, "/rest/send-message", "chatMessage");
+		sendMessageViaRest(data, restSendMessageEndpoint, "chatMessage");
 		setReloadPromptConfig(false);
 	};
 
@@ -1038,7 +1041,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-		sendMessageViaRest(data, "/rest/send-message", "generateImageRequest");
+		sendMessageViaRest(data, restSendMessageEndpoint, "generateImageRequest");
 	};
 
 	const generateVideo = async (
@@ -1118,7 +1121,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		]);
 
 		setTimeout(scrollToBottom, 0);
-		sendMessageViaRest(data, "/rest/send-message", "generateVideoRequest");
+		sendMessageViaRest(data, restSendMessageEndpoint, "generateVideoRequest");
 	};
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies:
@@ -1598,7 +1601,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		}
 	};
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 
 	useEffect(() => {
 		if (isDragging) {
 			document.addEventListener("mousemove", handleMouseMove);

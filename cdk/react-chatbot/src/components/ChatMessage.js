@@ -1,10 +1,18 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { memo, useMemo, useCallback, useState, useRef } from "react";
+import React, {
+	memo,
+	useMemo,
+	useCallback,
+	useEffect,
+	useState,
+	useRef,
+} from "react";
 import {
 	Box,
 	Typography,
 	CircularProgress,
 	IconButton,
+	Button,
 	Tooltip,
 	Chip,
 	Accordion,
@@ -31,9 +39,20 @@ import MessageHeader from "./MessageHeader";
 import "./ChatMessage.css";
 
 const ChatMessage = memo(
-	({ message, onSend, isLastMessage, reactThemeMode }) => {
+	({
+		message,
+		onSend,
+		isLastMessage,
+		reactThemeMode,
+		resetTrimmedMessages,
+	}) => {
 		const [copied, setCopied] = useState(false);
 		const messageRef = useRef(null);
+		const [showFullMessage, setShowFullMessage] = useState(false);
+
+		useEffect(() => {
+			setShowFullMessage(false);
+		}, [resetTrimmedMessages]);
 
 		const parseDeepseekResponse = useCallback((content) => {
 			const sections = { user: "", think: "", response: "", system: "" };
@@ -73,7 +92,7 @@ const ChatMessage = memo(
 		};
 
 		const formatContent = useCallback(
-			(content, outputTokenCount,trimLongMessages) => {
+			(content, outputTokenCount, trimLongMessages) => {
 				let formattedContent = "";
 
 				// Check if content contains 'think', 'system' or 'user' tags
@@ -103,9 +122,9 @@ const ChatMessage = memo(
 					// If no tags are present, use the raw content
 					formattedContent = content.trim();
 				}
-				// if formattedContent length > 200 then return substring, only keeping last 100 characters
-				if (trimLongMessages && formattedContent.length > 200) {
-					formattedContent = `${formattedContent.substring(formattedContent.length - 100,)}. ...`;
+				// if formattedContent length > 500 then return substring, only keeping last 500 characters
+				if (trimLongMessages && formattedContent.length > 500) {
+					formattedContent = `${formattedContent.substring(formattedContent.length - 500)}. ...`;
 				}
 				return formattedContent;
 			},
@@ -145,6 +164,8 @@ const ChatMessage = memo(
 					.join(" ");
 
 				const newAttachments = message.content.reduce((acc, item) => {
+					console.log('SDK newAttachments:')
+					console.log(item)
 					if (item.image?.s3source?.s3key) {
 						acc.push({
 							type: "image",
@@ -220,7 +241,34 @@ const ChatMessage = memo(
 			if (message.role === "Human" || message.role === "user") {
 				return (
 					<>
-						<Typography>{messageContent}</Typography>
+						<ReactMarkdown>
+							{formatContent(
+								messageContent,
+								message.outputTokenCount,
+								!isLastMessage && !showFullMessage,
+							)}
+						</ReactMarkdown>
+						{!isLastMessage &&
+							!showFullMessage &&
+							messageContent &&
+							messageContent.length > 500 && (
+								<Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+									<Button
+										variant="outlined"
+										size="small"
+										onClick={() => setShowFullMessage(true)}
+										sx={{
+											borderColor:
+												reactThemeMode === "dark"
+													? "rgba(255, 255, 255, 0.3)"
+													: "rgba(0, 0, 0, 0.23)",
+											color: reactThemeMode === "dark" ? "white" : "inherit",
+										}}
+									>
+										Load Entire Message
+									</Button>
+								</Box>
+							)}
 					</>
 				);
 			}
@@ -403,10 +451,36 @@ const ChatMessage = memo(
 									),
 								}}
 							>
-								{formatContent(messageContent, message.outputTokenCount,false)}
+								{formatContent(
+									messageContent,
+									message.outputTokenCount,
+									!isLastMessage && !showFullMessage,
+								)}
 							</ReactMarkdown>
 						</MathJax>
 					</MathJaxContext>
+					{!isLastMessage &&
+						!showFullMessage &&
+						messageContent &&
+						messageContent.length > 500 && (
+							<Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+								<Button
+									variant="outlined"
+									size="small"
+									onClick={() => setShowFullMessage(true)}
+									sx={{
+										borderColor:
+											reactThemeMode === "dark"
+												? "rgba(255, 255, 255, 0.3)"
+												: "rgba(0, 0, 0, 0.23)",
+										color: reactThemeMode === "dark" ? "white" : "inherit",
+									}}
+								>
+									Load Entire Message
+								</Button>
+							</Box>
+						)}
+
 					{attachments.length > 0 && (
 						<Box mt={2} display="flex" flexWrap="wrap" gap={1}>
 							{attachments.map((attachment) => (
@@ -439,6 +513,8 @@ const ChatMessage = memo(
 			attachments,
 			formatContent,
 			message.outputTokenCount,
+			showFullMessage,
+			reactThemeMode,
 		]);
 
 		return (

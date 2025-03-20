@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useRef, forwardRef, memo } from "react";
+import React, { useEffect,useState, useRef, forwardRef, memo } from "react";
 import ChatMessage from "./ChatMessage";
 import { Box } from "@mui/material";
 
@@ -26,8 +26,9 @@ const ChatHistory = memo(
 			ref,
 		) => {
 			const lastMessageRef = useRef(null);
+			const [resetTrimmedMessages, setResetTrimmedMessages] = useState(false);
 
-			// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+			// biome-ignore lint/correctness/useExhaustiveDependencies:
 			useEffect(() => {
 				if (requireConversationLoad && websocketConnectionId !== null) {
 					if (selectedConversation?.session_id) {
@@ -91,6 +92,10 @@ const ChatHistory = memo(
 				lastMessageRef.current?.scrollIntoView({ behavior: "smooth" });
 			}, [messages]);
 
+			useEffect(() => {
+				setResetTrimmedMessages((prev) => !prev);
+			}, [selectedConversation, onSend]);
+
 			return (
 				<Box
 					ref={ref}
@@ -107,12 +112,16 @@ const ChatHistory = memo(
 					}}
 				>
 					{messages?.map((message, index) => (
-						<div key={message.id || index}>
+						<div
+							key={`${message.timestamp || index}-${index}`}
+							ref={index === messages.length - 1 ? lastMessageRef : null}
+						>
 							<ChatMessage
 								message={message}
 								onSend={onSend}
 								isLastMessage={index === messages.length - 1}
 								reactThemeMode={reactThemeMode}
+								resetTrimmedMessages={resetTrimmedMessages}
 							/>
 						</div>
 					))}
