@@ -599,6 +599,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			setSelectedMode(newMode);
 			localStorage.setItem("selectedMode", JSON.stringify(newMode));
 		}
+		console.log('SDK SCROLL LOG 1')
 		setTimeout(scrollToBottom, 0);
 	};
 
@@ -754,6 +755,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			);
 			if (last_message) {
 				setIsRefreshing(false);
+				console.log('SDK SCROLL LOG 2')
 				setTimeout(scrollToBottom, 0);
 				message_temp_cache.length = 0;
 			}
@@ -983,6 +985,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			},
 		]);
 
+		console.log('SDK SCROLL LOG 3')
 		setTimeout(scrollToBottom, 0);
 		sendMessageViaRest(data, restSendMessageEndpoint, "chatMessage");
 		setReloadPromptConfig(false);
@@ -1040,6 +1043,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			},
 		]);
 
+		console.log('SDK SCROLL LOG 4')
 		setTimeout(scrollToBottom, 0);
 		sendMessageViaRest(data, restSendMessageEndpoint, "generateImageRequest");
 	};
@@ -1120,6 +1124,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			},
 		]);
 
+		console.log('SDK SCROLL LOG 5')
 		setTimeout(scrollToBottom, 0);
 		sendMessageViaRest(data, restSendMessageEndpoint, "generateVideoRequest");
 	};
@@ -1192,6 +1197,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				updateMessagesOnStop(message);
 				setIsDisabled(false);
 				setIsLoading(false);
+				console.log('SDK SCROLL LOG 6')
 				setTimeout(scrollToBottom, 0);
 				if (message.new_conversation) {
 					loadConversationList(message.session_id);
@@ -1216,6 +1222,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 				handleError(message);
 				setIsDisabled(false);
 				setIsLoading(false);
+				console.log('SDK SCROLL LOG 7')
 				setTimeout(scrollToBottom, 0);
 			} else if (
 				message.type === "video_generated" &&
@@ -1430,7 +1437,10 @@ const App = memo(({ signOut, user, awsRum }) => {
 				if (message.delta?.text) {
 					message.delta.text = `${message.delta.text} \n\r\n\r${max_token_message}`;
 				} else if (message.content) {
-					message.content.push({ text: `\n\r\n\r${max_token_message}` });
+					// if message.content is an array
+					if (Array.isArray(message.content)) {
+						message.content.push({ text: `\n\r\n\r${max_token_message}` });
+					}
 				} else {
 					message.delta = { text: `\n\r\n\r${max_token_message}` };
 					message.content = [{ text: `\n\r\n\r${max_token_message}` }];
@@ -1523,6 +1533,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			setTotalOutputTokens(newOutputTokens);
 			return updatedMessages;
 		});
+		console.log('SDK SCROLL LOG 8')
 		setTimeout(scrollToBottom, 0);
 	};
 

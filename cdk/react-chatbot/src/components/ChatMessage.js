@@ -37,6 +37,7 @@ import CodeBlock from "./CodeBlock";
 import MessageHeader from "./MessageHeader";
 
 import "./ChatMessage.css";
+const messageTrimThreshold = 500;
 
 const ChatMessage = memo(
 	({
@@ -50,6 +51,7 @@ const ChatMessage = memo(
 		const messageRef = useRef(null);
 		const [showFullMessage, setShowFullMessage] = useState(false);
 
+		// biome-ignore lint/correctness/useExhaustiveDependencies: not needed
 		useEffect(() => {
 			setShowFullMessage(false);
 		}, [resetTrimmedMessages]);
@@ -122,9 +124,8 @@ const ChatMessage = memo(
 					// If no tags are present, use the raw content
 					formattedContent = content.trim();
 				}
-				// if formattedContent length > 500 then return substring, only keeping last 500 characters
-				if (trimLongMessages && formattedContent.length > 500) {
-					formattedContent = `${formattedContent.substring(formattedContent.length - 500)}. ...`;
+				if (trimLongMessages && formattedContent.length > messageTrimThreshold) {
+					formattedContent = `${formattedContent.substring(0, 100)}...${formattedContent.substring(formattedContent.length - (messageTrimThreshold-100))}. ...`;
 				}
 				return formattedContent;
 			},
@@ -251,7 +252,7 @@ const ChatMessage = memo(
 						{!isLastMessage &&
 							!showFullMessage &&
 							messageContent &&
-							messageContent.length > 500 && (
+							messageContent.length > messageTrimThreshold && (
 								<Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
 									<Button
 										variant="outlined"
@@ -462,7 +463,7 @@ const ChatMessage = memo(
 					{!isLastMessage &&
 						!showFullMessage &&
 						messageContent &&
-						messageContent.length > 500 && (
+						messageContent.length > messageTrimThreshold && (
 							<Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
 								<Button
 									variant="outlined"
