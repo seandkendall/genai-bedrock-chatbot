@@ -560,8 +560,18 @@ while [ -z "$aws_application" ] && [ $loop_count -lt 2 ]; do
         fi
         aws_application=""
     fi
+    sentry_dsn_exists="false"
+    if [ -n "$sentry_dsn" ] && [ "$sentry_dsn" != "" ]; then
+        sentry_dsn_exists="true"
+    else
+        # Check if the parameter already exists in SSM
+        if aws ssm get-parameter --name "/genaichatbot/sentry_dsn" --with-decryption &>/dev/null; then
+            sentry_dsn_exists="true"
+            sentry_dsn=$(aws ssm get-parameter --name "/genaichatbot/sentry_dsn" --with-decryption --query "Parameter.Value" --output text)
+        fi
+    fi
     # Deploy the CDK app
-    cdk deploy --outputs-file outputs.json --context imported_models="$imported_models" --context aws_application="$aws_application" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context sentryDsn="$sentry_dsn" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+    cdk deploy --outputs-file outputs.json --context imported_models="$imported_models" --context aws_application="$aws_application" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context sentryDsn="$sentry_dsn" --context sentryDsnExists="$sentry_dsn_exists"  --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
     if [ $? -ne 0 ]; then
         echo "Error: CDK deployment failed. Exiting script."
         exit 1

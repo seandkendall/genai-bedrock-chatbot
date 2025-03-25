@@ -83,7 +83,8 @@ class ChatbotWebsiteStack(Stack):
         )
         sentry_dsn = self.node.try_get_context("sentryDsn")
         if sentry_dsn is not None and sentry_dsn != "":
-            ssm.StringParameter(
+            # Create parameter if provided through context
+            ssm_param = ssm.StringParameter(
                 self,
                 "SentryDSNParameter",
                 parameter_name="/genaichatbot/sentry_dsn",
@@ -92,15 +93,21 @@ class ChatbotWebsiteStack(Stack):
             )
             CfnOutput(self, "SentryDSN", value=sentry_dsn)
         else:
-            # Load sentryDSN value from SSM if parameter exists
-            try:
-                sentry_dsn = ssm.StringParameter.from_string_parameter_attributes(
-                    self,
-                    "SentryDSNParameter",
-                    parameter_name="/genaichatbot/sentry_dsn",
-                ).string_value
-                CfnOutput(self, "SentryDSN", value=sentry_dsn)
-            except Exception:
+            # Check if the parameter exists before trying to access it
+            sentry_param_exists = self.node.try_get_context("sentryDsnExists") or False
+
+            if sentry_param_exists:
+                try:
+                    sentry_dsn = ssm.StringParameter.value_for_string_parameter(
+                        self,
+                        "/genaichatbot/sentry_dsn",
+                    )
+                    CfnOutput(self, "SentryDSN", value=sentry_dsn)
+                except:
+                    print(
+                        "Error fetching Sentry DSN parameter, but continuing deployment"
+                    )
+            else:
                 print(
                     "No Sentry DSN URL Found. No Sentry Config will be deployed in the app"
                 )
