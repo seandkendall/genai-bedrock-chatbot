@@ -8,6 +8,7 @@ import React, {
 import { Box, Chip, TextField, IconButton } from "@mui/material";
 import { FaPaperPlane, FaPaperclip } from "react-icons/fa";
 import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
 
 const MAX_CONTENT_ITEMS = 20;
 const MAX_IMAGES = 20;
@@ -107,6 +108,7 @@ const MessageInput = forwardRef(
 				fileInputRef.current.click();
 			}
 		};
+
 		const isImageFile = useCallback((file) => {
 			if (file instanceof File) {
 				return ALLOWED_IMAGE_TYPES.includes(
@@ -148,7 +150,9 @@ const MessageInput = forwardRef(
 				}
 
 				if (
-					attachments.some((attachment) => attachment.name === file.name) ||
+					attachments.some(
+						(attachment) => attachment.file.name === file.name,
+					) ||
 					uploadedFileNames.includes(file.name)
 				) {
 					alert(
@@ -183,14 +187,13 @@ const MessageInput = forwardRef(
 
 				if (isImage) {
 					let allowed_number_of_images = MAX_IMAGES;
-					// if selectedMode.output_type lowercase = video
 					if (selectedMode.output_type.toLowerCase() === "video") {
 						allowed_number_of_images = 1;
 					}
 
 					if (
-						attachments.filter((a) => isImageFile(a)).length +
-							newAttachments.filter((a) => isImageFile(a)).length +
+						attachments.filter((a) => isImageFile(a.file)).length +
+							newAttachments.filter((a) => isImageFile(a.file)).length +
 							uploadedFileNames.filter((a) => isImageFile(a)).length >=
 						allowed_number_of_images
 					) {
@@ -204,11 +207,18 @@ const MessageInput = forwardRef(
 						if (file.name === "image.jpg") {
 							const timestamp = Date.now();
 							const newFileName = `image-${timestamp}-${newAttachments.length}.jpg`;
-							newAttachments.push(
-								new File([file], newFileName, { type: file.type }),
-							);
+							const newFile = new File([file], newFileName, {
+								type: file.type,
+							});
+							newAttachments.push({
+								id: uuidv4(),
+								file: newFile,
+							});
 						} else {
-							newAttachments.push(file);
+							newAttachments.push({
+								id: uuidv4(),
+								file: file,
+							});
 						}
 					} catch (error) {
 						console.error("Error processing image:", error);
@@ -216,26 +226,28 @@ const MessageInput = forwardRef(
 					}
 				} else if (isVideo) {
 					if (
-						attachments.filter((a) => isVideoFile(a)).length +
-							newAttachments.filter((a) => isVideoFile(a)).length +
+						attachments.filter((a) => isVideoFile(a.file)).length +
+							newAttachments.filter((a) => isVideoFile(a.file)).length +
 							uploadedFileNames.filter((a) => isVideoFile(a)).length >=
 						MAX_VIDEOS
 					) {
 						alert(`You can only attach up to ${MAX_VIDEOS} video.`);
 						continue;
 					}
-					// https://docs.aws.amazon.com/nova/latest/userguide/prompting-vision-limitations.html
 
 					if (file.size > MAX_VIDEO_SIZE) {
 						alert(`Video size must be no more than 1 GB: ${file.name}`);
 						continue;
 					}
 
-					newAttachments.push(file);
+					newAttachments.push({
+						id: uuidv4(),
+						file: file,
+					});
 				} else {
 					if (
-						attachments.filter((a) => !isImageFile(a)).length +
-							newAttachments.filter((a) => !isImageFile(a)).length +
+						attachments.filter((a) => !isImageFile(a.file)).length +
+							newAttachments.filter((a) => !isImageFile(a.file)).length +
 							uploadedFileNames.filter((a) => !isImageFile(a)).length >=
 						MAX_DOCUMENTS
 					) {
@@ -248,14 +260,17 @@ const MessageInput = forwardRef(
 						continue;
 					}
 
-					newAttachments.push(file);
+					newAttachments.push({
+						id: uuidv4(),
+						file: file,
+					});
 				}
 			}
 
 			setAttachments([...attachments, ...newAttachments]);
 			setUploadedFileNames([
 				...uploadedFileNames,
-				...newAttachments.map((file) => file.name),
+				...newAttachments.map((attachment) => attachment.file.name),
 			]);
 		};
 
@@ -264,11 +279,15 @@ const MessageInput = forwardRef(
 			handleFiles(files);
 		};
 
-		const handleRemoveAttachment = (index) => {
-			const removedAttachment = attachments[index];
-			setAttachments(attachments.filter((_, i) => i !== index));
+		const handleRemoveAttachment = (id) => {
+			const attachmentToRemove = attachments.find(
+				(attachment) => attachment.id === id,
+			);
+			setAttachments(attachments.filter((attachment) => attachment.id !== id));
 			setUploadedFileNames(
-				uploadedFileNames.filter((name) => name !== removedAttachment.name),
+				uploadedFileNames.filter(
+					(name) => name !== attachmentToRemove.file.name,
+				),
 			);
 		};
 
@@ -277,12 +296,10 @@ const MessageInput = forwardRef(
 				let truncated = false;
 				let finalMessage = message.trim();
 
-				// Check if the message size exceeds 250 KB (250 * 1024 bytes)
 				const messageSizeInBytes = new TextEncoder().encode(
 					finalMessage,
 				).length;
 				if (messageSizeInBytes > 250 * 1024) {
-					// Truncate the message to fit within 250 KB
 					const maxAllowedBytes = 250 * 1024;
 					let currentBytes = 0;
 					let truncatedMessage = "";
@@ -305,7 +322,7 @@ const MessageInput = forwardRef(
 				setIsDisabled(true);
 
 				const uploadedAttachments = await Promise.all(
-					attachments.map(uploadFileToS3),
+					attachments.map((attachment) => uploadFileToS3(attachment.file)),
 				);
 
 				onSend(
@@ -330,48 +347,78 @@ const MessageInput = forwardRef(
 		};
 
 		const uploadFileToS3 = async (file) => {
-			try {
-				const { accessToken, idToken } = await getCurrentSession();
+			const MAX_RETRIES = 3;
+			const TIMEOUT_MS = 45000;
 
-				const response = await axios.post(
-					"/rest/get-presigned-url",
-					{
-						accessToken: accessToken,
-						fileName: file.name,
-						fileType: file.type,
-						session_id: selectedConversation?.session_id,
-					},
-					{
-						headers: {
-							Authorization: `Bearer ${idToken}`,
-							"Content-Type": "application/json",
+			const axiosWithTimeout = axios.create({
+				timeout: TIMEOUT_MS,
+			});
+
+			let retries = 0;
+
+			const attemptUpload = async () => {
+				try {
+					const { accessToken, idToken } = await getCurrentSession();
+
+					const response = await axiosWithTimeout.post(
+						"/rest/get-presigned-url",
+						{
+							accessToken: accessToken,
+							fileName: file.name,
+							fileType: file.type,
+							session_id: selectedConversation?.session_id,
 						},
-					},
-				);
+						{
+							headers: {
+								Authorization: `Bearer ${idToken}`,
+								"Content-Type": "application/json",
+							},
+						},
+					);
 
-				const { url, fields } = response.data;
-				const formData = new FormData();
-				Object.keys(fields).forEach((key) => formData.append(key, fields[key]));
-				formData.append("file", file);
-				await axios.post(url, formData);
-				return {
-					name: sanitizeFileName(file.name),
-					type: file.type,
-					url: `${url}${fields.key}`,
-				};
-			} catch (error) {
-				console.error("Error uploading file:", error);
-				throw error;
-			}
+					const { url, fields } = response.data;
+					const formData = new FormData();
+
+					for (const [key, value] of Object.entries(fields)) {
+						formData.append(key, value);
+					}
+
+					formData.append("file", file);
+
+					await axiosWithTimeout.post(url, formData);
+
+					return {
+						name: sanitizeFileName(file.name),
+						type: file.type,
+						url: `${url}${fields.key}`,
+					};
+				} catch (error) {
+					if (retries < MAX_RETRIES) {
+						retries++;
+						console.log(`Upload attempt ${retries} failed, retrying...`);
+
+						const waitTime = 1000 * 2 ** (retries - 1);
+						await new Promise((resolve) => setTimeout(resolve, waitTime));
+
+						return attemptUpload();
+					}
+
+					console.error(
+						`Error uploading file after ${MAX_RETRIES} attempts:`,
+						error,
+					);
+					throw error;
+				}
+			};
+
+			return attemptUpload();
 		};
 
 		const isDisabled = () => {
 			return (
 				disabled ||
 				!selectedMode ||
-				(selectedMode?.category &&
-					selectedMode.category === "Bedrock KnowledgeBases" &&
-					!selectedKbMode)
+				(selectedMode?.category === "Bedrock KnowledgeBases" && !selectedKbMode)
 			);
 		};
 
@@ -434,21 +481,21 @@ const MessageInput = forwardRef(
 			>
 				{attachments.length > 0 && (
 					<Box sx={{ mb: 2, display: "flex", flexWrap: "wrap", gap: 1 }}>
-						{attachments.map((file, index) => (
+						{attachments.map((attachment) => (
 							<Chip
-								key={index}
-								label={file.name}
+								key={attachment.id}
+								label={attachment.file.name}
 								color={
-									isImageFile(file)
+									isImageFile(attachment.file)
 										? "primary"
-										: isVideoFile(file)
+										: isVideoFile(attachment.file)
 											? "secondary"
-											: isDocumentFile(file)
+											: isDocumentFile(attachment.file)
 												? "warning"
 												: "success"
 								}
 								disabled={isDisabled()}
-								onDelete={() => handleRemoveAttachment(index)}
+								onDelete={() => handleRemoveAttachment(attachment.id)}
 								sx={{ ml: 1 }}
 								size="small"
 							/>
@@ -465,7 +512,6 @@ const MessageInput = forwardRef(
 						placeholder={getPlaceholderText(selectedMode, selectedKbMode)}
 						disabled={isDisabled()}
 						multiline
-						maxlength={254000}
 						maxRows={4}
 						fullWidth
 						variant="outlined"

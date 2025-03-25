@@ -124,8 +124,11 @@ const ChatMessage = memo(
 					// If no tags are present, use the raw content
 					formattedContent = content.trim();
 				}
-				if (trimLongMessages && formattedContent.length > messageTrimThreshold) {
-					formattedContent = `${formattedContent.substring(0, 100)}...${formattedContent.substring(formattedContent.length - (messageTrimThreshold-100))}. ...`;
+				if (
+					trimLongMessages &&
+					formattedContent.length > messageTrimThreshold
+				) {
+					formattedContent = `${formattedContent.substring(0, 100)}...${formattedContent.substring(formattedContent.length - (messageTrimThreshold - 100))}. ...`;
 				}
 				return formattedContent;
 			},
@@ -156,7 +159,6 @@ const ChatMessage = memo(
 					attachments: [],
 				};
 			}
-
 			if (Array.isArray(message.content)) {
 				// Extract text content
 				const textContent = message.content
@@ -165,8 +167,6 @@ const ChatMessage = memo(
 					.join(" ");
 
 				const newAttachments = message.content.reduce((acc, item) => {
-					console.log('SDK newAttachments:')
-					console.log(item)
 					if (item.image?.s3source?.s3key) {
 						acc.push({
 							type: "image",
@@ -193,10 +193,36 @@ const ChatMessage = memo(
 					attachments: newAttachments,
 				};
 			}
+			const textContent = message.content || "";
+
+			// Handle case where content_items might not exist
+			const contentItems = message.content_items || [];
+
+			const newAttachments = contentItems.reduce((acc, item) => {
+				if (item.image?.s3source?.s3key) {
+					acc.push({
+						type: "image",
+						s3Key: reformatFilename(item.image.s3source.s3key),
+					});
+				}
+				if (item.document?.s3source?.s3key) {
+					acc.push({
+						type: "document",
+						s3Key: reformatFilename(item.document.s3source.s3key),
+					});
+				}
+				if (item.video?.s3source?.s3key) {
+					acc.push({
+						type: "video",
+						s3Key: reformatFilename(item.video.s3source.s3key),
+					});
+				}
+				return acc;
+			}, []);
 
 			return {
-				messageContent: message.content,
-				attachments: [],
+				messageContent: textContent,
+				attachments: newAttachments,
 			};
 		}, [message.content, hasError, message, reformatFilename]);
 
@@ -242,34 +268,60 @@ const ChatMessage = memo(
 			if (message.role === "Human" || message.role === "user") {
 				return (
 					<>
-						<ReactMarkdown>
-							{formatContent(
-								messageContent,
-								message.outputTokenCount,
-								!isLastMessage && !showFullMessage,
-							)}
-						</ReactMarkdown>
+						{formatContent(
+							messageContent,
+							message.outputTokenCount,
+							!isLastMessage && !showFullMessage,
+						)}
+
 						{!isLastMessage &&
 							!showFullMessage &&
 							messageContent &&
 							messageContent.length > messageTrimThreshold && (
-								<Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-									<Button
-										variant="outlined"
-										size="small"
-										onClick={() => setShowFullMessage(true)}
-										sx={{
-											borderColor:
-												reactThemeMode === "dark"
-													? "rgba(255, 255, 255, 0.3)"
-													: "rgba(0, 0, 0, 0.23)",
-											color: reactThemeMode === "dark" ? "white" : "inherit",
-										}}
-									>
-										Load Entire Message
-									</Button>
-								</Box>
+								<Button
+									size="small"
+									onClick={() => setShowFullMessage(true)}
+									sx={{
+										borderColor:
+											reactThemeMode === "dark"
+												? "rgba(255, 255, 255, 0.3)"
+												: "rgba(0, 0, 0, 0.23)",
+										color: reactThemeMode === "dark" ? "white" : "inherit",
+									}}
+								>
+									Load Entire Message
+								</Button>
 							)}
+						{attachments.length > 0 && (
+							<Box sx={{ mt: 2, display: "flex", flexWrap: "wrap", gap: 1 }}>
+								{attachments.map((attachment) => (
+									<Chip
+										key={`${attachment.type}-${attachment.s3Key || attachment.name}`}
+										label={attachment.s3Key || attachment.name}
+										sx={{
+											backgroundColor:
+												attachment.type === "image"
+													? "#e3f2fd"
+													: attachment.type === "video"
+														? "#e8f5e9"
+														: "#fff3e0",
+											color: "text.primary",
+											"& .MuiChip-label": {
+												color:
+													reactThemeMode === "dark" ? "#121212" : "inherit",
+											},
+										}}
+										size="small"
+									/>
+									// <Chip
+									// 	key={attachment.s3Key}
+									// 	label={attachment.s3Key}
+									// 	variant="outlined"
+									// 	size="small"
+									// />
+								))}
+							</Box>
+						)}
 					</>
 				);
 			}
@@ -363,7 +415,8 @@ const ChatMessage = memo(
 									thead: ({ node, ...props }) => (
 										<thead
 											style={{
-												backgroundColor: reactThemeMode === "dark" ? "#424242" : "#f5f5f5",
+												backgroundColor:
+													reactThemeMode === "dark" ? "#424242" : "#f5f5f5",
 												borderBottom: "2px solid #ddd",
 											}}
 											{...props}
@@ -483,21 +536,23 @@ const ChatMessage = memo(
 						)}
 
 					{attachments.length > 0 && (
-						<Box mt={2} display="flex" flexWrap="wrap" gap={1}>
+						<Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
 							{attachments.map((attachment) => (
 								<Chip
-									key={attachment.s3Key}
-									label={attachment.s3Key}
-									color={
-										attachment.type === "image"
-											? "primary"
-											: attachment.type === "video"
-												? "secondary"
-												: attachment.type === "document"
-													? "warning"
-													: "success"
-									}
-									sx={{ ml: 1 }}
+									key={`${attachment.type}-${attachment.s3Key || attachment.name}`}
+									label={attachment.s3Key || attachment.name}
+									sx={{
+										backgroundColor:
+											attachment.type === "image"
+												? "#e3f2fd"
+												: attachment.type === "video"
+													? "#e8f5e9"
+													: "#fff3e0",
+										color: "text.primary",
+										"& .MuiChip-label": {
+											color: reactThemeMode === "dark" ? "#121212" : "inherit",
+										},
+									}}
 									size="small"
 								/>
 							))}

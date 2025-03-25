@@ -482,17 +482,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			};
 			setPricePer1000InputTokens(modelPriceInfo.pricePer1000InputTokens);
 			setPricePer1000OutputTokens(modelPriceInfo.pricePer1000OutputTokens);
-
-			// TODO: Print console.log so the user know if we found the model in modelPrices and what the price will be
-			if (modelPrices[modelId]) {
-				console.log(
-					`Found pricing for model ${modelId}: $${modelPriceInfo.pricePer1000InputTokens} per 1000 input tokens, $${modelPriceInfo.pricePer1000OutputTokens} per 1000 output tokens`,
-				);
-			} else {
-				console.log(
-					`Model ${modelId} not found in pricing table. Using default pricing: $${modelPriceInfo.pricePer1000InputTokens} per 1000 input tokens, $${modelPriceInfo.pricePer1000OutputTokens} per 1000 output tokens`,
-				);
-			}
 		} else {
 			const modelPriceInfo = {
 				pricePer1000InputTokens: 0.003,
@@ -599,7 +588,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			setSelectedMode(newMode);
 			localStorage.setItem("selectedMode", JSON.stringify(newMode));
 		}
-		console.log('SDK SCROLL LOG 1')
 		setTimeout(scrollToBottom, 0);
 	};
 
@@ -755,7 +743,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			);
 			if (last_message) {
 				setIsRefreshing(false);
-				console.log('SDK SCROLL LOG 2')
 				setTimeout(scrollToBottom, 0);
 				message_temp_cache.length = 0;
 			}
@@ -985,7 +972,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			},
 		]);
 
-		console.log('SDK SCROLL LOG 3')
 		setTimeout(scrollToBottom, 0);
 		sendMessageViaRest(data, restSendMessageEndpoint, "chatMessage");
 		setReloadPromptConfig(false);
@@ -1043,7 +1029,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			},
 		]);
 
-		console.log('SDK SCROLL LOG 4')
 		setTimeout(scrollToBottom, 0);
 		sendMessageViaRest(data, restSendMessageEndpoint, "generateImageRequest");
 	};
@@ -1124,7 +1109,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			},
 		]);
 
-		console.log('SDK SCROLL LOG 5')
 		setTimeout(scrollToBottom, 0);
 		sendMessageViaRest(data, restSendMessageEndpoint, "generateVideoRequest");
 	};
@@ -1197,7 +1181,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 				updateMessagesOnStop(message);
 				setIsDisabled(false);
 				setIsLoading(false);
-				console.log('SDK SCROLL LOG 6')
 				setTimeout(scrollToBottom, 0);
 				if (message.new_conversation) {
 					loadConversationList(message.session_id);
@@ -1222,7 +1205,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 				handleError(message);
 				setIsDisabled(false);
 				setIsLoading(false);
-				console.log('SDK SCROLL LOG 7')
 				setTimeout(scrollToBottom, 0);
 			} else if (
 				message.type === "video_generated" &&
@@ -1533,7 +1515,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			setTotalOutputTokens(newOutputTokens);
 			return updatedMessages;
 		});
-		console.log('SDK SCROLL LOG 8')
 		setTimeout(scrollToBottom, 0);
 	};
 

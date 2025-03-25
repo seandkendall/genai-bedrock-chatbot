@@ -87,11 +87,7 @@ const ChatHistory = memo(
 				websocketConnectionId,
 			]);
 
-			// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
-			useEffect(() => {
-				lastMessageRef.current?.scrollIntoView({ behavior: "smooth" });
-			}, [messages]);
-
+			// biome-ignore lint/correctness/useExhaustiveDependencies: Dependency needed
 			useEffect(() => {
 				setResetTrimmedMessages((prev) => !prev);
 			}, [selectedConversation, onSend]);
