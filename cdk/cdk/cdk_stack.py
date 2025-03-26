@@ -154,7 +154,6 @@ class ChatbotWebsiteStack(Stack):
             ],
             compatible_architectures=[
                 _lambda.Architecture.ARM_64,
-                _lambda.Architecture.X86_64,
             ],
             description="Boto3 library with  PyJWT django pytz requests used for arm64/3.12",
         )
