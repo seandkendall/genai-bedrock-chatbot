@@ -23,9 +23,6 @@ class CodeBuildStack(NestedStack):
         **kwargs,
     ) -> None:
         super().__init__(scope, id, **kwargs)
-        print(
-            f"Deploying CodeBuildStack with inputs: custom_model_s3_bucket_name= {custom_model_s3_bucket_name} imported_models={imported_models} project={project} aws_application={aws_application}"
-        )
         deploy_deep_seek = False
         deploy_deep_seek_input = self.node.try_get_context("deployDeepSeek")
         if deploy_deep_seek_input is not None and deploy_deep_seek_input != "":
@@ -135,7 +132,7 @@ class CodeBuildStack(NestedStack):
             for current_model in models:
                 model_name = current_model["model_url"].rsplit("/", maxsplit=1)[-1]
                 print(
-                    f"Deploying Model: {model_name} with S3 Bucket: {custom_model_s3_bucket_name} Using CodeBuild ARN: {codebuild_role.role_arn} Project: {project} and AWS Application: {aws_application}"
+                    f"Deploying Model: {model_name} Project: {project} and AWS Application: {aws_application}"
                 )
                 codebuild_project = codebuild.Project(
                     self,
