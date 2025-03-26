@@ -9,7 +9,7 @@ import * as Sentry from "@sentry/react";
 import configJson from "./config.json";
 let awsRum = null;
 const sentry_dsn = configJson?.sentry_dsn
-if (sentry_dsn && sentry_dsn?.length > 0) {
+if (sentry_dsn && sentry_dsn?.length > 5) {
 	Sentry.init({
 		dsn: sentry_dsn,
 		integrations: [Sentry.browserTracingIntegration(),Sentry.replayIntegration()],
