@@ -278,19 +278,22 @@ const ChatMessage = memo(
 							!showFullMessage &&
 							messageContent &&
 							messageContent.length > messageTrimThreshold && (
-								<Button
-									size="small"
-									onClick={() => setShowFullMessage(true)}
-									sx={{
-										borderColor:
-											reactThemeMode === "dark"
-												? "rgba(255, 255, 255, 0.3)"
-												: "rgba(0, 0, 0, 0.23)",
-										color: reactThemeMode === "dark" ? "white" : "inherit",
-									}}
-								>
-									Load Entire Message
-								</Button>
+								<Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+									<Button
+										variant="outlined"
+										size="small"
+										onClick={() => setShowFullMessage(true)}
+										sx={{
+											borderColor:
+												reactThemeMode === "dark"
+													? "rgba(255, 255, 255, 0.3)"
+													: "rgba(0, 0, 0, 0.23)",
+											color: reactThemeMode === "dark" ? "white" : "inherit",
+										}}
+									>
+										Load Entire Message
+									</Button>
+								</Box>
 							)}
 						{attachments.length > 0 && (
 							<Box sx={{ mt: 2, display: "flex", flexWrap: "wrap", gap: 1 }}>
