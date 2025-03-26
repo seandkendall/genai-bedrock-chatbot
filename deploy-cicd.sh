@@ -190,7 +190,7 @@ phases:
   pre_build:
     commands:
       - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
-      - docker buildx create --use
+      - docker buildx create --use --platform=linux/amd64
       - git checkout $branch_name
       - cd cdk
       - cdk --version
