@@ -190,6 +190,7 @@ phases:
   pre_build:
     commands:
       - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
+      - docker buildx inspect --bootstrap
       - docker buildx create --use --platform=linux/amd64
       - git checkout $branch_name
       - cd cdk
@@ -221,7 +222,8 @@ phases:
   pre_build:
     commands:
       - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
-      - docker buildx create --use    
+      - docker buildx inspect --bootstrap
+      - docker buildx create --use --platform=linux/amd64
       - auto_deploy_branch=\$(git branch -r | grep -m1 'origin/feature_.*_autodeploy' | sed 's/.*origin\\///' || echo '')
       - |
         if [ -n "\$auto_deploy_branch" ]; then 
@@ -258,7 +260,8 @@ phases:
   pre_build:
     commands:
       - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
-      - docker buildx create --use    
+      - docker buildx inspect --bootstrap
+      - docker buildx create --use --platform=linux/amd64
       - cd cdk
       - cdk --version
       - python3 -m venv .env
