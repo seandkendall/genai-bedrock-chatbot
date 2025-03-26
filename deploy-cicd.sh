@@ -287,8 +287,6 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
   --source "$source_config" \
   --description "Build and deploy genai-bedrock-chatbot" \
   --artifacts "{\"type\": \"NO_ARTIFACTS\"}" \
-  --concurrent-build-limit 1 \
-  --auto-retry-limit 2 \
   --environment '{
     "type": "LINUX_CONTAINER", 
     "image": "aws/codebuild/amazonlinux2-x86_64-standard:5.0", 
