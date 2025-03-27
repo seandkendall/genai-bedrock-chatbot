@@ -19,7 +19,7 @@ import {
 } from "@mui/material";
 import { tooltipClasses } from "@mui/material/Tooltip";
 import { styled } from "@mui/material/styles";
-import { FaSignOutAlt, FaInfoCircle, FaCog } from "react-icons/fa";
+import { FaSignOutAlt, FaInfoCircle, FaCog, FaPlusCircle } from "react-icons/fa";
 import { ExpandMore, ExpandLess } from "@mui/icons-material";
 import Popup from "./Popup";
 import "./Header.css";
@@ -72,6 +72,7 @@ const Header = ({
 	expandedCategories,
 	setExpandedCategories,
 	region,
+	handleNewChat,
 }) => {
 	const [anchorEl, setAnchorEl] = React.useState(null);
 	const [qrCodeOpen, setQrCodeOpen] = useState(false);
@@ -91,9 +92,20 @@ const Header = ({
 	}, [disabled]);
 
 	const truncateText = (text, maxLength) => {
-		return text.length > maxLength
-			? `${text.substring(0, maxLength)}...`
-			: text;
+		if (!text) return "";
+
+		// If text is shorter than maxLength, return it as is
+		if (text.length <= maxLength) return text;
+
+		// For mobile view, show first 3 chars + .. + rest of string that fits
+		if (isMobile) {
+			const prefix = text.substring(0, 3);
+			const suffix = text.substring(text.length - (maxLength - 5)); // 5 = 3 chars + 2 dots
+			return `${prefix}..${suffix}`;
+		}
+
+		// For desktop, keep original truncation
+		return `${text.substring(0, maxLength)}...`;
 	};
 
 	const handleOpenQRCode = () => {
@@ -617,58 +629,72 @@ const Header = ({
 								? chatbotTitle.substring(0, 3).toUpperCase()
 								: chatbotTitle}
 						</Typography>
-						<NoMaxWidthTooltip
-							title={
-								<Box>
-									<Typography>
-										Solution Designed and Built by Sean Kendall
-									</Typography>
-									{user?.signInDetails?.loginId && (
+						{isMobile ? (
+							<Tooltip title="New Chat" arrow>
+								<IconButton
+									edge="end"
+									color="inherit"
+									aria-label="new-chat"
+									onClick={handleNewChat}
+								>
+									<FaPlusCircle />
+								</IconButton>
+							</Tooltip>
+						) : (
+							<NoMaxWidthTooltip
+								title={
+									<Box>
 										<Typography>
-											User: {user?.signInDetails?.loginId}
-											{user?.userId && user?.userId.length > 1 && (
-												<> ({user?.userId})</>
-											)}
+											Solution Designed and Built by Sean Kendall
 										</Typography>
-									)}
-									{region && (
-										<Typography>Deployment Region: {region}</Typography>
-									)}
-									<Typography>
-										Active Model/Mode: {getHeaderLabelExtended()}
-									</Typography>
-									<Typography>
-										App Session ID: {selectedConversation?.session_id}
-									</Typography>
-									{kbSessionId && (
+										{user?.signInDetails?.loginId && (
+											<Typography>
+												User: {user?.signInDetails?.loginId}
+												{user?.userId && user?.userId.length > 1 && (
+													<> ({user?.userId})</>
+												)}
+											</Typography>
+										)}
+										{region && (
+											<Typography>Deployment Region: {region}</Typography>
+										)}
 										<Typography>
-											KnowledgeBase Session ID: {kbSessionId}
+											Active Model/Mode: {getHeaderLabelExtended()}
 										</Typography>
-									)}
-									<Typography>
-										Total Input/Output Tokens (Bedrock only): {totalInputTokens}
-										/{totalOutputTokens}
-									</Typography>
-									<Typography>
-										Bedrock Cost (Today): {calculateDailyCost()} USD
-									</Typography>
-									{monthlyInputTokens > 0 && (
 										<Typography>
-											Bedrock Cost (Current Month): {calculateMonthlyCost()} USD
+											App Session ID: {selectedConversation?.session_id}
 										</Typography>
-									)}
-									<Typography> </Typography>
-								</Box>
-							}
-							open={showInfoTooltip}
-							onOpen={handleInfoTooltipOpen}
-							onClose={handleInfoTooltipClose}
-							arrow
-						>
-							<IconButton color="inherit" sx={{ ml: 1 }}>
-								<FaInfoCircle />
-							</IconButton>
-						</NoMaxWidthTooltip>
+										{kbSessionId && (
+											<Typography>
+												KnowledgeBase Session ID: {kbSessionId}
+											</Typography>
+										)}
+										<Typography>
+											Total Input/Output Tokens (Bedrock only):{" "}
+											{totalInputTokens}/{totalOutputTokens}
+										</Typography>
+										<Typography>
+											Bedrock Cost (Today): {calculateDailyCost()} USD
+										</Typography>
+										{monthlyInputTokens > 0 && (
+											<Typography>
+												Bedrock Cost (Current Month): {calculateMonthlyCost()}{" "}
+												USD
+											</Typography>
+										)}
+										<Typography> </Typography>
+									</Box>
+								}
+								open={showInfoTooltip}
+								onOpen={handleInfoTooltipOpen}
+								onClose={handleInfoTooltipClose}
+								arrow
+							>
+								<IconButton color="inherit" sx={{ ml: 1 }}>
+									<FaInfoCircle />
+								</IconButton>
+							</NoMaxWidthTooltip>
+						)}
 					</Typography>
 					<Box sx={{ display: "flex", alignItems: "center" }}>
 						{!isMobile && disabled && (
@@ -729,7 +755,7 @@ const Header = ({
 									<MenuItem value="DEFAULT">
 										<em>{isMobile ? "Model" : "Select a Model"}</em>
 									</MenuItem>
-									{renderSelectOptions(selectOptions, isMobile ? 20 : 50)}
+									{renderSelectOptions(selectOptions, isMobile ? 25 : 50)}
 									<MenuItem value="RELOAD">
 										<em>
 											{isMobile ? "Reload" : "Reload Models (~60 seconds)"}

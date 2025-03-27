@@ -1658,6 +1658,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 					expandedCategories={expandedCategories}
 					setExpandedCategories={setExpandedCategories}
 					region={region}
+					handleNewChat={handleNewChat}
 				/>
 				<Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
 					<Box

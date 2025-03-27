@@ -663,7 +663,7 @@ class ChatbotWebsiteStack(Stack):
                 principal=iam.ServicePrincipal("bedrock.amazonaws.com"),
                 source_arn=f"arn:aws:bedrock:{region}:{self.account}:agent/*",
             )
-
+        lambda_async_function_log_group = logs.LogGroup(self, "Lambda AsyncFn Log Group", retention=logs.RetentionDays.FIVE_DAYS)
         lambda_async_function = _lambda.DockerImageFunction(
             self,
             "LambdaAsyncFunction",
@@ -671,7 +671,7 @@ class ChatbotWebsiteStack(Stack):
                 directory="./lambda_functions/genai_bedrock_async_fn",
             ),
             tracing=_lambda.Tracing.ACTIVE,
-            log_retention=logs.RetentionDays.FIVE_DAYS,
+            log_group=lambda_async_function_log_group,
             memory_size=3008,
             timeout=Duration.seconds(900),
             architecture=_lambda.Architecture.X86_64,

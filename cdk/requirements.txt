@@ -1,10 +1,10 @@
-aws-cdk-lib>=2.185.0
+aws-cdk-lib>=2.186.0
 cdk-nag>=2.35.31
 constructs>=10.0.0
 requests
 aws-solutions-constructs.aws-cloudfront-s3==2.77.0
-aws-cdk.aws-scheduler-alpha>=2.185.0a0
-aws-cdk.aws-scheduler-targets-alpha>=2.185.0a0
-aws-cdk.aws-lambda-python-alpha>=2.185.0a0
-aws-cdk.aws-cognito-identitypool-alpha>=2.185.0a0
-aws-cdk.aws-servicecatalogappregistry-alpha>=2.185.0a0
+aws-cdk.aws-scheduler-alpha>=2.186.0a0
+aws-cdk.aws-scheduler-targets-alpha>=2.186.0a0
+aws-cdk.aws-lambda-python-alpha>=2.186.0a0
+aws-cdk.aws-cognito-identitypool-alpha>=2.186.0a0
+aws-cdk.aws-servicecatalogappregistry-alpha>=2.186.0a0
