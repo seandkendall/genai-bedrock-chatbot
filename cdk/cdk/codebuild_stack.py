@@ -2,8 +2,8 @@ from aws_cdk import (
     NestedStack,
     aws_codebuild as codebuild,
     aws_iam as iam,
-    aws_scheduler_alpha as scheduler,
-    aws_scheduler_targets_alpha as scheduler_targets,
+    aws_scheduler as scheduler,
+    aws_scheduler_targets as scheduler_targets,
     Duration,
     RemovalPolicy,
 )
