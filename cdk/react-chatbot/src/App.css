@@ -1,6 +1,8 @@
 /* General Styles */
 :root {
   --sidebar-width: 250px;
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
 
   /* Light mode variables */
   --light-bg: #ffffff;
@@ -13,12 +15,7 @@
   --dark-bg: #121212;
   --dark-text: #f5f5f5;
   --dark-chat-human-bg: #1e3a5f;
-  /* Darker blue */
   --dark-chat-assistant-bg: #f08686;
-  /* --dark-chat-assistant-bg: #2a2a2a; */
-
-
-  /* This should contrast with #121212 */
   --dark-chat-assistant-shadow: rgba(0, 0, 0, 0.3);
 }
 
@@ -49,17 +46,19 @@ body {
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  width: 100vw;
+  height: 100dvh;
+  width: 100%;
+  position: relative;
   overflow: hidden;
 }
 
 /* Chat History Styles */
 .chat-history {
   flex: 1;
-  height: calc(100vh - var(--header-height));
-  padding: 10px;
   overflow-y: auto;
+  padding-bottom: 80px;
+  height: calc(100dvh - var(--header-height));
+  padding: 10px;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
@@ -67,15 +66,30 @@ body {
 
 /* Message Input Styles */
 .message-input {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   padding: 10px 20px;
   padding-right: 30px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  margin-bottom: env(safe-area-inset-bottom);
   background-color: var(--light-input-bg);
-  position: sticky;
-  bottom: 0;
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
   z-index: 90;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .app {
+    height: -webkit-fill-available;
+  }
+
+  .message-input {
+    position: -webkit-sticky;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -146,7 +160,6 @@ body {
   overflow-y: auto;
   z-index: 90;
   transition: width 0.3s ease;
-  /* Add smooth transition */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -281,7 +294,6 @@ body {
 
   .left-sidebar {
     width: 250px;
-    /* Keep full width on mobile */
     transform: translateX(0);
     visibility: visible;
     display: block;

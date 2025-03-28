@@ -18,16 +18,14 @@ from aws_cdk import (  # type: ignore
     aws_apigateway as apigw,
     aws_apigatewayv2_integrations as apigwv2_integrations,
     aws_cognito as cognito,
+    aws_cognito_identitypool as cognito_identitypool,
     aws_cloudfront_origins as origins,
     RemovalPolicy,
-    aws_scheduler_alpha as scheduler,
-    aws_scheduler_targets_alpha as scheduler_targets,
+    aws_scheduler as scheduler,
+    aws_scheduler_targets as scheduler_targets,
     aws_lambda_event_sources as lambda_event_sources,
     aws_rum as rum,
     aws_ssm as ssm,
-)
-from aws_cdk.aws_cognito_identitypool_alpha import (
-    IdentityPool,
 )
 from constructs import Construct
 from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3
@@ -663,7 +661,9 @@ class ChatbotWebsiteStack(Stack):
                 principal=iam.ServicePrincipal("bedrock.amazonaws.com"),
                 source_arn=f"arn:aws:bedrock:{region}:{self.account}:agent/*",
             )
-        lambda_async_function_log_group = logs.LogGroup(self, "Lambda AsyncFn Log Group", retention=logs.RetentionDays.FIVE_DAYS)
+        lambda_async_function_log_group = logs.LogGroup(
+            self, "Lambda AsyncFn Log Group", retention=logs.RetentionDays.FIVE_DAYS
+        )
         lambda_async_function = _lambda.DockerImageFunction(
             self,
             "LambdaAsyncFunction",
@@ -1156,7 +1156,7 @@ class ChatbotWebsiteStack(Stack):
                 "sts:AssumeRoleWithWebIdentity",
             ),
         )
-        identity_pool = IdentityPool(
+        identity_pool = cognito_identitypool.IdentityPool(
             self,
             "ChatBotRUMIdPool",
             allow_unauthenticated_identities=True,
