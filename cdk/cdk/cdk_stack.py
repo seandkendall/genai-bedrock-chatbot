@@ -135,7 +135,19 @@ class ChatbotWebsiteStack(Stack):
                 _lambda.Architecture.ARM_64,
                 _lambda.Architecture.X86_64,
             ],
-            bundling=lambda_python.BundlingOptions(platform="linux/amd64"),
+            bundling=lambda_python.BundlingOptions(
+                platform="linux/amd64",
+                # image=cdk.DockerImage.from_registry("public.ecr.aws/sam/build-python3.12:latest"),
+                environment={
+                    "DOCKER_DEFAULT_PLATFORM": "linux/amd64",
+                    "PIP_CACHE_DIR": "/tmp/pip-cache",
+                },
+                command=[
+                    'bash', '-c',
+                    'python -m pip install --upgrade pip && pip install -r requirements.txt -t /asset-output/python'
+                ]
+            ),
+            # bundling=lambda_python.BundlingOptions(platform="linux/amd64"),
             description="Boto3 library with  PyJWT django pytz requests used for arm64/3.12",
         )
         commons_layer = _lambda.LayerVersion(
