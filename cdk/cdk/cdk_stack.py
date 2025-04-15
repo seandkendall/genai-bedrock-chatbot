@@ -135,9 +135,7 @@ class ChatbotWebsiteStack(Stack):
                 _lambda.Architecture.ARM_64,
                 _lambda.Architecture.X86_64,
             ],
-            # bundling= {
-            #     platform: "linux/amd64", 
-            # },
+            bundling=lambda_python.BundlingOptions(platform="linux/amd64"),
             description="Boto3 library with  PyJWT django pytz requests used for arm64/3.12",
         )
         commons_layer = _lambda.LayerVersion(
