@@ -291,7 +291,19 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
     "type": "LINUX_CONTAINER", 
     "image": "aws/codebuild/amazonlinux2-x86_64-standard:5.0", 
     "computeType": "BUILD_GENERAL1_SMALL",
-    "privilegedMode": true
+    "privilegedMode": true,
+    "environmentVariables": [
+      {
+        "name": "DOCKER_BUILDKIT",
+        "value": "1",
+        "type": "PLAINTEXT"
+      },
+      {
+        "name": "DOCKER_CLI_EXPERIMENTAL",
+        "value": "enabled",
+        "type": "PLAINTEXT"
+      }
+    ]
   }' \
   --service-role "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/codebuild-$CODEBUILD_PROJECT_NAME-service-role" \
   --build-batch-config '{"serviceRole": "codebuild-'$CODEBUILD_PROJECT_NAME'-service-role"}' \
