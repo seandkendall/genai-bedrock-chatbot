@@ -132,8 +132,8 @@ class ChatbotWebsiteStack(Stack):
                 _lambda.Runtime.PYTHON_3_13,
             ],
             compatible_architectures=[
-                _lambda.Architecture.ARM_64,
                 _lambda.Architecture.X86_64,
+                _lambda.Architecture.ARM_64,
             ],
             bundling=lambda_python.BundlingOptions(
                 platform="linux/amd64",
