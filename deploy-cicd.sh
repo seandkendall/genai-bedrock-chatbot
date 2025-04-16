@@ -189,10 +189,10 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
-      - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
+      - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      - docker buildx create --use
       - docker buildx inspect --bootstrap
-      - docker buildx create --use --platform=linux/amd64
-      - git checkout $branch_name
+      - export DOCKER_DEFAULT_PLATFORM=linux/amd64
       - cd cdk
       - cdk --version
       - python3 -m venv .env
@@ -203,7 +203,7 @@ phases:
     commands:
       - cd ..
       - chmod +x deploy.sh
-      - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
+      - DOCKER_DEFAULT_PLATFORM=linux/amd64 ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
 EOF
 elif [ "$auto_deploy_branch" = true ]; then
   # Use auto-deploy branch detection
@@ -221,9 +221,10 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
-      - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
+      - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      - docker buildx create --use
       - docker buildx inspect --bootstrap
-      - docker buildx create --use --platform=linux/amd64
+      - export DOCKER_DEFAULT_PLATFORM=linux/amd64
       - auto_deploy_branch=\$(git branch -r | grep -m1 'origin/feature_.*_autodeploy' | sed 's/.*origin\\///' || echo '')
       - |
         if [ -n "\$auto_deploy_branch" ]; then 
@@ -241,7 +242,7 @@ phases:
     commands:
       - cd ..
       - chmod +x deploy.sh
-      - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
+      - DOCKER_DEFAULT_PLATFORM=linux/amd64 ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
 EOF
 else
   # Use auto-deploy branch detection
@@ -259,9 +260,10 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
-      - docker run --privileged --rm public.ecr.aws/eks-distro-build-tooling/binfmt-misc:qemu-v7.0.0 --install all
+      - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      - docker buildx create --use
       - docker buildx inspect --bootstrap
-      - docker buildx create --use --platform=linux/amd64
+      - export DOCKER_DEFAULT_PLATFORM=linux/amd64
       - cd cdk
       - cdk --version
       - python3 -m venv .env
@@ -272,7 +274,7 @@ phases:
     commands:
       - cd ..
       - chmod +x deploy.sh
-      - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
+      - DOCKER_DEFAULT_PLATFORM=linux/amd64 ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
 EOF
 fi
 
@@ -301,6 +303,11 @@ aws codebuild create-project --name $CODEBUILD_PROJECT_NAME \
       {
         "name": "DOCKER_CLI_EXPERIMENTAL",
         "value": "enabled",
+        "type": "PLAINTEXT"
+      },
+      {
+        "name": "DOCKER_DEFAULT_PLATFORM",
+        "value": "linux/amd64",
         "type": "PLAINTEXT"
       }
     ]
