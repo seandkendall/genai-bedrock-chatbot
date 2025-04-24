@@ -154,7 +154,7 @@ def process_bedrock_converse_response(
         # Send the message_stop event to the WebSocket client
         message_end_timestamp_utc = datetime.now(timezone.utc).isoformat()
         needs_code_end = False
-        # if count of ```
+
         if result_text.count("```") % 2 != 0:
             needs_code_end = True
         commons.send_websocket_message(

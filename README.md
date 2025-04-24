@@ -53,12 +53,6 @@ cd genai-bedrock-chatbot
 ./deploy-cicd.sh -a -d --allowlist @example.com,@example.ca --schedule daily
 ```
 
-**Option 6 (Adding --deepseek flag to deploy deepseek models as custom models):** 
-Deploy from a 'main' branch on each deploy using a domain allow-list, delete old CodeBuild resources first, deploy custom deepseek models (this incurs additional costs, on S3, CodeBuild and Bedrock)
-```bash
-./deploy-cicd.sh -d --allowlist @example.com,@example.ca --schedule daily --deepseek
-```
-
 On any of these options, you can also specify a flag for `--schedule daily` if you would like to redeploy the latest changes daily, otherwise weekly releases will be auto-deployed
 
 
@@ -85,14 +79,6 @@ git clone https://github.com/seandkendall/genai-bedrock-chatbot.git
 cd genai-bedrock-chatbot
 ./setup.sh
 ./deploy.sh --redeploy
-```
-
-Or if you want to also Deploy the DeepSeek imported models:
-```bash
-git clone https://github.com/seandkendall/genai-bedrock-chatbot.git
-cd genai-bedrock-chatbot
-./setup.sh
-./deploy.sh --redeploy --deepseek
 ```
 
 </details>
@@ -281,7 +267,6 @@ Here are a list of patterns you will see in this code to help you write your own
  4. Use AWS CDK V2 for python to create Amazon S3 buckets, Cloudfront Distributions (Using S3 and API Gateway as origins), DynamoDB Tables, APIGateway HTTP API's, Cognito User Pools (utilizing a pre-signup function to restrict users to certain domains)
  5. Use AWS CDK V2 for python to add custom policies to generated Lambda function Roles
  6. Connecting APIGateway HTTP API's and Websocket API's, AWS Lambda Functions, DynamoDB, S3, and Amazon Bedrock (for Generative AI) to build an interactive chatbot flow
- 7. Automating an Amazon Bedrock custom model import from huggingface (Using DeepSeek)
  8. Building Agentic AI flows using Amazon Bedorck Agents
  9. Building data-rich generative AI experiences using Amazon Bedrock Knowledgebases
  10. Generating Images and Videos using Amazon Bedrock with AI Models such as Amazon Nova Reel, Amazon Nova Canvas, Stability AI - Stable Diffusion 3.5, and Luma AI Ray V2

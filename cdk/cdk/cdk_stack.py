@@ -1,5 +1,3 @@
-from .codebuild_stack import CodeBuildStack
-import aws_cdk as cdk
 from aws_cdk import (  # type: ignore
     Stack,
     Duration,
@@ -92,7 +90,6 @@ class ChatbotWebsiteStack(Stack):
             CfnOutput(self, "SentryDSN", value=sentry_dsn)
 
         self.aws_application = self.node.try_get_context("aws_application")
-        imported_models = self.node.try_get_context("imported_models")
 
         deploy_example_incidents_agent = False
         if (
@@ -668,17 +665,18 @@ class ChatbotWebsiteStack(Stack):
         lambda_async_function_log_group = logs.LogGroup(
             self, "Lambda AsyncFn Log Group", retention=logs.RetentionDays.FIVE_DAYS
         )
-        lambda_async_function = _lambda.DockerImageFunction(
+        lambda_async_function = _lambda.Function(
             self,
             "LambdaAsyncFunction",
-            code=_lambda.DockerImageCode.from_image_asset(
-                directory="./lambda_functions/genai_bedrock_async_fn",
-            ),
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="genai_bedrock_async_fn.lambda_handler",
+            code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_async_fn/"),
             tracing=_lambda.Tracing.ACTIVE,
             log_group=lambda_async_function_log_group,
             memory_size=3008,
+            layers=[boto3_layer, commons_layer, lambda_insights_layer_arm64],
             timeout=Duration.seconds(900),
-            architecture=_lambda.Architecture.X86_64,
+            architecture=_lambda.Architecture.ARM_64,
             environment={
                 "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,
                 "CONVERSATION_HISTORY_BUCKET": conversation_history_bucket.bucket_name,
@@ -688,7 +686,6 @@ class ChatbotWebsiteStack(Stack):
                 "REGION": region,
                 "ATTACHMENT_BUCKET_NAME": attachment_bucket.bucket_name,
                 "S3_IMAGE_BUCKET_NAME": image_bucket.bucket_name,
-                "S3_CUSTOM_MODEL_IMPORT_BUCKET_NAME": custom_model_import_bucket.bucket_name,
                 "COGNITO_PUBLIC_KEY_URL": cognito_public_key_url,
                 "POWERTOOLS_SERVICE_NAME": "BEDROCK_ASYNC_SERVICE",
             },
@@ -1259,20 +1256,3 @@ class ChatbotWebsiteStack(Stack):
             value=cloudwatch_logs_url,
             description="URL to CloudWatch Logs live tail screen for all Lambda functions",
         )
-
-        # Nested Stack:
-        codebuild_stack = CodeBuildStack(
-            self,
-            "CodeBuildNestedStack",
-            custom_model_s3_bucket_name=custom_model_import_bucket.bucket_name,
-            imported_models=imported_models if imported_models else "",
-            project=f"genai-bedrock-chatbot-{region}",
-            aws_application=self.aws_application
-            if self.aws_application
-            else "NoApplicationCreatedyet",
-        )
-        cdk.Tags.of(codebuild_stack).add("auto-delete", "false")
-        cdk.Tags.of(codebuild_stack).add("auto-stop", "false")
-        cdk.Tags.of(codebuild_stack).add("project", f"genai-bedrock-chatbot-{region}")
-        if self.aws_application is not None and len(self.aws_application) > 1:
-            cdk.Tags.of(codebuild_stack).add("awsApplication", self.aws_application)

@@ -56,6 +56,7 @@ const Header = ({
 	bedrockKnowledgeBases,
 	models,
 	imageModels,
+	speechModels,
 	videoModels,
 	importedModels,
 	promptFlows,
@@ -199,6 +200,7 @@ const Header = ({
 										switch (title) {
 											case "Bedrock Models":
 											case "Bedrock Image Models":
+											case "Bedrock Speech Models":
 											case "Bedrock Video Models":
 											case "Imported Models":
 												aName = isMobile
@@ -244,6 +246,10 @@ const Header = ({
 																? `${item.modelName}`
 																: `${item.providerName} ${item.modelName}`;
 														case "Bedrock Image Models":
+															return isMobile
+																? `${item.modelName}`
+																: `${item.providerName} ${item.modelName}`;
+														case "Bedrock Speech Models":
 															return isMobile
 																? `${item.modelName}`
 																: `${item.providerName} ${item.modelName}`;
@@ -306,6 +312,14 @@ const Header = ({
 											? b.modelName
 											: `${b.providerName} ${b.modelName}`;
 										break;
+									case "Bedrock Speech Models":
+										aName = isMobile
+											? a.modelName
+											: `${a.providerName} ${a.modelName}`;
+										bName = isMobile
+											? b.modelName
+											: `${b.providerName} ${b.modelName}`;
+										break;
 									case "Bedrock KnowledgeBases":
 										aName = a.name;
 										bName = b.name;
@@ -339,6 +353,11 @@ const Header = ({
 													}
 													return `${item.providerName} ${item.modelName}`;
 												case "Bedrock Image Models":
+													if (isMobile) {
+														return `${item.modelName}`;
+													}
+													return `${item.providerName} ${item.modelName}`;
+												case "Bedrock Speech Models":
 													if (isMobile) {
 														return `${item.modelName}`;
 													}
@@ -383,6 +402,11 @@ const Header = ({
 					break;
 				case "Bedrock Image Models":
 					selectedObject = imageModels.find(
+						(item) => item.mode_selector === modeSelector,
+					);
+					break;
+				case "Bedrock Speech Models":
+					selectedObject = speechModels.find(
 						(item) => item.mode_selector === modeSelector,
 					);
 					break;
@@ -506,6 +530,8 @@ const Header = ({
 					return `${selectedMode.modelName} (${selectedMode.modelId})`;
 				case "Bedrock Image Models":
 					return `${selectedMode.modelName} (${selectedMode.modelId})`;
+				case "Bedrock Speech Models":
+					return `${selectedMode.modelName} (${selectedMode.modelId})`;
 				case "Bedrock Video Models":
 					return `${selectedMode.modelName} (${selectedMode.modelId})`;
 				case "Imported Models":
@@ -537,6 +563,13 @@ const Header = ({
 				data: (imageModels
 					? imageModels
 					: JSON.parse(localStorage.getItem("local-image-models"))
+				).filter((item) => item.is_active === true || !("is_active" in item)),
+			},
+			{
+				title: "Bedrock Speech Models",
+				data: (speechModels
+					? speechModels
+					: JSON.parse(localStorage.getItem("local-speech-models"))
 				).filter((item) => item.is_active === true || !("is_active" in item)),
 			},
 			{
@@ -578,6 +611,7 @@ const Header = ({
 		[
 			models,
 			imageModels,
+			speechModels,
 			videoModels,
 			importedModels,
 			bedrockKnowledgeBases,
@@ -831,6 +865,7 @@ const Header = ({
 			{modelsLoaded &&
 				(!models || models.length === 0) &&
 				(!videoModels || videoModels.length === 0) &&
+				(!speechModels || speechModels.length === 0) &&
 				(!importedModels || importedModels.length === 0) &&
 				(!imageModels || imageModels.length === 0) && (
 					<Box

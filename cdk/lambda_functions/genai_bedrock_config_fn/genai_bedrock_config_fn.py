@@ -1,15 +1,18 @@
-import json, os, boto3
+import json
+import os
 from datetime import datetime, timezone
-from chatbot_commons import commons
+
+import boto3
+from aws_lambda_powertools import Logger, Metrics, Tracer
 from botocore.config import Config
 from botocore.exceptions import ClientError
-from aws_lambda_powertools import Logger, Metrics, Tracer
+from chatbot_commons import commons
 from load_utilities import (
-    load_knowledge_bases,
+    datetime_to_iso,
     load_agents,
+    load_knowledge_bases,
     load_models,
     load_prompt_flows,
-    datetime_to_iso
 )
 
 logger = Logger(service="BedrockConfig")
@@ -99,6 +102,7 @@ def lambda_handler(event, context):
                     global load_prompt_flow_response, load_knowledgebase_response, load_agents_response, load_models_response
                     response_var = f"load_{action.split('_', 1)[1]}_response"
                     if ENABLE_CACHE and modelscan is False and response_var in globals() and globals()[response_var] is not None:
+                        logger.info("LLM - Models Loading From Cache")
                         return_obj[action] = globals()[response_var]
                     else:
                         # Call the mapped function and store the response in the corresponding global variable

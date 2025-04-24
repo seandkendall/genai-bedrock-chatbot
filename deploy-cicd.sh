@@ -9,7 +9,6 @@ display_help() {
   echo "  -h, --help                 Display this help message"
   echo "  -d                         Delete existing resources"
   echo "  -a                         Enable auto-deploy branch detection"
-  echo "  --deepseek                 Deploy DeepSeek as a Custom Model Import in Bedrock"
   echo "  --deploy-agents-example    Deploy agents example"
   echo "  --branch BRANCH_NAME       Specify a branch to use"
   echo "  --schedule SCHEDULE        Set the deployment schedule (daily or weekly, default: weekly)"
@@ -43,10 +42,6 @@ while [[ $# -gt 0 ]]; do
     ;;
   --deploy-agents-example)
     deploy_agents_example=true
-    shift
-    ;;
-  --deepseek)
-    deepseek=true
     shift
     ;;
   --branch)
@@ -169,7 +164,6 @@ create_or_update_role \
 echo "Creating CodeBuild project..."
 source_config="{\"type\": \"GITHUB\", \"location\": \"$REPO_URL\""
 deploy_agents_example_option=$([ "$deploy_agents_example" = true ] && echo " --deploy-agents-example " || echo "")
-deploy_deepseek_option=$([ "$deepseek" = true ] && echo " --deepseek " || echo "")
 
 allowlist_option=$([ -n "$allowlist_pattern" ] && echo "--allowlist $allowlist_pattern" || echo "")
 
@@ -203,7 +197,7 @@ phases:
     commands:
       - cd ..
       - chmod +x deploy.sh
-      - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
+      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
 EOF
 elif [ "$auto_deploy_branch" = true ]; then
   # Use auto-deploy branch detection
@@ -241,7 +235,7 @@ phases:
     commands:
       - cd ..
       - chmod +x deploy.sh
-      - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
+      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
 EOF
 else
   # Use auto-deploy branch detection
@@ -272,7 +266,7 @@ phases:
     commands:
       - cd ..
       - chmod +x deploy.sh
-      - ./deploy.sh $deploy_agents_example_option $deploy_deepseek_option --headless $allowlist_option
+      - ./deploy.sh $deploy_agents_example_option --headless $allowlist_option
 EOF
 fi
 

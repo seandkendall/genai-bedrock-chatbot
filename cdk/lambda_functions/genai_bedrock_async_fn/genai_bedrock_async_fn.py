@@ -17,7 +17,6 @@ from llm_conversion_functions import (
     process_bedrock_converse_response,
     process_bedrock_converse_response_for_title,
 )
-from transformers import AutoTokenizer
 
 
 logger = Logger(service="BedrockAsync")
@@ -35,7 +34,6 @@ image_bucket_name = os.environ["S3_IMAGE_BUCKET_NAME"]
 WEBSOCKET_API_ENDPOINT = os.environ["WEBSOCKET_API_ENDPOINT"]
 conversations_table_name = os.environ["CONVERSATIONS_DYNAMODB_TABLE"]
 conversations_table = boto3.resource("dynamodb").Table(conversations_table_name)
-s3_custom_model_import_bucket_name = os.environ["S3_CUSTOM_MODEL_IMPORT_BUCKET_NAME"]
 usage_table_name = os.environ["DYNAMODB_TABLE_USAGE"]
 region = os.environ["REGION"]
 # models that do not support a system prompt (also includes all amazon models)
@@ -244,7 +242,7 @@ def process_websocket_message(request_body):
                 logger,
                 apigateway_management_api,
                 connection_id,
-                {"type": "error", "session_id": session_id,"error": error_message},
+                {"type": "error", "session_id": session_id, "error": error_message},
             )
             return {"statusCode": 400}
 
@@ -458,57 +456,6 @@ def process_websocket_message(request_body):
                 #     'system_prompt': system_prompt,
                 #     'session_id':session_id,
                 # });
-            elif "imported-model" in selected_model_id:
-                if not os.path.exists(f"/tmp/{selected_model_name.replace('/', '-')}"):
-                    os.makedirs(f"/tmp/{selected_model_name.replace('/', '-')}")
-                tags_response = bedrock_client.list_tags_for_resource(
-                    resourceARN=selected_model_id
-                )
-                model_identifier = [
-                    tag["value"]
-                    for tag in tags_response["tags"]
-                    if tag["key"] == "modelIdentifier"
-                ][0]
-                tokenizer = get_tokenizer(model_identifier)
-                messages = convert_message_format(message_content)
-                (
-                    assistant_response,
-                    input_tokens,
-                    output_tokens,
-                    message_end_timestamp_utc,
-                    message_stop_reason,
-                ) = auto_generate(
-                    connection_id,
-                    session_id,
-                    new_message_id,
-                    tokenizer,
-                    selected_model_id,
-                    selected_model_name,
-                    messages,
-                    temperature=0.7,
-                    max_tokens=4096,
-                    top_p=0.9,
-                )
-                store_conversation_history_converse(
-                    session_id,
-                    selected_model_id,
-                    original_existing_history,
-                    converse_content_with_s3_pointers,
-                    prompt,
-                    assistant_response,
-                    None,  # reasoning_text if exists
-                    user_id,
-                    input_tokens,
-                    output_tokens,
-                    message_end_timestamp_utc,
-                    message_received_timestamp_utc,
-                    message_id,
-                    chat_title,
-                    new_conversation,
-                    selected_model_category,
-                    message_stop_reason,
-                    new_message_id,
-                )
             else:
                 response = bedrock_runtime.converse_stream(
                     messages=bedrock_request.get("messages"),
@@ -517,44 +464,43 @@ def process_websocket_message(request_body):
                         "additionalModelRequestFields", {}
                     ),
                 )
-            if "imported-model" not in selected_model_id:
-                (
-                    assistant_response,
-                    reasoning_text,
-                    input_tokens,
-                    output_tokens,
-                    message_end_timestamp_utc,
-                    message_stop_reason,
-                ) = process_bedrock_converse_response(
-                    apigateway_management_api,
-                    response,
-                    selected_model_id,
-                    connection_id,
-                    converse_content_with_s3_pointers,
-                    new_conversation,
-                    session_id,
-                    new_message_id,
-                )
-                store_conversation_history_converse(
-                    session_id,
-                    selected_model_id,
-                    original_existing_history,
-                    converse_content_with_s3_pointers,
-                    prompt,
-                    assistant_response,
-                    reasoning_text,
-                    user_id,
-                    input_tokens,
-                    output_tokens,
-                    message_end_timestamp_utc,
-                    message_received_timestamp_utc,
-                    message_id,
-                    chat_title,
-                    new_conversation,
-                    selected_model_category,
-                    message_stop_reason,
-                    new_message_id,
-                )
+            (
+                assistant_response,
+                reasoning_text,
+                input_tokens,
+                output_tokens,
+                message_end_timestamp_utc,
+                message_stop_reason,
+            ) = process_bedrock_converse_response(
+                apigateway_management_api,
+                response,
+                selected_model_id,
+                connection_id,
+                converse_content_with_s3_pointers,
+                new_conversation,
+                session_id,
+                new_message_id,
+            )
+            store_conversation_history_converse(
+                session_id,
+                selected_model_id,
+                original_existing_history,
+                converse_content_with_s3_pointers,
+                prompt,
+                assistant_response,
+                reasoning_text,
+                user_id,
+                input_tokens,
+                output_tokens,
+                message_end_timestamp_utc,
+                message_received_timestamp_utc,
+                message_id,
+                chat_title,
+                new_conversation,
+                selected_model_category,
+                message_stop_reason,
+                new_message_id,
+            )
         except Exception as e:
             if "ResourceNotFoundException" in str(e):
                 logger.error(
@@ -652,7 +598,7 @@ def download_s3_content(item, content_type):
         except ClientError as e:
             logger.error(f"Error downloading content from S3: {e}")
             if e.response["Error"]["Code"] == "NoSuchKey":
-                logger.error(f"Key {s3_key} not found in bucket {s3_bucket}")
+                logger.error("Key %s not found in bucket %s", s3_key, s3_bucket)
             logger.exception(e)
         del content["s3source"]
         return status
@@ -1174,15 +1120,3 @@ def convert_message_format(message_input):
                     )
 
     return converted_messages
-
-
-def get_tokenizer(selected_model_name):
-    if selected_model_name in tokenizer_cache:
-        return tokenizer_cache[selected_model_name]
-    else:
-        new_tokenizer = AutoTokenizer.from_pretrained(
-            selected_model_name,
-            cache_dir=f"/tmp/{selected_model_name.replace('/', '-')}",
-        )
-        tokenizer_cache[selected_model_name] = new_tokenizer
-        return new_tokenizer

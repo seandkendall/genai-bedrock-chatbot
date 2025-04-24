@@ -9,6 +9,7 @@ import { Box, Chip, TextField, IconButton } from "@mui/material";
 import { FaPaperPlane, FaPaperclip } from "react-icons/fa";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
+import PushToTalkButton from "./PushToTalkButton";
 
 const MAX_CONTENT_ITEMS = 20;
 const MAX_IMAGES = 20;
@@ -87,6 +88,7 @@ const MessageInput = forwardRef(
 			setIsRefreshingMessage,
 			uploadedFileNames,
 			setUploadedFileNames,
+			onAudioData,
 		},
 		ref,
 	) => {
@@ -463,6 +465,56 @@ const MessageInput = forwardRef(
 				handleFiles(files);
 			}
 		};
+
+		const isSpeechInputAllowed = selectedMode?.allow_input_speech === true;
+
+		if (isSpeechInputAllowed) {
+			return (
+				<Box
+					sx={{
+						display: "flex",
+						flexDirection: "column",
+						padding: 2,
+					}}
+				>
+					{attachments.length > 0 && (
+						<Box sx={{ mb: 2, display: "flex", flexWrap: "wrap", gap: 1 }}>
+							{attachments.map((attachment) => (
+								<Chip
+									key={attachment.id}
+									label={attachment.file.name}
+									color={
+										isImageFile(attachment.file)
+											? "primary"
+											: isVideoFile(attachment.file)
+												? "secondary"
+												: isDocumentFile(attachment.file)
+													? "warning"
+													: "success"
+									}
+									disabled={isDisabled()}
+									onDelete={() => handleRemoveAttachment(attachment.id)}
+									sx={{ ml: 1 }}
+									size="small"
+								/>
+							))}
+						</Box>
+					)}
+					<Box
+						sx={{
+							display: "flex",
+							justifyContent: "center",
+							alignItems: "center",
+						}}
+					>
+						<PushToTalkButton
+							onAudioData={onAudioData}
+							isProcessing={disabled}
+						/>
+					</Box>
+				</Box>
+			);
+		}
 
 		return (
 			<Box

@@ -49,6 +49,7 @@ const ChatMessage = memo(
 	}) => {
 		const [copied, setCopied] = useState(false);
 		const messageRef = useRef(null);
+		const audioRef = useRef(null);
 		const [showFullMessage, setShowFullMessage] = useState(false);
 
 		// biome-ignore lint/correctness/useExhaustiveDependencies: not needed
@@ -56,19 +57,19 @@ const ChatMessage = memo(
 			setShowFullMessage(false);
 		}, [resetTrimmedMessages]);
 
-		const parseDeepseekResponse = useCallback((content) => {
-			const sections = { user: "", think: "", response: "", system: "" };
-			const sectionRegex = /<(user|think|system)>([\s\S]*?)<\/\1>/gi;
+		// const parseDeepseekResponse = useCallback((content) => {
+		// 	const sections = { user: "", think: "", response: "", system: "" };
+		// 	const sectionRegex = /<(user|think|system)>([\s\S]*?)<\/\1>/gi;
 
-			// Use matchAll instead of exec
-			for (const match of content.matchAll(sectionRegex)) {
-				const [, type, text] = match;
-				sections[type] = text.trim();
-			}
+		// 	// Use matchAll instead of exec
+		// 	for (const match of content.matchAll(sectionRegex)) {
+		// 		const [, type, text] = match;
+		// 		sections[type] = text.trim();
+		// 	}
 
-			sections.response = content.replace(sectionRegex, "").trim();
-			return sections;
-		}, []);
+		// 	sections.response = content.replace(sectionRegex, "").trim();
+		// 	return sections;
+		// }, []);
 
 		const handleCopyMessage = () => {
 			if (message.content) {
@@ -96,34 +97,35 @@ const ChatMessage = memo(
 		const formatContent = useCallback(
 			(content, outputTokenCount, trimLongMessages) => {
 				let formattedContent = "";
-
+				// Removed DeepSeek Custom Model import
 				// Check if content contains 'think', 'system' or 'user' tags
-				if (/<\/?(?:think|user|system)>/i.test(content)) {
-					// Parse the Deepseek response
-					const parsedContent = parseDeepseekResponse(content);
+				// if (/<\/?(?:think|user|system)>/i.test(content)) {
+				// 	// Parse the Deepseek response
+				// 	const parsedContent = parseDeepseekResponse(content);
 
-					// Combine the parsed sections into a single string, using Markdown syntax
-					if (parsedContent.user) {
-						formattedContent += `## User Input Summary\n\n${parsedContent.user}\n\n`;
-					}
+				// 	// Combine the parsed sections into a single string, using Markdown syntax
+				// 	if (parsedContent.user) {
+				// 		formattedContent += `## User Input Summary\n\n${parsedContent.user}\n\n`;
+				// 	}
 
-					if (parsedContent.think) {
-						formattedContent += `## Thinking Process\n\n${parsedContent.think}\n\n`;
-					}
+				// 	if (parsedContent.think) {
+				// 		formattedContent += `## Thinking Process\n\n${parsedContent.think}\n\n`;
+				// 	}
 
-					if (parsedContent.system) {
-						formattedContent += `## System\n\n${parsedContent.system}\n\n`;
-					}
+				// 	if (parsedContent.system) {
+				// 		formattedContent += `## System\n\n${parsedContent.system}\n\n`;
+				// 	}
 
-					if (parsedContent.response) {
-						formattedContent += `## Response\n\n${parsedContent.response}`;
-					}
+				// 	if (parsedContent.response) {
+				// 		formattedContent += `## Response\n\n${parsedContent.response}`;
+				// 	}
 
-					formattedContent = formattedContent.trim();
-				} else {
-					// If no tags are present, use the raw content
-					formattedContent = content.trim();
-				}
+				// 	formattedContent = formattedContent.trim();
+				// } else {
+				// 	// If no tags are present, use the raw content
+				// 	formattedContent = content.trim();
+				// }
+				formattedContent = content.trim();
 				if (
 					trimLongMessages &&
 					formattedContent.length > messageTrimThreshold
@@ -132,7 +134,7 @@ const ChatMessage = memo(
 				}
 				return formattedContent;
 			},
-			[parseDeepseekResponse],
+			[],
 		);
 
 		const reformatFilename = useCallback((filename) => {
@@ -233,6 +235,33 @@ const ChatMessage = memo(
 		const isHuman = message.role === "Human" || message.role === "user";
 		// biome-ignore lint/correctness/useExhaustiveDependencies: Not Needed
 		const renderContent = useCallback(() => {
+			if (message.isAudioMessage) {
+				return (
+					<>
+						<Typography
+							variant="body1"
+							color={
+								reactThemeMode === "light"
+									? hasError
+										? "red.main"
+										: "text.primary"
+									: "text.secondary"
+							}
+						>
+							{message.content}
+						</Typography>
+						<audio
+							ref={audioRef}
+							controls
+							style={{ marginTop: "10px" }}
+							src={message.audioUrl}
+						>
+							<track kind="captions" src="" label="English" default />
+							Your browser does not support the audio element.
+						</audio>
+					</>
+				);
+			}
 			if (message.isImage) {
 				return (
 					<>
@@ -566,6 +595,8 @@ const ChatMessage = memo(
 		}, [
 			message.isImage,
 			message.isVideo,
+			message.isAudioMessage,
+			message.audioUrl,
 			messageContent,
 			message.prompt,
 			message.imageAlt,

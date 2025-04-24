@@ -2,8 +2,10 @@
 import { websocketUrl } from "./variables.js";
 import React, {
 	useState,
+	useMemo,
 	useEffect,
 	useRef,
+	useCallback,
 	memo,
 	lazy,
 	Suspense,
@@ -27,6 +29,10 @@ import CssBaseline from "@mui/material/CssBaseline";
 import { Box, useMediaQuery } from "@mui/material";
 import useWebSocket from "react-use-websocket";
 import { modelPrices } from "./modelPrices.js";
+import {
+	BedrockRuntimeClient,
+	InvokeModelWithBidirectionalStreamCommand,
+} from "@aws-sdk/client-bedrock-runtime";
 
 const SettingsModal = lazy(() => import("./components/SettingsModal"));
 
@@ -41,12 +47,13 @@ async function getCurrentSession() {
 
 Amplify.configure(amplifyConfig);
 const awsChatbotUrl = amplifyConfig.aws_chatbot_url;
-const restSendMessageEndpoint = `${awsChatbotUrl}/rest/send-message`
-
+const restSendMessageEndpoint = `${awsChatbotUrl}/rest/send-message`;
 
 const App = memo(({ signOut, user, awsRum }) => {
 	const [partialMessages, setPartialMessages] = useState([]);
 	const [region, setRegion] = useState("");
+	const [isAudioProcessing, setIsAudioProcessing] = useState(false);
+	const bedrockClient = useMemo(() => new BedrockRuntimeClient(), []);
 	const [websocketConnectionId, setWebsocketConnectionId] = useState(null);
 	const [reactThemeMode, setReactThemeMode] = useState(
 		localStorage.getItem("react_theme_mode") || "light",
@@ -88,6 +95,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		);
 	});
 	const [isDisabled, setIsDisabled] = useState(false);
+	const [isProcessing, setIsProcessing] = useState(false);
 	const [selectedMode, setSelectedMode] = useState(() => {
 		const storedValue = localStorage.getItem("selectedMode");
 		if (storedValue) {
@@ -143,6 +151,11 @@ const App = memo(({ signOut, user, awsRum }) => {
 			? JSON.parse(localStorage.getItem("local-image-models"))
 			: [],
 	); //local-image-models
+	const [speechModels, setSpeechModels] = useState(
+		localStorage.getItem("local-speech-models")
+			? JSON.parse(localStorage.getItem("local-speech-models"))
+			: [],
+	); //local-speech-models
 	const [videoModels, setVideoModels] = useState(
 		localStorage.getItem("local-video-models")
 			? JSON.parse(localStorage.getItem("local-video-models"))
@@ -224,6 +237,11 @@ const App = memo(({ signOut, user, awsRum }) => {
 		if (imageModels && imageModels.length > 0)
 			localStorage.setItem("local-image-models", JSON.stringify(imageModels));
 	}, [imageModels]);
+	//persist speech models to local storage if changed
+	useEffect(() => {
+		if (speechModels && speechModels.length > 0)
+			localStorage.setItem("local-speech-models", JSON.stringify(speechModels));
+	}, [speechModels]);
 	useEffect(() => {
 		if (videoModels && videoModels.length > 0)
 			localStorage.setItem("local-video-models", JSON.stringify(videoModels));
@@ -268,7 +286,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 		}
 	}, [websocketConnectionId]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: only watch messages
 	useEffect(() => {
 		// if messages has > 0 elements, print to console
 		if (messages.length > 0 && !messagesProcessing) {
@@ -363,6 +380,15 @@ const App = memo(({ signOut, user, awsRum }) => {
 			);
 			if (!selectedObject) {
 				selectedObject = imageModels.find(
+					(item) => item.modelArn === selectedModelId,
+				);
+			}
+		} else if (category === "Bedrock Speech Models") {
+			selectedObject = speechModels.find(
+				(item) => item.modelId === selectedModelId,
+			);
+			if (!selectedObject) {
+				selectedObject = speechModels.find(
 					(item) => item.modelArn === selectedModelId,
 				);
 			}
@@ -673,7 +699,11 @@ const App = memo(({ signOut, user, awsRum }) => {
 				idToken: `${idToken}`,
 				accessToken: `${accessToken}`,
 			};
-			sendMessageViaRest(data, restSendMessageEndpoint, "loadConversationHistory");
+			sendMessageViaRest(
+				data,
+				restSendMessageEndpoint,
+				"loadConversationHistory",
+			);
 		}
 	};
 
@@ -688,7 +718,11 @@ const App = memo(({ signOut, user, awsRum }) => {
 			idToken: `${idToken}`,
 			accessToken: `${accessToken}`,
 		};
-		sendMessageViaRest(data, restSendMessageEndpoint, "clearConversationHistory");
+		sendMessageViaRest(
+			data,
+			restSendMessageEndpoint,
+			"clearConversationHistory",
+		);
 	};
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Not Needed
@@ -1272,12 +1306,16 @@ const App = memo(({ signOut, user, awsRum }) => {
 					setImageModels(
 						filter_active_models(message.load_models.image_models),
 					);
+				if (message.load_models.speech_models)
+					setSpeechModels(
+						filter_active_models(message.load_models.speech_models),
+					);
 				if (message.load_models.video_models)
 					setVideoModels(
 						filter_active_models(message.load_models.video_models),
 					);
-				if (message.load_models.imported_models)
-					setImportedModels(message.load_models.imported_models);
+				// if (message.load_models.imported_models)
+				// 	setImportedModels(message.load_models.imported_models);
 				if (message.load_knowledge_bases?.knowledge_bases)
 					setBedrockKnowledgeBases(
 						message.load_knowledge_bases.knowledge_bases,
@@ -1321,6 +1359,34 @@ const App = memo(({ signOut, user, awsRum }) => {
 				setConversationListLoading(false);
 			} else if (message.type === "modelscan") {
 				triggerModelScanFinished();
+			} else if (
+				message.type === "audio_generated" &&
+				selectedConversation.session_id === message.session_id
+			) {
+				if (isRefreshing) {
+					setIsRefreshing(false);
+				}
+				setMessages((prevMessages) => {
+					const updatedMessages = [...(prevMessages ? prevMessages : [])];
+					const lastIndex = updatedMessages.length - 1;
+					updatedMessages[lastIndex] = {
+						...updatedMessages[lastIndex],
+						content: "[Audio Response]",
+						audioUrl: message.audio_url,
+						reasoning: "",
+						prompt: message.prompt,
+						message_id: message.message_id,
+						isStreaming: false,
+						isAudioMessage: true,
+						model: message.modelId,
+						outputTokenCount: message.token_count || 0,
+						inputTokenCount: message.input_token_count || 0,
+						timestamp: message.timestamp,
+						raw_message: message,
+						is_reasoning: false,
+					};
+					return updatedMessages;
+				});
 			} else {
 				if (typeof message === "object" && message !== null) {
 					const messageString = JSON.stringify(message);
@@ -1406,7 +1472,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 			if (message.message_stop_reason === "max_tokens") {
 				const needs_code_end = message.needs_code_end;
 				if (message?.amazon_bedrock_invocation_metrics?.outputTokenCount) {
-					// if needs_code_end is true, then prepend ``` to max_token_message
+					// if needs_code_end is true, then prepend three backticks to max_token_message
 					if (needs_code_end) {
 						max_token_message = `\`\`\`\n\rThe response from this model has reached the maximum size. Max Size: ${message.amazon_bedrock_invocation_metrics.outputTokenCount} Tokens.`;
 					} else {
@@ -1593,7 +1659,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 		}
 	};
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: 
+	// biome-ignore lint/correctness/useExhaustiveDependencies:
 	useEffect(() => {
 		if (isDragging) {
 			document.addEventListener("mousemove", handleMouseMove);
@@ -1614,6 +1680,60 @@ const App = memo(({ signOut, user, awsRum }) => {
 			mode: reactThemeMode,
 		},
 	});
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Not Needed
+	const handleAudioData = useCallback(
+		async (audioBlob) => {
+			if (!selectedMode?.allow_input_speech) return;
+
+			setIsAudioProcessing(true);
+			setIsLoading(true);
+
+			try {
+				const reader = new FileReader();
+				reader.readAsArrayBuffer(audioBlob);
+				reader.onloadend = async () => {
+					const audioArrayBuffer = reader.result;
+
+					const { accessToken, idToken } = await getCurrentSession();
+					const data = {
+						type: "audio_chat",
+						audio: Array.from(new Uint8Array(audioArrayBuffer)),
+						session_id: selectedConversation?.session_id,
+						selected_mode: selectedMode,
+						idToken: `${idToken}`,
+						accessToken: `${accessToken}`,
+					};
+
+					try {
+						await sendMessageViaRest(
+							data,
+							restSendMessageEndpoint,
+							"audioMessage",
+						);
+					} catch (error) {
+						console.error("Error processing audio:", error);
+						triggerInfoErrorPopupMessage(
+							"Error processing audio. Please try again.",
+							"error",
+						);
+					} finally {
+						setIsAudioProcessing(false);
+						setIsLoading(false);
+					}
+				};
+			} catch (error) {
+				console.error("Error preparing audio data:", error);
+				setIsAudioProcessing(false);
+				setIsLoading(false);
+				triggerInfoErrorPopupMessage(
+					"Error preparing audio data. Please try again.",
+					"error",
+				);
+			}
+		},
+		[selectedMode, selectedConversation, getCurrentSession],
+	);
 
 	return (
 		<ThemeProvider theme={reactThemePropviderTheme}>
@@ -1642,6 +1762,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 					bedrockKnowledgeBases={bedrockKnowledgeBases}
 					models={models}
 					imageModels={imageModels}
+					speechModels={speechModels}
 					videoModels={videoModels}
 					importedModels={importedModels}
 					promptFlows={promptFlows}
@@ -1723,6 +1844,7 @@ const App = memo(({ signOut, user, awsRum }) => {
 						<MessageInput
 							selectedConversation={selectedConversation}
 							onSend={onSend}
+							onAudioData={handleAudioData}
 							disabled={isDisabled || isLoading}
 							setIsDisabled={setIsDisabled}
 							selectedMode={selectedMode}

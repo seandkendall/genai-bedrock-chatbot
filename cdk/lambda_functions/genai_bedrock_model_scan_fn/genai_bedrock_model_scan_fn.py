@@ -55,7 +55,7 @@ def lambda_handler(event, context):
     elif "immediate" in event:
         is_websocket_event = False
     else:
-        logger.error(f"Unexpected event format: {event}")
+        logger.error("Unexpected event format: %s", event)
         return {
             "statusCode": 400,
             "body": json.dumps({"error": "Unexpected event format"}),
@@ -74,13 +74,13 @@ def lambda_handler(event, context):
                 )
                 return
         except ClientError:
-            logger.warn(
-                f"WebSocket connection is closed (connectionId: {connection_id})"
+            logger.warning(
+                "WebSocket connection is closed (connectionId: %s)", connection_id
             )
             return
         except apigateway_management_api.exceptions.GoneException:
-            logger.warn(
-                f"WebSocket connection is closed (connectionId: {connection_id})"
+            logger.warning(
+                "WebSocket connection is closed (connectionId: %s)", connection_id
             )
             return
 
@@ -116,8 +116,19 @@ def lambda_handler(event, context):
     return {"statusCode": 200, "body": json.dumps(active_models, indent=2)}
 
 
-def process_prompt(model_id, model_arn, kb_id, prompt_type, prompt_text, model_name):
+def process_prompt(
+    model_id,
+    model_arn,
+    kb_id,
+    prompt_type,
+    prompt_text,
+    model_name,
+    input_modalities,
+    output_modalities,
+):
     try:
+        if "SPEECH" in input_modalities and "SPEECH" in output_modalities:
+            return model_id, prompt_type, True, 0, 0
         if "imported-model" in model_id and prompt_type == "TEXT":
             # if imported assume True
             return model_id, prompt_type, True, 0, 0
@@ -163,20 +174,21 @@ def process_prompt(model_id, model_arn, kb_id, prompt_type, prompt_text, model_n
                         input={"text": "?"},
                         retrieveAndGenerateConfiguration=retrieve_and_generate_configuration_data,
                     )
-                    logger.info(f"LLM Model: {model_id} Supported for KBs")
+                    logger.info("LLM Model: %s Supported for KBs", model_id)
                     return model_id, prompt_type, True, 0, 0
                 except ClientError as e:
                     error_code = e.response["Error"]["Code"]
                     if error_code == "ThrottlingException":
-                        logger.warning(f"Throttling for KB model {model_id}")
+                        logger.warning("Throttling for KB model %s", model_id)
                     elif error_code == "ValidationException":
                         logger.warning(
-                            f"Validation issues (not supported) for KB model {model_id}"
+                            "Validation issues (not supported) for KB model %s",
+                            model_id,
                         )
                     elif error_code == "AccessDeniedException":
-                        logger.warning(f"AccessDenied for KB model {model_id}")
+                        logger.warning("AccessDenied for KB model %s", model_id)
                     else:
-                        logger.warning(f"Client issue for KB model {model_id}")
+                        logger.warning("Client issue for KB model %s", model_id)
                     return model_id, prompt_type, False, 0, 0
             response = bedrock_runtime.converse(
                 modelId=model_id, messages=[{"role": "user", "content": content}]
@@ -193,26 +205,42 @@ def process_prompt(model_id, model_arn, kb_id, prompt_type, prompt_text, model_n
         error_code = e.response["Error"]["Code"]
         if error_code == "ThrottlingException":
             logger.warning(
-                f"Throttling for model {model_id}, prompt type {prompt_type}, model name: {model_name}"
+                "Throttling for model %s, prompt type %s, model name: %s",
+                model_id,
+                prompt_type,
+                model_name,
             )
             return model_id, prompt_type, True, 0, 0
         elif error_code == "ValidationException":
             logger.warning(
-                f"Validation issues (not supported) for model {model_id}, prompt type {prompt_type}, model name: {model_name}"
+                "Validation issues (not supported) for model %s, prompt type %s, model name: %s",
+                model_id,
+                prompt_type,
+                model_name,
             )
         elif error_code == "AccessDeniedException":
             logger.warning(
-                f"AccessDenied for model {model_id}, prompt type {prompt_type}, model name: {model_name}"
+                "AccessDenied for model %s, prompt type %s, model name: %s",
+                model_id,
+                prompt_type,
+                model_name,
             )
         else:
             logger.warning(
-                f"Client issue for model {model_id}, prompt type {prompt_type}, model name: {model_name}"
+                "Client issue for model %s, prompt type %s, model name: %s",
+                model_id,
+                prompt_type,
+                model_name,
             )
         return model_id, prompt_type, False, 0, 0
     except Exception as e:
         logger.exception(e)
         logger.error(
-            f"Unexpected error for model {model_id}, prompt type {prompt_type}, model name: {model_name}: {str(e)}"
+            "Unexpected error for model %s, prompt type %s, model name: %s: %s",
+            model_id,
+            prompt_type,
+            model_name,
+            str(e),
         )
         return model_id, prompt_type, False, 0, 0
 
@@ -231,22 +259,22 @@ def scan_for_active_models():
         foundation_model_response = (
             bedrock_client.list_foundation_models()
         )  # removed byInferenceType='ON_DEMAND'
-        list_imported_models_response = bedrock_client.list_imported_models().get(
-            "modelSummaries", []
-        )
+        # list_imported_models_response = bedrock_client.list_imported_models().get(
+        #     "modelSummaries", []
+        # )
         all_models = [
             model
             for model in foundation_model_response.get("modelSummaries", [])
             if model["modelArn"] not in inference_profile_summary_models
         ]
-        for item in list_imported_models_response:
-            item["modelLifecycle"] = {}
-            item["modelLifecycle"]["status"] = "ACTIVE"
-            item["inputModalities"] = ["TEXT"]
-            item["outputModalities"] = ["TEXT"]
-            item["modelId"] = item["modelArn"]
-            item["providerName"] = item["modelArchitecture"]
-            all_models.append(item)
+        # for item in list_imported_models_response:
+        #     item["modelLifecycle"] = {}
+        #     item["modelLifecycle"]["status"] = "ACTIVE"
+        #     item["inputModalities"] = ["TEXT"]
+        #     item["outputModalities"] = ["TEXT"]
+        #     item["modelId"] = item["modelArn"]
+        #     item["providerName"] = item["modelArchitecture"]
+        #     all_models.append(item)
         for item in inference_profile_response:
             for model in item["models"]:
                 for model_summary in foundation_model_response.get(
@@ -319,6 +347,7 @@ def scan_for_active_models():
                     "VIDEO": ddb_config.get(model_id, {}).get("VIDEO", False),
                     "IMAGE": ddb_config.get(model_id, {}).get("IMAGE", False),
                     "DOCUMENT": ddb_config.get(model_id, {}).get("DOCUMENT", False),
+                    "SPEECH": ddb_config.get(model_id, {}).get("SPEECH", False),
                     "is_kb_model": ddb_config.get(model_id, {}).get(
                         "is_kb_model", False
                     ),
@@ -371,6 +400,8 @@ def scan_for_active_models():
                             prompt_type,
                             prompt_text,
                             model_name,
+                            input_modalities,
+                            output_modalities,
                         )
                     )
 
@@ -405,11 +436,17 @@ def scan_for_active_models():
                 results[model_id]["IMAGE"] = results[model_id]["TEXT"]
 
     for model_id, model_info in results.items():
+        if "inputModalities" in model_info and "outputModalities" in model_info:
+            model_info["allow_input_speech"] = "SPEECH" in model_info["inputModalities"]
+            model_info["allow_output_speech"] = (
+                "SPEECH" in model_info["outputModalities"]
+            )
         if (
-            model_info["TEXT"]
-            or model_info["DOCUMENT"]
-            or model_info["IMAGE"]
-            or model_info["VIDEO"]
+            model_info.get("TEXT", False)
+            or model_info.get("DOCUMENT", False)
+            or model_info.get("IMAGE", False)
+            or model_info.get("VIDEO", False)
+            or model_info.get("allow_input_speech", False)
         ):
             model_info["access_granted"] = True
             if "nova" in model_id.lower() and video_helper_image_model_id:
@@ -535,4 +572,4 @@ def update_dynamodb(results):
         logger.info("Successfully updated DynamoDB")
     except Exception as e:
         logger.exception(e)
-        logger.error(f"Error updating DynamoDB: {str(e)}")
+        logger.error("Error updating DynamoDB: %s", str(e))

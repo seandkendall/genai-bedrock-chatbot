@@ -1,7 +1,7 @@
-aws-cdk-lib>=2.186.0
-cdk-nag>=2.35.31
+aws-cdk-lib>=2.191.0
+cdk-nag>=2.35.79
 constructs>=10.0.0
 requests
-aws-solutions-constructs.aws-cloudfront-s3==2.77.0
-aws-cdk.aws-lambda-python-alpha>=2.186.0a0
-aws-cdk.aws-servicecatalogappregistry-alpha>=2.186.0a0
+aws-solutions-constructs.aws-cloudfront-s3==2.84.0
+aws-cdk.aws-lambda-python-alpha>=2.191.0a0
+aws-cdk.aws-servicecatalogappregistry-alpha>=2.191.0a0

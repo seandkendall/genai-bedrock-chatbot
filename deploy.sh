@@ -11,7 +11,6 @@ display_help() {
     echo "  -a, --app APP              Specify the app name"
     echo "  -c, --context CONTEXT      Specify the context"
     echo "  --debug                    Enable debug mode"
-    echo "  --deepseek                 Deploy DeepSeek as a Custom Model Import in Bedrock"
     echo "  --sentry-dsn DSN           Specify Sentry.io DSN for error tracking"
     echo "  --profile PROFILE          Specify the AWS profile"
     echo "  -t, --tags TAGS            Specify tags"
@@ -256,10 +255,6 @@ while [[ $# -gt 0 ]]; do
         debug_flag="--debug"
         shift
         ;;
-    --deepseek)
-        deepseek_flag="y"
-        shift
-        ;;
     --sentry-dsn)
         sentry_dsn="$2"
         echo "Sentry DSN: $sentry_dsn"
@@ -320,17 +315,9 @@ fi
 # Restore the positional arguments
 set -- "${POSITIONAL_ARGS[@]}"
 deployExample=${deployExample:-'n'}
-deepseek_flag=${deepseek_flag:-'n'}
-
 projects=$(aws codebuild list-projects \
     --query "projects[?starts_with(@, 'GenAIChatBotCustomModel')]" \
     --output json)
-
-# Check if any projects are found
-if [[ $(echo "$projects" | jq 'length') -gt 0 ]]; then
-    # Override the flag if a project is found
-    deepseek_flag='y'
-fi
 
 # Check if AWS CDK is installed
 if ! command -v cdk &>/dev/null; then
@@ -525,7 +512,7 @@ if [ -f "$bootstrap_ref_file" ]; then
     echo "Skipping CDK bootstrap process."
 else
     echo "Running CDK bootstrap..."
-    cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context allowlistDomain="$allowListDomain"
+    cdk bootstrap --require-approval never --context cognitoDomain="$cognitoDomain" --context deployExample="$deployExample" --context allowlistDomain="$allowListDomain"
     if [ $? -eq 0 ]; then
         echo "CDK bootstrap completed successfully."
     else
@@ -534,16 +521,6 @@ else
     fi
 fi
 touch "$bootstrap_ref_file"
-
-# List bedrock imported models
-imported_models=""
-output=$(aws bedrock list-imported-models 2>&1)
-
-if [ $? -eq 0 ]; then
-    if echo "$output" | jq -e '.modelSummaries' >/dev/null 2>&1; then
-        imported_models=$(echo "$output" | jq -r '.modelSummaries[].modelName' | paste -sd "," -)
-    fi
-fi
 
 aws_application=""
 if [ -z "$sentry_dsn" ] && [ -f "sentry.ref" ]; then
@@ -566,7 +543,7 @@ while [ -z "$aws_application" ] && [ $loop_count -lt 2 ]; do
         echo "Found Sentry Config in SSM sentry_dsn: $sentry_dsn"
     fi
     # Deploy the CDK app
-    cdk deploy --outputs-file outputs.json --context imported_models="$imported_models" --context aws_application="$aws_application" --context deployExample="$deployExample" --context deployDeepSeek="$deepseek_flag" --context cognitoDomain="$cognitoDomain" --context sentryDsn="$sentry_dsn" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
+    cdk deploy --outputs-file outputs.json --context aws_application="$aws_application" --context deployExample="$deployExample" --context cognitoDomain="$cognitoDomain" --context sentryDsn="$sentry_dsn" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag
     if [ $? -ne 0 ]; then
         echo "Error: CDK deployment failed. Exiting script."
         exit 1

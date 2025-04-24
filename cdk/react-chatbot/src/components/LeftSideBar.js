@@ -24,6 +24,8 @@ const getCategoryIdentifier = (category) => {
 			return { text: "PF", color: "#FF9800" }; // Orange
 		case "Bedrock Image Models":
 			return { text: "IMG", color: "#FA8072" }; // Salmon
+		case "Bedrock Speech Models":
+			return { text: "SPH", color: "#4682B4" }; // Steel Blue
 		case "Bedrock Video Models":
 			return { text: "VID", color: "#9C27B0" }; // Purple
 		case "Imported Models":
