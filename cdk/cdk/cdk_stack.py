@@ -727,10 +727,10 @@ class ChatbotWebsiteStack(Stack):
                 "./lambda_functions/genai_bedrock_conversations_fn/"
             ),
             timeout=Duration.seconds(30),
-            architecture=_lambda.Architecture.ARM_64,
+            architecture=_lambda.Architecture.X86_64,
             tracing=_lambda.Tracing.ACTIVE,
             memory_size=1024,
-            layers=[boto3_layer, commons_layer, lambda_insights_layer_arm64],
+            layers=[boto3_layer, commons_layer, lambda_insights_layer_x86],
             log_retention=logs.RetentionDays.FIVE_DAYS,
             environment={
                 "CONVERSATIONS_DYNAMODB_TABLE": dynamodb_conversations_table.table_name,

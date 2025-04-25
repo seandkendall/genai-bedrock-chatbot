@@ -1202,7 +1202,15 @@ const App = memo(({ signOut, user, awsRum }) => {
 				setIsDisabled(false);
 				setIsLoading(false);
 				setTimeout(scrollToBottom, 0);
-				if (message.new_conversation) {
+				// Always refresh the conversation list when a message completes for a new conversation
+				// or when the new_conversation flag is set
+				if (
+					message.new_conversation ||
+					(!conversationList.some(
+						(conv) => conv.session_id === message.session_id,
+					) &&
+						message.session_id)
+				) {
 					loadConversationList(message.session_id);
 				}
 			} else if (
