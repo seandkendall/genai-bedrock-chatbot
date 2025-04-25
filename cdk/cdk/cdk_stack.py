@@ -1,3 +1,9 @@
+import time
+import json
+import os
+from constructs import Construct
+from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3
+import cdk_nag
 from aws_cdk import (  # type: ignore
     Stack,
     Duration,
@@ -24,17 +30,13 @@ from aws_cdk import (  # type: ignore
     aws_lambda_event_sources as lambda_event_sources,
     aws_rum as rum,
     aws_ssm as ssm,
+    aws_route53 as route53,
 )
-from constructs import Construct
-from aws_solutions_constructs.aws_cloudfront_s3 import CloudFrontToS3
 import requests
-import time
-import json
-import os
-from aws_cdk.aws_route53 import PublicHostedZone
-import cdk_nag
 from .cdk_constants import lambda_insights_layers_arm64
 from .cdk_constants import lambda_insights_layers_x86
+
+FUNCTION_NAME_SUFFIX = ""
 
 
 def get_pillow_arn_for_region(python_version="p3.12", region="us-east-1"):
@@ -84,7 +86,7 @@ class ChatbotWebsiteStack(Stack):
                 self,
                 "SentryDSNParameter",
                 parameter_name="/genaichatbot/sentry_dsn",
-                description="Sentry DSN URL Value if you would like to use Sentry to monitor the app",
+                description="Sentry DSN URL Value - Optional",
                 string_value=sentry_dsn,
             )
             CfnOutput(self, "SentryDSN", value=sentry_dsn)
@@ -140,7 +142,7 @@ class ChatbotWebsiteStack(Stack):
         )
         commons_layer = _lambda.LayerVersion(
             self,
-            "KendallChatCommons",
+            "KendallChatCommons" + FUNCTION_NAME_SUFFIX,
             code=_lambda.Code.from_asset("lambda_functions/commons_layer"),
             compatible_runtimes=[
                 _lambda.Runtime.PYTHON_3_12,
@@ -154,7 +156,7 @@ class ChatbotWebsiteStack(Stack):
         )
         conversations_layer = _lambda.LayerVersion(
             self,
-            "KendallChatConversations",
+            "KendallChatConversations" + FUNCTION_NAME_SUFFIX,
             code=_lambda.Code.from_asset("lambda_functions/conversations_layer"),
             compatible_runtimes=[
                 _lambda.Runtime.PYTHON_3_12,
@@ -164,7 +166,7 @@ class ChatbotWebsiteStack(Stack):
                 _lambda.Architecture.ARM_64,
                 _lambda.Architecture.X86_64,
             ],
-            description="KendallChat Conversations: Making all the code more simple and reusable in relation to loading and deleting conversations",
+            description="KendallChat Conversations: Load/Delete conversations",
         )
 
         # ARN Lookup: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versionsARM.html
@@ -281,7 +283,7 @@ class ChatbotWebsiteStack(Stack):
         }
         if has_cname_condition:
             # get hosted zone
-            hosted_zone = PublicHostedZone.from_lookup(
+            hosted_zone = route53.PublicHostedZone.from_lookup(
                 self, "HostedZone", domain_name=cname_string
             )
             # if hosted zone was found:
@@ -295,10 +297,12 @@ class ChatbotWebsiteStack(Stack):
             cloud_front_distribution_props["domainNames"] = [cname_string]
             if has_certificate_arn_condition:
                 print("has_certificate_arn_condition: " + certificate_arn_string)
-                # cloud_front_distribution_props['certificate'] = acm.Certificate.from_certificate_arn(self, "Certificate", certificate_arn_string)
+                # cloud_front_distribution_props['certificate'] = 
+                # acm.Certificate.from_certificate_arn(self, "Certificate", certificate_arn_string)
             else:
                 print("Not has_certificate_arn_condition!")
-                # cloud_front_distribution_props['certificate'] = acm.Certificate(self, "Certificate", domain_name=cname_string)
+                # cloud_front_distribution_props['certificate'] = 
+                # acm.Certificate(self, "Certificate", domain_name=cname_string)
 
         # Create a CloudFront distribution for the website content S3 bucket
         cloudfront_to_s3 = CloudFrontToS3(
@@ -345,7 +349,8 @@ class ChatbotWebsiteStack(Stack):
             origin_request_policy=cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
         )
 
-        # Create DynamoDB table for bedrock_usage with a user_id (partition key string), input_tokens (number) and output_tokens(number)
+        # Create DynamoDB table for bedrock_usage with a user_id (partition key string),
+        # input_tokens (number) and output_tokens(number)
         dynamodb_bedrock_usage_table = dynamodb.Table(
             self,
             "bedrock_usage_table",
@@ -447,7 +452,7 @@ class ChatbotWebsiteStack(Stack):
         if allowlist_domain_string is not None and len(allowlist_domain_string) > 0:
             cognito_pre_signup_function = _lambda.Function(
                 self,
-                "CognitoPreSignupFunction",
+                "CognitoPreSignupFunction" + FUNCTION_NAME_SUFFIX,
                 runtime=_lambda.Runtime.PYTHON_3_13,
                 handler="cognito_pre_signup_fn.lambda_handler",
                 code=_lambda.Code.from_asset("lambda_functions/cognito_pre_signup_fn/"),
@@ -468,7 +473,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the Lambda function for image generation
         image_generation_function = _lambda.Function(
             self,
-            "ImageGenerationFunction",
+            "ImageGenerationFunction" + FUNCTION_NAME_SUFFIX,
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_image_fn.lambda_handler",
             code=_lambda.Code.from_asset("lambda_functions/genai_bedrock_image_fn/"),
@@ -509,7 +514,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the Lambda function for video generation
         video_generation_function = _lambda.Function(
             self,
-            "VideoGenerationFunction",
+            "VideoGenerationFunction" + FUNCTION_NAME_SUFFIX,
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="genai_bedrock_video_fn.lambda_handler",
             code=_lambda.Code.from_asset("lambda_functions/genai_bedrock_video_fn/"),
@@ -554,7 +559,7 @@ class ChatbotWebsiteStack(Stack):
 
         config_function = _lambda.Function(
             self,
-            "GenAIBedrockConfigFunction",
+            "GenAIBedrockConfigFunction" + FUNCTION_NAME_SUFFIX,
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_config_fn.lambda_handler",
             code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_config_fn/"),
@@ -589,7 +594,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the "genai_bedrock_agents_client_fn" Lambda function
         agents_client_function = _lambda.Function(
             self,
-            "genai_bedrock_agents_client_fn",
+            "genai_bedrock_agents_client_fn" + FUNCTION_NAME_SUFFIX,
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_agents_client_fn.lambda_handler",
             code=_lambda.Code.from_asset(
@@ -637,7 +642,7 @@ class ChatbotWebsiteStack(Stack):
         if deploy_example_incidents_agent:
             incidents_agents_function = _lambda.Function(
                 self,
-                "genai_bedrock_incidents_agents_fn",
+                "genai_bedrock_incidents_agents_fn" + FUNCTION_NAME_SUFFIX,
                 runtime=_lambda.Runtime.PYTHON_3_13,
                 handler="genai_bedrock_incidents_agents_fn.lambda_handler",
                 code=_lambda.Code.from_asset(
@@ -667,7 +672,7 @@ class ChatbotWebsiteStack(Stack):
         )
         lambda_async_function = _lambda.Function(
             self,
-            "LambdaAsyncFunction",
+            "LambdaAsyncFunction" + FUNCTION_NAME_SUFFIX,
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_async_fn.lambda_handler",
             code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_async_fn/"),
@@ -715,7 +720,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the "genai_bedrock_fn_conversations" Lambda function
         lambda_conversations_function = _lambda.Function(
             self,
-            "genai_bedrock_fn_conversations",
+            "genai_bedrock_fn_conversations" + FUNCTION_NAME_SUFFIX,
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_conversations_fn.lambda_handler",
             code=_lambda.Code.from_asset(
@@ -747,7 +752,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the Lambda function for Scanning through LLM Models
         model_scan_function = _lambda.Function(
             self,
-            "ModelScanFunction",
+            "ModelScanFunction" + FUNCTION_NAME_SUFFIX,
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_model_scan_fn.lambda_handler",
             code=_lambda.Code.from_asset(
@@ -798,7 +803,7 @@ class ChatbotWebsiteStack(Stack):
         # Create the "genai_bedrock_fn" Lambda function
         lambda_router_function = _lambda.Function(
             self,
-            "GenAIBedrockRouterFunction",
+            "GenAIBedrockRouterFunction" + FUNCTION_NAME_SUFFIX,
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_router_fn.lambda_handler",
             code=_lambda.Code.from_asset("./lambda_functions/genai_bedrock_router_fn/"),
@@ -834,7 +839,7 @@ class ChatbotWebsiteStack(Stack):
 
         presigned_url_function = _lambda.Function(
             self,
-            "PreSignedUrlFunction",
+            "PreSignedUrlFunction" + FUNCTION_NAME_SUFFIX,
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="genai_bedrock_presigned_fn.lambda_handler",
             code=_lambda.Code.from_asset(
@@ -980,7 +985,10 @@ class ChatbotWebsiteStack(Stack):
                         "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'"
                     },
                     request_templates={
-                        "application/json": "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
+                        "application/json": (
+                            "Action=SendMessage&MessageBody="
+                            "$util.urlEncode($input.body)"
+                        )
                     },
                     integration_responses=[
                         apigw.IntegrationResponse(
@@ -1072,7 +1080,7 @@ class ChatbotWebsiteStack(Stack):
             ),
             managed_login_version=cognito.ManagedLoginVersion.NEWER_MANAGED_LOGIN,
         )
-        with open("cdk/cognito_ui_settings.json", "r") as file:
+        with open("cdk/cognito_ui_settings.json", "r", encoding="utf-8") as file:
             settings_dict = json.load(file)
 
         cognito.CfnManagedLoginBranding(
@@ -1110,7 +1118,8 @@ class ChatbotWebsiteStack(Stack):
         )
         config_function.add_environment("SCHEDULE_GROUP_NAME", scheduler_group_name)
         # add scheduler:GetSchedule to config_function role to module_scan_schedule custom policy
-        # TODO: module_scan_schedule.schedule_arn fails because the construct is in alpha, fix this once its out of alpha
+        # TODO: module_scan_schedule.schedule_arn fails
+        # because the construct is in alpha, fix this once its out of alpha
         config_function_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -1221,12 +1230,12 @@ class ChatbotWebsiteStack(Stack):
         # Construct the log group ARNs for all Lambda functions
         log_group_arns = [
             Fn.sub(
-                "~'arn*3aaws*3alogs*3a${AWS::Region}*3a${AWS::AccountId}*3alog-group*3a${LogGroupName}*3a*2a",
+                "~'arn*3aaws*3alogs*3a${AWS::Region}*3a${AWS::AccountId}"
+                "*3alog-group*3a${LogGroupName}*3a*2a",
                 {"LogGroupName": lambda_function.log_group.log_group_name},
             )
             for lambda_function in lambda_functions
         ]
-
         # Join the log group ARNs into a single string for the URL
         log_group_arns_str = "~(" + ",".join(log_group_arns) + ")"
 

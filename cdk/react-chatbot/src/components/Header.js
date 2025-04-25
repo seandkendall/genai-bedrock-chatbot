@@ -19,7 +19,12 @@ import {
 } from "@mui/material";
 import { tooltipClasses } from "@mui/material/Tooltip";
 import { styled } from "@mui/material/styles";
-import { FaSignOutAlt, FaInfoCircle, FaCog, FaPlusCircle } from "react-icons/fa";
+import {
+	FaSignOutAlt,
+	FaInfoCircle,
+	FaCog,
+	FaPlusCircle,
+} from "react-icons/fa";
 import { ExpandMore, ExpandLess } from "@mui/icons-material";
 import Popup from "./Popup";
 import "./Header.css";
@@ -58,7 +63,6 @@ const Header = ({
 	imageModels,
 	speechModels,
 	videoModels,
-	importedModels,
 	promptFlows,
 	selectedKbMode,
 	onSelectedKbMode,
@@ -166,121 +170,131 @@ const Header = ({
 	};
 
 	const renderSelectOptions = (options, maxLength) => {
-		return options.flatMap(({ title, data }, categoryIndex) =>
-			data.length > 0
-				? [
-						<MenuItem
-							key={`header-${title}`}
-							value={`header-${title}`}
-							onClick={(event) => toggleCategory(event, title, false)}
-							sx={{
-								fontWeight: "bold",
-								display: "flex",
-								justifyContent: "space-between",
-								alignItems: "center",
-								"&:hover": {
-									backgroundColor: "rgba(0, 0, 0, 0.04)",
-								},
-							}}
-						>
-							{title}
-							{expandedCategories[title] ? (
-								<ExpandLess onClick={(event) => event.preventDefault()} />
-							) : (
-								<ExpandMore onClick={(event) => event.preventDefault()} />
-							)}
-						</MenuItem>,
-						...(expandedCategories[title]
-							? [...data]
-									.sort((a, b) => {
-										// For most categories, sort by model name
-										let aName;
-										let bName;
+		return options.flatMap(({ title, data }, categoryIndex) => {
 
+			if (data.length > 0) {
+				const menuItems = [
+					<MenuItem
+						key={`header-${title}`}
+						value={`header-${title}`}
+						onClick={(event) => toggleCategory(event, title, false)}
+						sx={{
+							fontWeight: "bold",
+							display: "flex",
+							justifyContent: "space-between",
+							alignItems: "center",
+							"&:hover": {
+								backgroundColor: "rgba(0, 0, 0, 0.04)",
+							},
+						}}
+					>
+						{title}
+						{expandedCategories[title] ? (
+							<ExpandLess onClick={(event) => event.preventDefault()} />
+						) : (
+							<ExpandMore onClick={(event) => event.preventDefault()} />
+						)}
+					</MenuItem>,
+				];
+
+				if (expandedCategories[title]) {
+					const sortedData = [...data].sort((a, b) => {
+						// For most categories, sort by model name
+						let aName;
+						let bName;
+
+						switch (title) {
+							case "Bedrock Models":
+							case "Bedrock Image Models":
+							case "Bedrock Speech Models":
+							case "Bedrock Video Models":
+							case "Imported Models":
+								aName = isMobile
+									? a.modelName
+									: `${a.providerName} ${a.modelName}`;
+								bName = isMobile
+									? b.modelName
+									: `${b.providerName} ${b.modelName}`;
+								break;
+							case "Bedrock KnowledgeBases":
+								aName = a.name;
+								bName = b.name;
+								break;
+							case "Bedrock Agents":
+								aName = isMobile
+									? a.agentAliasName
+									: `${a.agent_name} (${a.agentAliasName})`;
+								bName = isMobile
+									? b.agentAliasName
+									: `${b.agent_name} (${b.agentAliasName})`;
+								break;
+							case "Bedrock Prompt Flows":
+								aName = a.name;
+								bName = b.name;
+								break;
+							default:
+								aName = "Unknown";
+								bName = "Unknown";
+						}
+
+						return aName.localeCompare(bName);
+					});
+
+					const itemMenuItems = sortedData.map((item, index) => {
+						const itemValue = `${title}%${item.mode_selector}`;
+						return (
+							<MenuItem
+								key={`${title}-${item.mode_selector || index}`}
+								value={itemValue}
+							>
+								{truncateText(
+									(() => {
 										switch (title) {
 											case "Bedrock Models":
+												return isMobile
+													? `${item.modelName}`
+													: `${item.providerName} ${item.modelName}`;
 											case "Bedrock Image Models":
+												return isMobile
+													? `${item.modelName}`
+													: `${item.providerName} ${item.modelName}`;
 											case "Bedrock Speech Models":
+												return isMobile
+													? `${item.modelName}`
+													: `${item.providerName} ${item.modelName}`;
 											case "Bedrock Video Models":
+												return isMobile
+													? `${item.modelName}`
+													: `${item.providerName} ${item.modelName}`;
 											case "Imported Models":
-												aName = isMobile
-													? a.modelName
-													: `${a.providerName} ${a.modelName}`;
-												bName = isMobile
-													? b.modelName
-													: `${b.providerName} ${b.modelName}`;
-												break;
+												return isMobile
+													? `${item.modelName}`
+													: `${item.providerName} ${item.modelName}`;
 											case "Bedrock KnowledgeBases":
-												aName = a.name;
-												bName = b.name;
-												break;
+												return item.name;
 											case "Bedrock Agents":
-												aName = isMobile
-													? a.agentAliasName
-													: `${a.agent_name} (${a.agentAliasName})`;
-												bName = isMobile
-													? b.agentAliasName
-													: `${b.agent_name} (${b.agentAliasName})`;
-												break;
+												return isMobile
+													? `${item.agentAliasName}`
+													: `${item.agent_name} (${item.agentAliasName})`;
 											case "Bedrock Prompt Flows":
-												aName = a.name;
-												bName = b.name;
-												break;
+												return item.name;
 											default:
-												aName = "Unknown";
-												bName = "Unknown";
+												return "Unknown";
 										}
+									})(),
+									maxLength,
+								)}
+							</MenuItem>
+						);
+					});
 
-										return aName.localeCompare(bName);
-									})
-									.map((item, index) => (
-										<MenuItem
-											key={`${title}-${item.mode_selector || index}`}
-											value={`${title}%${item.mode_selector}`}
-										>
-											{truncateText(
-												(() => {
-													switch (title) {
-														case "Bedrock Models":
-															return isMobile
-																? `${item.modelName}`
-																: `${item.providerName} ${item.modelName}`;
-														case "Bedrock Image Models":
-															return isMobile
-																? `${item.modelName}`
-																: `${item.providerName} ${item.modelName}`;
-														case "Bedrock Speech Models":
-															return isMobile
-																? `${item.modelName}`
-																: `${item.providerName} ${item.modelName}`;
-														case "Bedrock Video Models":
-															return isMobile
-																? `${item.modelName}`
-																: `${item.providerName} ${item.modelName}`;
-														case "Imported Models":
-															return isMobile
-																? `${item.modelName}`
-																: `${item.providerName} ${item.modelName}`;
-														case "Bedrock KnowledgeBases":
-															return item.name;
-														case "Bedrock Agents":
-															return isMobile
-																? `${item.agentAliasName}`
-																: `${item.agent_name} (${item.agentAliasName})`;
-														case "Bedrock Prompt Flows":
-															return item.name;
-														default:
-															return "Unknown";
-													}
-												})(),
-												maxLength,
-											)}
-										</MenuItem>
-									))
-							: []),
-					]
-				: [],
-		);
+					menuItems.push(...itemMenuItems);
+				}
+
+				return menuItems;
+			}
+			return [];
+		});
 	};
 
 	const renderSelectOptionsKB = (options, maxLength) => {
@@ -412,11 +426,6 @@ const Header = ({
 					break;
 				case "Bedrock Video Models":
 					selectedObject = videoModels.find(
-						(item) => item.mode_selector === modeSelector,
-					);
-					break;
-				case "Imported Models":
-					selectedObject = importedModels.find(
 						(item) => item.mode_selector === modeSelector,
 					);
 					break;
@@ -580,13 +589,6 @@ const Header = ({
 				).filter((item) => item.is_active === true || !("is_active" in item)),
 			},
 			{
-				title: "Imported Models",
-				data: (importedModels
-					? importedModels
-					: JSON.parse(localStorage.getItem("local-imported-models"))
-				).filter((item) => item.is_active === true || !("is_active" in item)),
-			},
-			{
 				title: "Bedrock KnowledgeBases",
 				data: (bedrockKnowledgeBases
 					? bedrockKnowledgeBases
@@ -613,7 +615,6 @@ const Header = ({
 			imageModels,
 			speechModels,
 			videoModels,
-			importedModels,
 			bedrockKnowledgeBases,
 			bedrockAgents,
 			promptFlows,
@@ -637,6 +638,15 @@ const Header = ({
 		],
 		[models],
 	);
+
+	useEffect(() => {
+		if (selectedMode?.category) {
+			setExpandedCategories((prev) => ({
+				...prev,
+				[selectedMode.category]: true,
+			}));
+		}
+	}, [selectedMode?.category,setExpandedCategories]);
 
 	return (
 		<>
@@ -758,8 +768,15 @@ const Header = ({
 											: "DEFAULT"
 									}
 									open={dropdownOpen}
-									onOpen={(event) => {
+									onOpen={() => {
 										setDropdownOpen(true);
+										// When opening the dropdown, ensure the category of the selected item is expanded
+										if (selectedMode?.category) {
+											setExpandedCategories((prev) => ({
+												...prev,
+												[selectedMode.category]: true,
+											}));
+										}
 									}}
 									onClose={(event) => {
 										if (
@@ -866,7 +883,6 @@ const Header = ({
 				(!models || models.length === 0) &&
 				(!videoModels || videoModels.length === 0) &&
 				(!speechModels || speechModels.length === 0) &&
-				(!importedModels || importedModels.length === 0) &&
 				(!imageModels || imageModels.length === 0) && (
 					<Box
 						sx={{

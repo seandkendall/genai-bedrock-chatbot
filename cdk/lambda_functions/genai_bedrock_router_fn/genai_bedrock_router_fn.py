@@ -98,6 +98,7 @@ def route_request(request_body, message_type, selected_mode):
         #     InvocationType="Event",
         #     Payload=json.dumps(request_body),
         # )
+        print("This should never be reached...")
     elif selected_mode.get("category") == "Bedrock Video Models":
         lambda_client.invoke(
             FunctionName=video_generation_function_name,

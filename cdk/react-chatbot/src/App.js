@@ -95,7 +95,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 		);
 	});
 	const [isDisabled, setIsDisabled] = useState(false);
-	const [isProcessing, setIsProcessing] = useState(false);
 	const [selectedMode, setSelectedMode] = useState(() => {
 		const storedValue = localStorage.getItem("selectedMode");
 		if (storedValue) {
@@ -161,18 +160,21 @@ const App = memo(({ signOut, user, awsRum }) => {
 			? JSON.parse(localStorage.getItem("local-video-models"))
 			: [],
 	); //local-video-models
-	const [importedModels, setImportedModels] = useState(
-		localStorage.getItem("local-imported-models")
-			? JSON.parse(localStorage.getItem("local-imported-models"))
-			: [],
-	); //local-imported-models
 	const [promptFlows, setPromptFlows] = useState(
 		localStorage.getItem("local-prompt-flows")
 			? JSON.parse(localStorage.getItem("local-prompt-flows"))
 			: [],
 	); //local-prompt-flows
 	const [modelsLoaded, setModelsLoaded] = useState(false);
-	const [expandedCategories, setExpandedCategories] = useState({});
+	const [expandedCategories, setExpandedCategories] = useState(() => {
+		if (selectedMode?.category) {
+			return {
+				[selectedMode.category]: true,
+			};
+		}
+		return {};
+	});
+
 	const [kbSessionId, setKBSessionId] = useState("");
 	const [systemPromptUserOrSystem, setSystemPromptUserOrSystem] =
 		useState("system");
@@ -246,13 +248,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 		if (videoModels && videoModels.length > 0)
 			localStorage.setItem("local-video-models", JSON.stringify(videoModels));
 	}, [videoModels]);
-	useEffect(() => {
-		if (importedModels && importedModels.length > 0)
-			localStorage.setItem(
-				"local-imported-models",
-				JSON.stringify(importedModels),
-			);
-	}, [importedModels]);
 
 	//persist prompt flows to local storage if changed
 	useEffect(() => {
@@ -398,15 +393,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 			);
 			if (!selectedObject) {
 				selectedObject = videoModels.find(
-					(item) => item.modelArn === selectedModelId,
-				);
-			}
-		} else if (category === "Imported Models") {
-			selectedObject = importedModels.find(
-				(item) => item.modelId === selectedModelId,
-			);
-			if (!selectedObject) {
-				selectedObject = importedModels.find(
 					(item) => item.modelArn === selectedModelId,
 				);
 			}
@@ -1314,8 +1300,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 					setVideoModels(
 						filter_active_models(message.load_models.video_models),
 					);
-				// if (message.load_models.imported_models)
-				// 	setImportedModels(message.load_models.imported_models);
 				if (message.load_knowledge_bases?.knowledge_bases)
 					setBedrockKnowledgeBases(
 						message.load_knowledge_bases.knowledge_bases,
@@ -1764,7 +1748,6 @@ const App = memo(({ signOut, user, awsRum }) => {
 					imageModels={imageModels}
 					speechModels={speechModels}
 					videoModels={videoModels}
-					importedModels={importedModels}
 					promptFlows={promptFlows}
 					selectedKbMode={selectedKbMode}
 					onSelectedKbMode={onSelectedKbMode}
