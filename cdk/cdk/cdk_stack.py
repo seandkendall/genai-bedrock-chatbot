@@ -1,3 +1,11 @@
+"""
+CDK Stack for deploying a GenAI Chatbot application with Amazon Bedrock.
+
+This module defines the infrastructure components needed for a web-based chatbot
+application that leverages AWS services including Amazon Bedrock, Lambda, API Gateway,
+CloudFront, S3, DynamoDB, and Cognito for authentication.
+"""
+
 import time
 import json
 import os
@@ -72,6 +80,17 @@ def get_pillow_arn_for_region(python_version="p3.12", region="us-east-1"):
 
 
 class ChatbotWebsiteStack(Stack):
+    """
+    CDK Stack that defines the infrastructure for the GenAI Chatbot application.
+    
+    This stack creates all necessary AWS resources including:
+    - S3 buckets for website content, conversation history, and agent schemas
+    - CloudFront distribution for content delivery
+    - DynamoDB tables for storing conversations and configurations
+    - Lambda functions for handling various aspects of the application
+    - API Gateway for REST and WebSocket APIs
+    - Cognito User Pool for authentication
+    """
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         region = os.environ.get("CDK_DEFAULT_REGION")
@@ -297,11 +316,11 @@ class ChatbotWebsiteStack(Stack):
             cloud_front_distribution_props["domainNames"] = [cname_string]
             if has_certificate_arn_condition:
                 print("has_certificate_arn_condition: " + certificate_arn_string)
-                # cloud_front_distribution_props['certificate'] = 
+                # cloud_front_distribution_props['certificate'] =
                 # acm.Certificate.from_certificate_arn(self, "Certificate", certificate_arn_string)
             else:
                 print("Not has_certificate_arn_condition!")
-                # cloud_front_distribution_props['certificate'] = 
+                # cloud_front_distribution_props['certificate'] =
                 # acm.Certificate(self, "Certificate", domain_name=cname_string)
 
         # Create a CloudFront distribution for the website content S3 bucket
@@ -1118,8 +1137,8 @@ class ChatbotWebsiteStack(Stack):
         )
         config_function.add_environment("SCHEDULE_GROUP_NAME", scheduler_group_name)
         # add scheduler:GetSchedule to config_function role to module_scan_schedule custom policy
-        # TODO: module_scan_schedule.schedule_arn fails
-        # because the construct is in alpha, fix this once its out of alpha
+        # Construct the schedule ARN manually since the property is not directly accessible in alpha
+        schedule_arn = f"arn:aws:scheduler:{region}:{self.account}:schedule/{scheduler_group_name}/{module_scan_schedule.schedule_name}"
         config_function_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -1128,7 +1147,7 @@ class ChatbotWebsiteStack(Stack):
                     "scheduler:UpdateSchedule",
                     "iam:PassRole",
                 ],
-                resources=["*"],
+                resources=[schedule_arn],
             )
         )
 
@@ -1265,3 +1284,8 @@ class ChatbotWebsiteStack(Stack):
             value=cloudwatch_logs_url,
             description="URL to CloudWatch Logs live tail screen for all Lambda functions",
         )
+
+
+
+
+
