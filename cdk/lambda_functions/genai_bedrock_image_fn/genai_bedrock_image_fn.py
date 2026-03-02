@@ -245,9 +245,9 @@ def lambda_handler(event, context):
             logger,
             apigateway_management_api,
             connection_id,
-            {"type": "error", "session_id": session_id,"error": str(e)},
+            {"type": "error", "session_id": session_id, "error": "An error occurred while generating the image. Please try again."},
         )
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+        return {"statusCode": 500, "body": json.dumps({"error": "An internal error occurred."})}
 
 
 def save_image_to_s3_and_get_url(image_base64, user_id, session_id):

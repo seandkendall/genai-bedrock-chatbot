@@ -61,9 +61,9 @@ def lambda_handler(event, context):
                     logger,
                     apigateway_management_api,
                     connection_id,
-                    {"type": "error", "code": "7460","session_id": event.get("session_id", "XYZ"), "error": str(e)},
+                    {"type": "error", "code": "7460", "session_id": event.get("session_id", "XYZ"), "error": "An internal error occurred. Please try again."},
                 )
-                return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+                return {"statusCode": 500, "body": json.dumps({"error": "An internal error occurred."})}
 
 
 @tracer.capture_method
@@ -735,7 +735,7 @@ def process_bedrock_agents_response(
                 "message_id": message_id,
                 "session_id": session_id,
                 "code": "9200",
-                "error": str(e),
+                "error": "An error occurred while processing the response. Please try again.",
             },
         )
         contains_errors = True

@@ -94,7 +94,7 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.exception(e)
         logger.error("Error (766)")
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+        return {"statusCode": 500, "body": json.dumps({"error": "An internal error occurred. Please try again."})}
 
 
 @tracer.capture_method
@@ -540,7 +540,7 @@ def process_websocket_message(request_body):
                     {
                         "type": "error",
                         "session_id": session_id,
-                        "error": f"An Error has occurred, please try again: {str(e)}",
+                        "error": "An error occurred while processing your request. Please try again.",
                     },
                 )
 
