@@ -1,7 +1,6 @@
 import os
 import boto3
 from boto3.dynamodb.conditions import Key
-import jwt
 from chatbot_commons import commons
 from datetime import datetime, timezone
 
@@ -36,12 +35,9 @@ apigateway_management_api = boto3.client(
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
     """Lambda Hander Function"""
-    id_token = event.get("idToken", "none")
+    access_token = event.get("access_token", event.get("accessToken", {}))
     selected_session_id = event.get("selectedSessionId", "")
-    decoded_token = jwt.decode(
-        id_token, algorithms=["RS256"], options={"verify_signature": False}
-    )
-    user_id = decoded_token["cognito:username"]
+    user_id = access_token["payload"]["sub"]
     connection_id = event["connection_id"]
     conversation_items = get_conversation_list_from_dynamodb_conversation_history_table(
         user_id

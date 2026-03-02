@@ -257,7 +257,7 @@ while [[ $# -gt 0 ]]; do
         ;;
     --sentry-dsn)
         sentry_dsn="$2"
-        echo "Sentry DSN: $sentry_dsn"
+        echo "Sentry DSN configured"
         echo "$sentry_dsn" > sentry.ref
         shift 2
         ;;
@@ -540,7 +540,7 @@ while [ -z "$aws_application" ] && [ $loop_count -lt 2 ]; do
     # if sentry_dsn is null or empty then load from ssm parameter store with key: '/genaichatbot/sentry_dsn'
     if [ -z "$sentry_dsn" ]; then
         sentry_dsn=$(aws ssm get-parameter --name "/genaichatbot/sentry_dsn" --query 'Parameter.Value' --output text)
-        echo "Found Sentry Config in SSM sentry_dsn: $sentry_dsn"
+        echo "Found Sentry Config in SSM"
     fi
     # Deploy the CDK app
     cdk deploy --outputs-file outputs.json --context aws_application="$aws_application" --context deployExample="$deployExample" --context cognitoDomain="$cognitoDomain" --context sentryDsn="$sentry_dsn" --context allowlistDomain="$allowListDomain" --require-approval never $app_flag $context_flag $debug_flag $profile_flag $tags_flag $force_flag $verbose_flag $role_arn_flag

@@ -288,9 +288,9 @@ def lambda_handler(event, context):
             logger,
             apigateway_management_api,
             connection_id,
-            {"type": "error", "session_id": session_id, "error": str(e)},
+            {"type": "error", "session_id": session_id, "error": "An error occurred while generating the video. Please try again."},
         )
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+        return {"statusCode": 500, "body": json.dumps({"error": "An internal error occurred."})}
 
 
 def store_bedrock_videos_response(

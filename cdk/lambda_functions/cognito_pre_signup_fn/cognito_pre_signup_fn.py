@@ -9,7 +9,7 @@ def lambda_handler(event, context):
         if allowlist_domain:
             allowed_patterns = [pattern.strip() for pattern in allowlist_domain.lower().split(',')]
             for pattern in allowed_patterns:
-                if pattern in email:
+                if email.endswith(pattern):
                     event['response']['autoConfirmUser'] = True
                     event['response']['autoVerifyEmail'] = True
                     return event

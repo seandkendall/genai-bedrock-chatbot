@@ -51,7 +51,7 @@ class CodeBuildStack(NestedStack):
             bedrock_import_model_role_inline_policy.add_statements(
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
-                    actions=["s3:*"],
+                    actions=["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:GetBucketLocation"],
                     resources=[
                         f"arn:aws:s3:::{custom_model_s3_bucket_name}",
                         f"arn:aws:s3:::{custom_model_s3_bucket_name}/*",
@@ -94,7 +94,7 @@ class CodeBuildStack(NestedStack):
             codebuild_role.add_to_policy(
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
-                    actions=["s3:*"],
+                    actions=["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:GetBucketLocation"],
                     resources=[
                         f"arn:aws:s3:::{custom_model_s3_bucket_name}",
                         f"arn:aws:s3:::{custom_model_s3_bucket_name}/*",

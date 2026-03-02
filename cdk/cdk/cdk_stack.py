@@ -108,7 +108,7 @@ class ChatbotWebsiteStack(Stack):
                 description="Sentry DSN URL Value - Optional",
                 string_value=sentry_dsn,
             )
-            CfnOutput(self, "SentryDSN", value=sentry_dsn)
+            # SentryDSN stored in SSM Parameter Store only - not exposed in CloudFormation outputs
 
         self.aws_application = self.node.try_get_context("aws_application")
 
@@ -328,7 +328,7 @@ class ChatbotWebsiteStack(Stack):
             self,
             "CloudfrontDist",
             existing_bucket_obj=website_content_bucket,
-            insert_http_security_headers=False,
+            insert_http_security_headers=True,
             cloud_front_distribution_props=cloud_front_distribution_props,
         )
         cloudfront_distribution = cloudfront_to_s3.cloud_front_web_distribution
@@ -341,7 +341,7 @@ class ChatbotWebsiteStack(Stack):
                 s3.HttpMethods.POST,
                 s3.HttpMethods.PUT,
             ],
-            allowed_origins=["*"],
+            allowed_origins=[f"https://{cloudfront_distribution_domain_name}"],
             allowed_headers=["*"],
             exposed_headers=["ETag"],
             max_age=3600,
@@ -378,6 +378,8 @@ class ChatbotWebsiteStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption=dynamodb.TableEncryption.AWS_MANAGED,
+            point_in_time_recovery=True,
         )
         # add secondary index for user_id to dynamodb_conversations_table
         dynamodb_conversations_table = dynamodb.Table(
@@ -388,6 +390,8 @@ class ChatbotWebsiteStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption=dynamodb.TableEncryption.AWS_MANAGED,
+            point_in_time_recovery=True,
         )
         dynamodb_conversations_table.add_global_secondary_index(
             index_name="user_id-index",
@@ -409,6 +413,8 @@ class ChatbotWebsiteStack(Stack):
                 ),
                 billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
                 removal_policy=RemovalPolicy.DESTROY,
+                encryption=dynamodb.TableEncryption.AWS_MANAGED,
+                point_in_time_recovery=True,
             )
             dynamodb_incidents_table_name = dynamodb_incidents_table.table_name
 
@@ -423,6 +429,8 @@ class ChatbotWebsiteStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption=dynamodb.TableEncryption.AWS_MANAGED,
+            point_in_time_recovery=True,
         )
 
         # Create a WebSocket API
@@ -520,12 +528,16 @@ class ChatbotWebsiteStack(Stack):
         image_generation_function.apply_removal_policy(RemovalPolicy.DESTROY)
         websocket_api.grant_manage_connections(image_generation_function)
         image_bucket.grant_read_write(image_generation_function)
-        image_generation_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess")
-        )
-        image_generation_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "AmazonAPIGatewayInvokeFullAccess"
+        image_generation_function.add_to_role_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                    "bedrock:Converse",
+                    "bedrock:ConverseStream",
+                ],
+                resources=["*"],
             )
         )
         dynamodb_conversations_table.grant_full_access(image_generation_function)
@@ -566,12 +578,16 @@ class ChatbotWebsiteStack(Stack):
         websocket_api.grant_manage_connections(video_generation_function)
         image_bucket.grant_read_write(video_generation_function)
         attachment_bucket.grant_read_write(video_generation_function)
-        video_generation_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess")
-        )
-        video_generation_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "AmazonAPIGatewayInvokeFullAccess"
+        video_generation_function.add_to_role_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                    "bedrock:Converse",
+                    "bedrock:ConverseStream",
+                ],
+                resources=["*"],
             )
         )
         dynamodb_conversations_table.grant_full_access(video_generation_function)
@@ -604,7 +620,18 @@ class ChatbotWebsiteStack(Stack):
         # Add permissions to the Lambda function's role
         config_function.add_to_role_policy(
             iam.PolicyStatement(
-                effect=iam.Effect.ALLOW, actions=["bedrock:*"], resources=["*"]
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "bedrock:ListFoundationModels",
+                    "bedrock:ListInferenceProfiles",
+                    "bedrock:GetFoundationModel",
+                    "bedrock:ListAgents",
+                    "bedrock:ListAgentAliases",
+                    "bedrock:ListKnowledgeBases",
+                    "bedrock:ListFlows",
+                    "bedrock:ListFlowAliases",
+                ],
+                resources=["*"],
             )
         )
 
@@ -642,16 +669,17 @@ class ChatbotWebsiteStack(Stack):
         )
         agents_client_function.apply_removal_policy(RemovalPolicy.DESTROY)
         websocket_api.grant_manage_connections(agents_client_function)
-        agents_client_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess")
-        )
-        agents_client_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "AmazonAPIGatewayInvokeFullAccess"
+        agents_client_function.add_to_role_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                    "bedrock:Converse",
+                    "bedrock:ConverseStream",
+                ],
+                resources=["*"],
             )
-        )
-        agents_client_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSQSFullAccess")
         )
         dynamodb_conversations_table.grant_full_access(agents_client_function)
         conversation_history_bucket.grant_read_write(agents_client_function)
@@ -717,16 +745,17 @@ class ChatbotWebsiteStack(Stack):
 
         lambda_async_function.apply_removal_policy(RemovalPolicy.DESTROY)
         websocket_api.grant_manage_connections(lambda_async_function)
-        lambda_async_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess")
-        )
-        lambda_async_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "AmazonAPIGatewayInvokeFullAccess"
+        lambda_async_function.add_to_role_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                    "bedrock:Converse",
+                    "bedrock:ConverseStream",
+                ],
+                resources=["*"],
             )
-        )
-        lambda_async_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSQSFullAccess")
         )
         dynamodb_conversations_table.grant_full_access(lambda_async_function)
         dynamodb_configurations_table.grant_full_access(lambda_async_function)
@@ -803,19 +832,23 @@ class ChatbotWebsiteStack(Stack):
         image_bucket.grant_read_write(model_scan_function)
         custom_model_import_bucket.grant_read_write(model_scan_function)
         dynamodb_configurations_table.grant_read_write_data(model_scan_function)
-        model_scan_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess")
-        )
-        model_scan_function.role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "AmazonAPIGatewayInvokeFullAccess"
-            )
-        )
-        # Add permissions to the Lambda function's role
         model_scan_function.add_to_role_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
-                actions=["bedrock:*", "codebuild:*"],
+                actions=[
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                    "bedrock:Converse",
+                    "bedrock:ConverseStream",
+                    "bedrock:StartAsyncInvoke",
+                    "bedrock:GetAsyncInvoke",
+                    "bedrock:ListFoundationModels",
+                    "bedrock:ListInferenceProfiles",
+                    "bedrock:ListImportedModels",
+                    "bedrock:ListKnowledgeBases",
+                    "bedrock:ListAgents",
+                    "bedrock:ListAgentAliases",
+                ],
                 resources=["*"],
             )
         )
@@ -888,13 +921,16 @@ class ChatbotWebsiteStack(Stack):
         # START OF APIGW/REST to SQS to Lambda Code
         # Create SQS Queues for each Lambda function
         send_message_queue = sqs.Queue(
-            self, "SendMessageQueue", visibility_timeout=Duration.seconds(900)
+            self, "SendMessageQueue", visibility_timeout=Duration.seconds(900),
+            encryption=sqs.QueueEncryption.SQS_MANAGED,
         )
         presigned_url_queue = sqs.Queue(
-            self, "PresignedUrlQueue", visibility_timeout=Duration.seconds(60)
+            self, "PresignedUrlQueue", visibility_timeout=Duration.seconds(60),
+            encryption=sqs.QueueEncryption.SQS_MANAGED,
         )
         model_scan_request_queue = sqs.Queue(
-            self, "ModelScanRequestQueue", visibility_timeout=Duration.seconds(900)
+            self, "ModelScanRequestQueue", visibility_timeout=Duration.seconds(900),
+            encryption=sqs.QueueEncryption.SQS_MANAGED,
         )
 
         # Create IAM Roles for API Gateway to send messages to SQS
@@ -945,7 +981,7 @@ class ChatbotWebsiteStack(Stack):
                 logging_level=apigw.MethodLoggingLevel.INFO,
             ),
             default_cors_preflight_options=apigw.CorsOptions(
-                allow_origins=apigw.Cors.ALL_ORIGINS,
+                allow_origins=[f"https://{cloudfront_distribution_domain_name}"],
                 allow_methods=apigw.Cors.ALL_METHODS,
             ),
         )
@@ -1145,9 +1181,20 @@ class ChatbotWebsiteStack(Stack):
                 actions=[
                     "scheduler:GetSchedule",
                     "scheduler:UpdateSchedule",
-                    "iam:PassRole",
                 ],
                 resources=[schedule_arn],
+            )
+        )
+        config_function_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["iam:PassRole"],
+                resources=["*"],
+                conditions={
+                    "StringEquals": {
+                        "iam:PassedToService": "scheduler.amazonaws.com"
+                    }
+                },
             )
         )
 
