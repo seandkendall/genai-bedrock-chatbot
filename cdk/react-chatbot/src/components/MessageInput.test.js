@@ -31,28 +31,28 @@ describe('getPlaceholderText function', () => {
 describe('sanitizeFileName function', () => {
   it('removes special characters and spaces from filename', () => {
     const result = sanitizeFileName('My File Name!@#.txt');
-    expect(result).toMatch(/^[a-z0-9]{6}-MyFileName\.txt$/);
+    expect(result).toBe('MyFileName.txt');
   });
 
   it('preserves allowed special characters', () => {
     const result = sanitizeFileName('File-Name_(1)[2].pdf');
-    expect(result).toMatch(/^[a-z0-9]{6}-[a-zA-Z0-9_\-()[\]]+\.[a-zA-Z]{3}$/);
+    expect(result).toBe('File-Name_(1)[2].pdf');
   });
 
   it('handles filenames without extensions', () => {
     const result = sanitizeFileName('NoExtensionFile');
-    expect(result).toMatch(/^[a-z0-9]{6}-[a-zA-Z0-9_\-()[\]]+\.[a-zA-Z]{3}$/);
+    expect(result).toBe('NoExtensionFile.txt');
   });
 
   it('handles filenames with multiple dots', () => {
     const result = sanitizeFileName('file.name.with.dots.txt');
-    expect(result).toMatch(/^[a-z0-9]{6}-filenamewithdots\.txt$/);
+    expect(result).toBe('filenamewithdots.txt');
   });
 
-  it('generates different prefixes for each call', () => {
+  it('returns same result for same filename', () => {
     const result1 = sanitizeFileName('test.txt');
     const result2 = sanitizeFileName('test.txt');
-    expect(result1).not.toBe(result2);
+    expect(result1).toBe(result2);
   });
 });
 
@@ -60,12 +60,25 @@ describe('MessageInput Component', () => {
   const mockOnSend = jest.fn();
   const mockGetCurrentSession = jest.fn(() => Promise.resolve({ accessToken: 'mockToken', idToken: 'mockIdToken' }));
 
+  const defaultProps = {
+    onSend: jest.fn(),
+    getCurrentSession: jest.fn(),
+    selectedMode: {},
+    attachments: [],
+    setAttachments: jest.fn(),
+    uploadedFileNames: [],
+    setUploadedFileNames: jest.fn(),
+    setIsDisabled: jest.fn(),
+    setIsRefreshing: jest.fn(),
+    setIsRefreshingMessage: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   it('renders the input field and buttons', () => {
-    render(<MessageInput onSend={jest.fn()} getCurrentSession={jest.fn()} selectedMode={{}} />);
+    render(<MessageInput {...defaultProps} />);
 
     expect(screen.getByRole('textbox')).toBeInTheDocument();
     expect(screen.getByLabelText('Attach file')).toBeInTheDocument();
@@ -73,7 +86,7 @@ describe('MessageInput Component', () => {
   });
 
   it('disables input and buttons when disabled prop is true', () => {
-    render(<MessageInput onSend={jest.fn()} disabled={true} getCurrentSession={jest.fn()} selectedMode={{}} />);
+    render(<MessageInput {...defaultProps} disabled={true} />);
 
     expect(screen.getByRole('textbox')).toBeDisabled();
     expect(screen.getByLabelText('Attach file')).toBeDisabled();
@@ -81,7 +94,7 @@ describe('MessageInput Component', () => {
   });
 
   it('allows typing in the input field', async () => {
-    render(<MessageInput onSend={mockOnSend} getCurrentSession={mockGetCurrentSession} selectedMode={{}} />);
+    render(<MessageInput {...defaultProps} onSend={mockOnSend} getCurrentSession={mockGetCurrentSession} />);
 
     const input = screen.getByRole('textbox');
     await userEvent.type(input, 'Hello, world!');
@@ -90,7 +103,7 @@ describe('MessageInput Component', () => {
   });
 
   it('calls onSend when send button is clicked', async () => {
-    render(<MessageInput onSend={mockOnSend} getCurrentSession={mockGetCurrentSession} selectedMode={{}} />);
+    render(<MessageInput {...defaultProps} onSend={mockOnSend} getCurrentSession={mockGetCurrentSession} />);
 
     const input = screen.getByRole('textbox');
     await userEvent.type(input, 'Test message');
@@ -98,6 +111,6 @@ describe('MessageInput Component', () => {
     const sendButton = screen.getByLabelText('Send message');
     await userEvent.click(sendButton);
 
-    expect(mockOnSend).toHaveBeenCalledWith('Test message', []);
+    expect(mockOnSend).toHaveBeenCalledWith('Test message', [], false, false);
   });
 });
