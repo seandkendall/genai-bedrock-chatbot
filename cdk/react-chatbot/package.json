@@ -11,7 +11,8 @@
 		"@testing-library/jest-dom": "^6.6.3",
 		"@testing-library/react": "^16.3.0",
 		"@testing-library/user-event": "^14.6.1",
-		"jest": "^29.7.0"
+		"jest": "^29.7.0",
+		"jest-environment-jsdom": "^30.3.0"
 	},
 	"dependencies": {
 		"@aws-amplify/ui-react": "^6.15.1",
